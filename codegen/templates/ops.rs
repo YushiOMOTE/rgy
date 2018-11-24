@@ -283,7 +283,7 @@
     let p = {{ i.operands[1] | getter(bits=i.bits) }};
     let pc = cpu.get_pc().wrapping_add(alu::signed(p)).wrapping_add({{ i.size }});
     cpu.set_pc(pc);
-    return ({{ i.time[0] }}, {{ i.size }})
+    return ({{ i.time[0] }}, 0)
   }
 {% endmacro %}
 

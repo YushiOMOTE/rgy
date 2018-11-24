@@ -30,7 +30,7 @@ fn sub(b: usize, p: usize, q: usize, c: bool, hb: usize, cb: usize) -> (usize, b
 }
 
 pub fn signed(v: u8) -> u16 {
-    if v & 0x80 == 0 {
+    if v & 0x80 != 0 {
         0xff00 | v as u16
     } else {
         v as u16

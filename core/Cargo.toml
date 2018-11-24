@@ -5,3 +5,6 @@ authors = ["Yushi Omote <yushiomote@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+lazy_static = "1.2"
+log = "0.4"
+env_logger = "0.6"

@@ -3,9 +3,21 @@
 use crate::cpu::Cpu;
 use crate::mmu::Mmu;
 use crate::alu;
+use std::collections::HashMap;
+
+lazy_static! {
+    static ref MNEMONICS: HashMap<u16, &'static str> = {
+        let mut m = HashMap::new();
+        {%- for i in insts -%}
+        m.insert(0x{{i.code|hex}}, "{{i.operator}} {{i.operands|join(sep=",")}}");
+        {%- endfor -%}
+        m
+    };
+}
 
 {% for i in insts %}
 /// {{i.operator}} {{i.operands | join(sep=",")}}
+#[allow(unused_variables)]
 fn op_{{i.code | hex}}(cpu: &Cpu, mmu: &Mmu) -> (usize, usize) {
     {%- if i.operator == "nop" -%}
 
@@ -178,3 +190,18 @@ fn op_{{i.code | hex}}(cpu: &Cpu, mmu: &Mmu) -> (usize, usize) {
     ({{i.time | untuple}}, {{i.size}})
 }
 {% endfor %}
+
+pub fn mnem(code: u16) -> &'static str {
+    MNEMONICS.get(&code).unwrap_or(&"(unknown opcode)")
+}
+
+pub fn decode(code: u16, cpu: &Cpu, mmu: &Mmu) -> (usize, usize) {
+    trace!("{:04x}: {:04x}: {}", cpu.get_pc(), code, mnem(code));
+
+    match code {
+        {%- for i in insts -%}
+        0x{{i.code | hex}} => op_{{i.code | hex}}(cpu, mmu),
+        {%- endfor -%}
+        _ => panic!("Invalid opcode: {:02x}", code),
+    }
+}
