@@ -1,0 +1,22 @@
+diff --git a/inst.yml b/../codegen/inst.yml
+index 216bd25..2382016 100644
+--- a/inst.yml
++++ b/../codegen/inst.yml
+@@ -2606,7 +2606,7 @@
+     - (0xff00+c)
+     - a
+   bits: 8
+-  size: 2
++  size: 1
+   time: 8
+   z: "-"
+   n: "-"
+@@ -2731,7 +2731,7 @@
+     - a
+     - (0xff00+c)
+   bits: 8
+-  size: 2
++  size: 1
+   time: 8
+   z: "-"
+   n: "-"

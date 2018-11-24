@@ -1,0 +1,33 @@
+Mnemonic = ${
+    Operator ~ (Delim ~ Operand)*
+}
+
+Delim = _{ " " | "," }
+
+Operator = { ASCII_ALPHANUMERIC+ }
+
+Operand = { (ASCII_ALPHANUMERIC | "+" | "-" | "(" | ")")+ }
+
+Space = _{
+    "&nbsp;"
+}
+
+Newline = _{
+    "<br>"
+}
+
+Number = { (ASCII_DIGIT | "/")+ }
+
+Z = { "Z" }
+N = { "N" }
+H = { "H" }
+C = { "C" }
+NotAffect = { "-" }
+Set = { "1" }
+Unset = { "0" }
+
+Flag = _{ Z | N | H | C | NotAffect | Set | Unset }
+
+Flags = ${ Flag ~ " " ~ Flag ~ " " ~ Flag ~ " " ~ Flag }
+
+Instruction = _{ Mnemonic ~ Newline ~ Number ~ Space ~ Space ~ Number ~ Newline ~ Flags }
