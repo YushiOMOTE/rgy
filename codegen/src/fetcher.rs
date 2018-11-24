@@ -1,20 +1,3 @@
-// extern crate curl;
-// extern crate pest;
-// extern crate scraper;
-// #[macro_use]
-// extern crate pest_derive;
-// #[macro_use]
-// extern crate log;
-// extern crate env_logger;
-// extern crate regex;
-// #[macro_use]
-// extern crate lazy_static;
-// extern crate serde;
-// #[macro_use]
-// extern crate serde_derive;
-// extern crate serde_yaml;
-// extern crate structopt;
-
 use pest::Parser;
 #[derive(Parser)]
 #[grammar = "inst.pest"]
@@ -30,7 +13,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use crate::format::{Instruction, Time};
 
-use crate::{Fetch, Error, Result};
+use crate::{Error, Fetch, Result};
 
 lazy_static! {
     static ref ALT: HashMap<&'static str, &'static str> = {
@@ -55,7 +38,7 @@ fn alter(s: &str) -> String {
 fn modify(code: u16, s: &str) -> String {
     let s = s.to_lowercase();
 
-    if s == "c" && (code == 0xd8 || code == 0xda || code == 0xdc) {
+    if s == "c" && (code == 0x38 || code == 0xd8 || code == 0xda || code == 0xdc) {
         // Special cases: conditional jump and returns
         "cf".to_string()
     } else {
@@ -174,8 +157,11 @@ pub fn run(opt: &Fetch) -> Result<()> {
     let mut handle = Easy::new();
 
     handle
-        .url(opt.url.as_ref()
-            .unwrap_or(&"http://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html".into()))
+        .url(
+            opt.url
+                .as_ref()
+                .unwrap_or(&"http://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html".into()),
+        )
         .map_err(|e| e.to_string())?;
     {
         let mut transfer = handle.transfer();

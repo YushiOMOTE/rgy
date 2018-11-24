@@ -4,13 +4,13 @@
 fn op_0000(cpu: &Cpu) {}
 
 fn op_0001(cpu: &Cpu) {
-  let v = cpu.d16.get();
-  cpu.bc.set(v.into());
+  let v = mmu.get16(cpu.get_pc().wrapping_add(1));
+  cpu.set_bc(v.into());
 }
 
 fn op_0002(cpu: &Cpu) {
-  let v = cpu.a.get();
-  cpu.mc.as8(cpu.bc.get()).set(v.into());
+  let v = cpu.get_a();
+  mmu.set8(cpu.get_bc(), v.into());
 }
 
 fn op_0003(cpu: &Cpu) {}
@@ -20,22 +20,22 @@ fn op_0004(cpu: &Cpu) {}
 fn op_0005(cpu: &Cpu) {}
 
 fn op_0006(cpu: &Cpu) {
-  let v = cpu.d8.get();
-  cpu.b.set(v.into());
+  let v = mmu.get8(cpu.get_pc().wrapping_add(1));
+  cpu.set_b(v.into());
 }
 
 fn op_0007(cpu: &Cpu) {}
 
 fn op_0008(cpu: &Cpu) {
-  let v = cpu.sp.get();
-  cpu.mc.as16(cpu.a16.get()).set(v.into());
+  let v = cpu.get_sp();
+  mmu.set16(mmu.get16(cpu.get_pc().wrapping_add(1)), v.into());
 }
 
 fn op_0009(cpu: &Cpu) {}
 
 fn op_000a(cpu: &Cpu) {
-  let v = cpu.mc.as8(cpu.bc.get()).get();
-  cpu.a.set(v.into());
+  let v = mmu.get8(cpu.get_bc());
+  cpu.set_a(v.into());
 }
 
 fn op_000b(cpu: &Cpu) {}
@@ -45,8 +45,8 @@ fn op_000c(cpu: &Cpu) {}
 fn op_000d(cpu: &Cpu) {}
 
 fn op_000e(cpu: &Cpu) {
-  let v = cpu.d8.get();
-  cpu.c.set(v.into());
+  let v = mmu.get8(cpu.get_pc().wrapping_add(1));
+  cpu.set_c(v.into());
 }
 
 fn op_000f(cpu: &Cpu) {}
@@ -54,13 +54,13 @@ fn op_000f(cpu: &Cpu) {}
 fn op_0010(cpu: &Cpu) {}
 
 fn op_0011(cpu: &Cpu) {
-  let v = cpu.d16.get();
-  cpu.de.set(v.into());
+  let v = mmu.get16(cpu.get_pc().wrapping_add(1));
+  cpu.set_de(v.into());
 }
 
 fn op_0012(cpu: &Cpu) {
-  let v = cpu.a.get();
-  cpu.mc.as8(cpu.de.get()).set(v.into());
+  let v = cpu.get_a();
+  mmu.set8(cpu.get_de(), v.into());
 }
 
 fn op_0013(cpu: &Cpu) {}
@@ -70,8 +70,8 @@ fn op_0014(cpu: &Cpu) {}
 fn op_0015(cpu: &Cpu) {}
 
 fn op_0016(cpu: &Cpu) {
-  let v = cpu.d8.get();
-  cpu.d.set(v.into());
+  let v = mmu.get8(cpu.get_pc().wrapping_add(1));
+  cpu.set_d(v.into());
 }
 
 fn op_0017(cpu: &Cpu) {}
@@ -81,8 +81,8 @@ fn op_0018(cpu: &Cpu) {}
 fn op_0019(cpu: &Cpu) {}
 
 fn op_001a(cpu: &Cpu) {
-  let v = cpu.mc.as8(cpu.de.get()).get();
-  cpu.a.set(v.into());
+  let v = mmu.get8(cpu.get_de());
+  cpu.set_a(v.into());
 }
 
 fn op_001b(cpu: &Cpu) {}
@@ -92,8 +92,8 @@ fn op_001c(cpu: &Cpu) {}
 fn op_001d(cpu: &Cpu) {}
 
 fn op_001e(cpu: &Cpu) {
-  let v = cpu.d8.get();
-  cpu.e.set(v.into());
+  let v = mmu.get8(cpu.get_pc().wrapping_add(1));
+  cpu.set_e(v.into());
 }
 
 fn op_001f(cpu: &Cpu) {}
@@ -101,8 +101,8 @@ fn op_001f(cpu: &Cpu) {}
 fn op_0020(cpu: &Cpu) {}
 
 fn op_0021(cpu: &Cpu) {
-  let v = cpu.d16.get();
-  cpu.hl.set(v.into());
+  let v = mmu.get16(cpu.get_pc().wrapping_add(1));
+  cpu.set_hl(v.into());
 }
 
 fn op_0022(cpu: &Cpu) {}
@@ -114,8 +114,8 @@ fn op_0024(cpu: &Cpu) {}
 fn op_0025(cpu: &Cpu) {}
 
 fn op_0026(cpu: &Cpu) {
-  let v = cpu.d8.get();
-  cpu.h.set(v.into());
+  let v = mmu.get8(cpu.get_pc().wrapping_add(1));
+  cpu.set_h(v.into());
 }
 
 fn op_0027(cpu: &Cpu) {}
@@ -133,8 +133,8 @@ fn op_002c(cpu: &Cpu) {}
 fn op_002d(cpu: &Cpu) {}
 
 fn op_002e(cpu: &Cpu) {
-  let v = cpu.d8.get();
-  cpu.l.set(v.into());
+  let v = mmu.get8(cpu.get_pc().wrapping_add(1));
+  cpu.set_l(v.into());
 }
 
 fn op_002f(cpu: &Cpu) {}
@@ -142,8 +142,8 @@ fn op_002f(cpu: &Cpu) {}
 fn op_0030(cpu: &Cpu) {}
 
 fn op_0031(cpu: &Cpu) {
-  let v = cpu.d16.get();
-  cpu.sp.set(v.into());
+  let v = mmu.get16(cpu.get_pc().wrapping_add(1));
+  cpu.set_sp(v.into());
 }
 
 fn op_0032(cpu: &Cpu) {}
@@ -155,8 +155,8 @@ fn op_0034(cpu: &Cpu) {}
 fn op_0035(cpu: &Cpu) {}
 
 fn op_0036(cpu: &Cpu) {
-  let v = cpu.d8.get();
-  cpu.mc.as8(cpu.hl.get()).set(v.into());
+  let v = mmu.get8(cpu.get_pc().wrapping_add(1));
+  mmu.set8(cpu.get_hl(), v.into());
 }
 
 fn op_0037(cpu: &Cpu) {}
@@ -174,327 +174,327 @@ fn op_003c(cpu: &Cpu) {}
 fn op_003d(cpu: &Cpu) {}
 
 fn op_003e(cpu: &Cpu) {
-  let v = cpu.d8.get();
-  cpu.a.set(v.into());
+  let v = mmu.get8(cpu.get_pc().wrapping_add(1));
+  cpu.set_a(v.into());
 }
 
 fn op_003f(cpu: &Cpu) {}
 
 fn op_0040(cpu: &Cpu) {
-  let v = cpu.b.get();
-  cpu.b.set(v.into());
+  let v = cpu.get_b();
+  cpu.set_b(v.into());
 }
 
 fn op_0041(cpu: &Cpu) {
-  let v = cpu.c.get();
-  cpu.b.set(v.into());
+  let v = cpu.get_c();
+  cpu.set_b(v.into());
 }
 
 fn op_0042(cpu: &Cpu) {
-  let v = cpu.d.get();
-  cpu.b.set(v.into());
+  let v = cpu.get_d();
+  cpu.set_b(v.into());
 }
 
 fn op_0043(cpu: &Cpu) {
-  let v = cpu.e.get();
-  cpu.b.set(v.into());
+  let v = cpu.get_e();
+  cpu.set_b(v.into());
 }
 
 fn op_0044(cpu: &Cpu) {
-  let v = cpu.h.get();
-  cpu.b.set(v.into());
+  let v = cpu.get_h();
+  cpu.set_b(v.into());
 }
 
 fn op_0045(cpu: &Cpu) {
-  let v = cpu.l.get();
-  cpu.b.set(v.into());
+  let v = cpu.get_l();
+  cpu.set_b(v.into());
 }
 
 fn op_0046(cpu: &Cpu) {
-  let v = cpu.mc.as8(cpu.hl.get()).get();
-  cpu.b.set(v.into());
+  let v = mmu.get8(cpu.get_hl());
+  cpu.set_b(v.into());
 }
 
 fn op_0047(cpu: &Cpu) {
-  let v = cpu.a.get();
-  cpu.b.set(v.into());
+  let v = cpu.get_a();
+  cpu.set_b(v.into());
 }
 
 fn op_0048(cpu: &Cpu) {
-  let v = cpu.b.get();
-  cpu.c.set(v.into());
+  let v = cpu.get_b();
+  cpu.set_c(v.into());
 }
 
 fn op_0049(cpu: &Cpu) {
-  let v = cpu.c.get();
-  cpu.c.set(v.into());
+  let v = cpu.get_c();
+  cpu.set_c(v.into());
 }
 
 fn op_004a(cpu: &Cpu) {
-  let v = cpu.d.get();
-  cpu.c.set(v.into());
+  let v = cpu.get_d();
+  cpu.set_c(v.into());
 }
 
 fn op_004b(cpu: &Cpu) {
-  let v = cpu.e.get();
-  cpu.c.set(v.into());
+  let v = cpu.get_e();
+  cpu.set_c(v.into());
 }
 
 fn op_004c(cpu: &Cpu) {
-  let v = cpu.h.get();
-  cpu.c.set(v.into());
+  let v = cpu.get_h();
+  cpu.set_c(v.into());
 }
 
 fn op_004d(cpu: &Cpu) {
-  let v = cpu.l.get();
-  cpu.c.set(v.into());
+  let v = cpu.get_l();
+  cpu.set_c(v.into());
 }
 
 fn op_004e(cpu: &Cpu) {
-  let v = cpu.mc.as8(cpu.hl.get()).get();
-  cpu.c.set(v.into());
+  let v = mmu.get8(cpu.get_hl());
+  cpu.set_c(v.into());
 }
 
 fn op_004f(cpu: &Cpu) {
-  let v = cpu.a.get();
-  cpu.c.set(v.into());
+  let v = cpu.get_a();
+  cpu.set_c(v.into());
 }
 
 fn op_0050(cpu: &Cpu) {
-  let v = cpu.b.get();
-  cpu.d.set(v.into());
+  let v = cpu.get_b();
+  cpu.set_d(v.into());
 }
 
 fn op_0051(cpu: &Cpu) {
-  let v = cpu.c.get();
-  cpu.d.set(v.into());
+  let v = cpu.get_c();
+  cpu.set_d(v.into());
 }
 
 fn op_0052(cpu: &Cpu) {
-  let v = cpu.d.get();
-  cpu.d.set(v.into());
+  let v = cpu.get_d();
+  cpu.set_d(v.into());
 }
 
 fn op_0053(cpu: &Cpu) {
-  let v = cpu.e.get();
-  cpu.d.set(v.into());
+  let v = cpu.get_e();
+  cpu.set_d(v.into());
 }
 
 fn op_0054(cpu: &Cpu) {
-  let v = cpu.h.get();
-  cpu.d.set(v.into());
+  let v = cpu.get_h();
+  cpu.set_d(v.into());
 }
 
 fn op_0055(cpu: &Cpu) {
-  let v = cpu.l.get();
-  cpu.d.set(v.into());
+  let v = cpu.get_l();
+  cpu.set_d(v.into());
 }
 
 fn op_0056(cpu: &Cpu) {
-  let v = cpu.mc.as8(cpu.hl.get()).get();
-  cpu.d.set(v.into());
+  let v = mmu.get8(cpu.get_hl());
+  cpu.set_d(v.into());
 }
 
 fn op_0057(cpu: &Cpu) {
-  let v = cpu.a.get();
-  cpu.d.set(v.into());
+  let v = cpu.get_a();
+  cpu.set_d(v.into());
 }
 
 fn op_0058(cpu: &Cpu) {
-  let v = cpu.b.get();
-  cpu.e.set(v.into());
+  let v = cpu.get_b();
+  cpu.set_e(v.into());
 }
 
 fn op_0059(cpu: &Cpu) {
-  let v = cpu.c.get();
-  cpu.e.set(v.into());
+  let v = cpu.get_c();
+  cpu.set_e(v.into());
 }
 
 fn op_005a(cpu: &Cpu) {
-  let v = cpu.d.get();
-  cpu.e.set(v.into());
+  let v = cpu.get_d();
+  cpu.set_e(v.into());
 }
 
 fn op_005b(cpu: &Cpu) {
-  let v = cpu.e.get();
-  cpu.e.set(v.into());
+  let v = cpu.get_e();
+  cpu.set_e(v.into());
 }
 
 fn op_005c(cpu: &Cpu) {
-  let v = cpu.h.get();
-  cpu.e.set(v.into());
+  let v = cpu.get_h();
+  cpu.set_e(v.into());
 }
 
 fn op_005d(cpu: &Cpu) {
-  let v = cpu.l.get();
-  cpu.e.set(v.into());
+  let v = cpu.get_l();
+  cpu.set_e(v.into());
 }
 
 fn op_005e(cpu: &Cpu) {
-  let v = cpu.mc.as8(cpu.hl.get()).get();
-  cpu.e.set(v.into());
+  let v = mmu.get8(cpu.get_hl());
+  cpu.set_e(v.into());
 }
 
 fn op_005f(cpu: &Cpu) {
-  let v = cpu.a.get();
-  cpu.e.set(v.into());
+  let v = cpu.get_a();
+  cpu.set_e(v.into());
 }
 
 fn op_0060(cpu: &Cpu) {
-  let v = cpu.b.get();
-  cpu.h.set(v.into());
+  let v = cpu.get_b();
+  cpu.set_h(v.into());
 }
 
 fn op_0061(cpu: &Cpu) {
-  let v = cpu.c.get();
-  cpu.h.set(v.into());
+  let v = cpu.get_c();
+  cpu.set_h(v.into());
 }
 
 fn op_0062(cpu: &Cpu) {
-  let v = cpu.d.get();
-  cpu.h.set(v.into());
+  let v = cpu.get_d();
+  cpu.set_h(v.into());
 }
 
 fn op_0063(cpu: &Cpu) {
-  let v = cpu.e.get();
-  cpu.h.set(v.into());
+  let v = cpu.get_e();
+  cpu.set_h(v.into());
 }
 
 fn op_0064(cpu: &Cpu) {
-  let v = cpu.h.get();
-  cpu.h.set(v.into());
+  let v = cpu.get_h();
+  cpu.set_h(v.into());
 }
 
 fn op_0065(cpu: &Cpu) {
-  let v = cpu.l.get();
-  cpu.h.set(v.into());
+  let v = cpu.get_l();
+  cpu.set_h(v.into());
 }
 
 fn op_0066(cpu: &Cpu) {
-  let v = cpu.mc.as8(cpu.hl.get()).get();
-  cpu.h.set(v.into());
+  let v = mmu.get8(cpu.get_hl());
+  cpu.set_h(v.into());
 }
 
 fn op_0067(cpu: &Cpu) {
-  let v = cpu.a.get();
-  cpu.h.set(v.into());
+  let v = cpu.get_a();
+  cpu.set_h(v.into());
 }
 
 fn op_0068(cpu: &Cpu) {
-  let v = cpu.b.get();
-  cpu.l.set(v.into());
+  let v = cpu.get_b();
+  cpu.set_l(v.into());
 }
 
 fn op_0069(cpu: &Cpu) {
-  let v = cpu.c.get();
-  cpu.l.set(v.into());
+  let v = cpu.get_c();
+  cpu.set_l(v.into());
 }
 
 fn op_006a(cpu: &Cpu) {
-  let v = cpu.d.get();
-  cpu.l.set(v.into());
+  let v = cpu.get_d();
+  cpu.set_l(v.into());
 }
 
 fn op_006b(cpu: &Cpu) {
-  let v = cpu.e.get();
-  cpu.l.set(v.into());
+  let v = cpu.get_e();
+  cpu.set_l(v.into());
 }
 
 fn op_006c(cpu: &Cpu) {
-  let v = cpu.h.get();
-  cpu.l.set(v.into());
+  let v = cpu.get_h();
+  cpu.set_l(v.into());
 }
 
 fn op_006d(cpu: &Cpu) {
-  let v = cpu.l.get();
-  cpu.l.set(v.into());
+  let v = cpu.get_l();
+  cpu.set_l(v.into());
 }
 
 fn op_006e(cpu: &Cpu) {
-  let v = cpu.mc.as8(cpu.hl.get()).get();
-  cpu.l.set(v.into());
+  let v = mmu.get8(cpu.get_hl());
+  cpu.set_l(v.into());
 }
 
 fn op_006f(cpu: &Cpu) {
-  let v = cpu.a.get();
-  cpu.l.set(v.into());
+  let v = cpu.get_a();
+  cpu.set_l(v.into());
 }
 
 fn op_0070(cpu: &Cpu) {
-  let v = cpu.b.get();
-  cpu.mc.as8(cpu.hl.get()).set(v.into());
+  let v = cpu.get_b();
+  mmu.set8(cpu.get_hl(), v.into());
 }
 
 fn op_0071(cpu: &Cpu) {
-  let v = cpu.c.get();
-  cpu.mc.as8(cpu.hl.get()).set(v.into());
+  let v = cpu.get_c();
+  mmu.set8(cpu.get_hl(), v.into());
 }
 
 fn op_0072(cpu: &Cpu) {
-  let v = cpu.d.get();
-  cpu.mc.as8(cpu.hl.get()).set(v.into());
+  let v = cpu.get_d();
+  mmu.set8(cpu.get_hl(), v.into());
 }
 
 fn op_0073(cpu: &Cpu) {
-  let v = cpu.e.get();
-  cpu.mc.as8(cpu.hl.get()).set(v.into());
+  let v = cpu.get_e();
+  mmu.set8(cpu.get_hl(), v.into());
 }
 
 fn op_0074(cpu: &Cpu) {
-  let v = cpu.h.get();
-  cpu.mc.as8(cpu.hl.get()).set(v.into());
+  let v = cpu.get_h();
+  mmu.set8(cpu.get_hl(), v.into());
 }
 
 fn op_0075(cpu: &Cpu) {
-  let v = cpu.l.get();
-  cpu.mc.as8(cpu.hl.get()).set(v.into());
+  let v = cpu.get_l();
+  mmu.set8(cpu.get_hl(), v.into());
 }
 
 fn op_0076(cpu: &Cpu) {}
 
 fn op_0077(cpu: &Cpu) {
-  let v = cpu.a.get();
-  cpu.mc.as8(cpu.hl.get()).set(v.into());
+  let v = cpu.get_a();
+  mmu.set8(cpu.get_hl(), v.into());
 }
 
 fn op_0078(cpu: &Cpu) {
-  let v = cpu.b.get();
-  cpu.a.set(v.into());
+  let v = cpu.get_b();
+  cpu.set_a(v.into());
 }
 
 fn op_0079(cpu: &Cpu) {
-  let v = cpu.c.get();
-  cpu.a.set(v.into());
+  let v = cpu.get_c();
+  cpu.set_a(v.into());
 }
 
 fn op_007a(cpu: &Cpu) {
-  let v = cpu.d.get();
-  cpu.a.set(v.into());
+  let v = cpu.get_d();
+  cpu.set_a(v.into());
 }
 
 fn op_007b(cpu: &Cpu) {
-  let v = cpu.e.get();
-  cpu.a.set(v.into());
+  let v = cpu.get_e();
+  cpu.set_a(v.into());
 }
 
 fn op_007c(cpu: &Cpu) {
-  let v = cpu.h.get();
-  cpu.a.set(v.into());
+  let v = cpu.get_h();
+  cpu.set_a(v.into());
 }
 
 fn op_007d(cpu: &Cpu) {
-  let v = cpu.l.get();
-  cpu.a.set(v.into());
+  let v = cpu.get_l();
+  cpu.set_a(v.into());
 }
 
 fn op_007e(cpu: &Cpu) {
-  let v = cpu.mc.as8(cpu.hl.get()).get();
-  cpu.a.set(v.into());
+  let v = mmu.get8(cpu.get_hl());
+  cpu.set_a(v.into());
 }
 
 fn op_007f(cpu: &Cpu) {
-  let v = cpu.a.get();
-  cpu.a.set(v.into());
+  let v = cpu.get_a();
+  cpu.set_a(v.into());
 }
 
 fn op_0080(cpu: &Cpu) {}
@@ -684,15 +684,15 @@ fn op_00de(cpu: &Cpu) {}
 fn op_00df(cpu: &Cpu) {}
 
 fn op_00e0(cpu: &Cpu) {
-  let v = cpu.a.get();
-  cpu.mc.as8(cpu.0xff00+a8.get()).set(v.into());
+  let v = cpu.get_a();
+  mmu.set8(cpu.get_0xff00+a8(), v.into());
 }
 
 fn op_00e1(cpu: &Cpu) {}
 
 fn op_00e2(cpu: &Cpu) {
-  let v = cpu.a.get();
-  cpu.mc.as8(cpu.0xff00+c.get()).set(v.into());
+  let v = cpu.get_a();
+  mmu.set8(cpu.get_0xff00+c(), v.into());
 }
 
 fn op_00e5(cpu: &Cpu) {}
@@ -706,8 +706,8 @@ fn op_00e8(cpu: &Cpu) {}
 fn op_00e9(cpu: &Cpu) {}
 
 fn op_00ea(cpu: &Cpu) {
-  let v = cpu.a.get();
-  cpu.mc.as8(cpu.a16.get()).set(v.into());
+  let v = cpu.get_a();
+  mmu.set8(mmu.get16(cpu.get_pc().wrapping_add(1)), v.into());
 }
 
 fn op_00ee(cpu: &Cpu) {}
@@ -715,15 +715,15 @@ fn op_00ee(cpu: &Cpu) {}
 fn op_00ef(cpu: &Cpu) {}
 
 fn op_00f0(cpu: &Cpu) {
-  let v = cpu.mc.as8(cpu.0xff00+a8.get()).get();
-  cpu.a.set(v.into());
+  let v = mmu.get8(cpu.get_0xff00+a8());
+  cpu.set_a(v.into());
 }
 
 fn op_00f1(cpu: &Cpu) {}
 
 fn op_00f2(cpu: &Cpu) {
-  let v = cpu.mc.as8(cpu.0xff00+c.get()).get();
-  cpu.a.set(v.into());
+  let v = mmu.get8(cpu.get_0xff00+c());
+  cpu.set_a(v.into());
 }
 
 fn op_00f3(cpu: &Cpu) {}
@@ -737,13 +737,13 @@ fn op_00f7(cpu: &Cpu) {}
 fn op_00f8(cpu: &Cpu) {}
 
 fn op_00f9(cpu: &Cpu) {
-  let v = cpu.hl.get();
-  cpu.sp.set(v.into());
+  let v = cpu.get_hl();
+  cpu.set_sp(v.into());
 }
 
 fn op_00fa(cpu: &Cpu) {
-  let v = cpu.mc.as8(cpu.a16.get()).get();
-  cpu.a.set(v.into());
+  let v = mmu.get8(mmu.get16(cpu.get_pc().wrapping_add(1)));
+  cpu.set_a(v.into());
 }
 
 fn op_00fb(cpu: &Cpu) {}

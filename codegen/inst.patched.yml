@@ -641,7 +641,7 @@
 - code: 56
   operator: jr
   operands:
-    - c
+    - cf
     - r8
   bits: 0
   size: 2
@@ -2721,10 +2721,10 @@
   bits: 16
   size: 1
   time: 12
-  z: Z
-  n: N
-  h: H
-  c: C
+  z: "-"
+  n: "-"
+  h: "-"
+  c: "-"
 - code: 242
   operator: ld
   operands:

@@ -641,7 +641,7 @@
 - code: 56
   operator: jr
   operands:
-    - c
+    - cf
     - r8
   bits: 0
   size: 2
@@ -2606,7 +2606,7 @@
     - (0xff00+c)
     - a
   bits: 8
-  size: 1
+  size: 2
   time: 8
   z: "-"
   n: "-"
@@ -2731,7 +2731,7 @@
     - a
     - (0xff00+c)
   bits: 8
-  size: 1
+  size: 2
   time: 8
   z: "-"
   n: "-"

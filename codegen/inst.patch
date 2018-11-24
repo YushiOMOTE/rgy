@@ -1,0 +1,41 @@
+--- inst.yml	2018-11-24 17:31:05.000000000 +0900
++++ inst.patched.yml	2018-11-24 17:30:59.000000000 +0900
+@@ -2606,7 +2606,7 @@
+     - (0xff00+c)
+     - a
+   bits: 8
+-  size: 2
++  size: 1
+   time: 8
+   z: "-"
+   n: "-"
+@@ -2721,17 +2721,17 @@
+   bits: 16
+   size: 1
+   time: 12
+-  z: Z
+-  n: N
+-  h: H
+-  c: C
++  z: "-"
++  n: "-"
++  h: "-"
++  c: "-"
+ - code: 242
+   operator: ld
+   operands:
+     - a
+     - (0xff00+c)
+   bits: 8
+-  size: 2
++  size: 1
+   time: 8
+   z: "-"
+   n: "-"
+@@ -5855,4 +5855,4 @@
+   z: "-"
+   n: "-"
+   h: "-"
+-  c: "-"
+\ No newline at end of file
++  c: "-"
