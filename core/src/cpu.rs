@@ -1,6 +1,8 @@
 use std::cell::Cell;
 use crate::mmu::Mmu;
 
+use std::fmt;
+
 pub struct Cpu {
     a: Cell<u8>,
     b: Cell<u8>,
@@ -12,6 +14,36 @@ pub struct Cpu {
     l: Cell<u8>,
     pc: Cell<u16>,
     sp: Cell<u16>,
+}
+
+impl fmt::Display for Cpu {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "a:  [{:02x}],  b:  [{:02x}]\n\
+             c:  [{:02x}],  d:  [{:02x}]\n\
+             e:  [{:02x}],  f:  [{:02x}]\n\
+             h:  [{:02x}],  l:  [{:02x}]\n\
+             pc: [{:04x}]\n\
+             sp: [{:04x}]\n\
+             flgs: [{}{}{}{}]\
+             ",
+            self.a.get(),
+            self.b.get(),
+            self.c.get(),
+            self.d.get(),
+            self.e.get(),
+            self.f.get(),
+            self.h.get(),
+            self.l.get(),
+            self.pc.get(),
+            self.sp.get(),
+            if self.get_zf() { "z" } else { "_" },
+            if self.get_nf() { "n" } else { "_" },
+            if self.get_hf() { "h" } else { "_" },
+            if self.get_cf() { "c" } else { "_" },
+        )
+    }
 }
 
 impl Cpu {
@@ -108,10 +140,6 @@ impl Cpu {
         self.e.set(v)
     }
 
-    pub fn set_f(&self, v: u8) {
-        self.f.set(v)
-    }
-
     pub fn set_h(&self, v: u8) {
         self.h.set(v)
     }
@@ -158,10 +186,6 @@ impl Cpu {
 
     pub fn get_e(&self) -> u8 {
         self.e.get()
-    }
-
-    pub fn get_f(&self) -> u8 {
-        self.f.get()
     }
 
     pub fn get_h(&self) -> u8 {
@@ -214,5 +238,18 @@ impl Cpu {
         let p = self.get_sp();
         self.set_sp(self.get_sp().wrapping_add(2));
         mmu.get16(p)
+    }
+
+    pub fn fetch(&self, mmu: &Mmu) -> (u16, u16) {
+        let pc = self.get_pc();
+
+        let fb = mmu.get8(pc);
+
+        if fb == 0xcb {
+            let sb = mmu.get8(pc + 1);
+            (0xcb00 | sb as u16, 2)
+        } else {
+            (fb as u16, 1)
+        }
     }
 }

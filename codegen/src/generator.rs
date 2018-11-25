@@ -40,9 +40,9 @@ fn eval_getter(s: &str, b: usize) -> String {
     } else if s == "cf" {
         format!("cpu.get_cf()")
     } else if s == "d8" || s == "a8" || s == "r8" {
-        format!("mmu.get8(cpu.get_pc().wrapping_add(1))")
+        format!("mmu.get8(cpu.get_pc().wrapping_add(arg))")
     } else if s == "d16" || s == "a16" {
-        format!("mmu.get16(cpu.get_pc().wrapping_add(1))")
+        format!("mmu.get16(cpu.get_pc().wrapping_add(arg))")
     } else if s.starts_with("0x") {
         let mut expr = s.split("+");
         let offset = expr.next().expect("No offset");
