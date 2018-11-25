@@ -229,7 +229,7 @@ impl Cpu {
     }
 
     pub fn push(&self, mmu: &Mmu, v: u16) {
-        let p = self.get_sp().wrapping_sub(1);
+        let p = self.get_sp().wrapping_sub(2);
         self.set_sp(self.get_sp().wrapping_sub(2));
         mmu.set16(p, v)
     }
