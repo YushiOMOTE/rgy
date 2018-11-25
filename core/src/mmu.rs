@@ -54,7 +54,8 @@ impl Mmu {
     pub fn load(&self) {
         let mut f = File::open("boot.bin").expect("Couldn't open file");
         let mut buf = vec![0; 256];
-        let count = f.read(buf.as_mut_slice()).expect("Couldn't read file");
+
+        f.read(buf.as_mut_slice()).expect("Couldn't read file");
 
         for i in 0..buf.len() {
             self.set8(i as u16, buf[i]);

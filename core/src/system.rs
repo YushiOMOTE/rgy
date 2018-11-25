@@ -7,6 +7,8 @@ use crate::debug::{Debugger, Perf, Resource};
 use std::rc::Rc;
 
 pub fn run() {
+    info!("Initializing...");
+
     let mut dbg = Debugger::new();
     let cpu = Cpu::new();
     let mut mmu = Mmu::new();
@@ -19,6 +21,8 @@ pub fn run() {
     dbg.init(&Resource::new(&cpu, &mmu));
 
     let mut perf = Perf::new();
+
+    info!("Starting...");
 
     loop {
         let (code, arg) = cpu.fetch(&mmu);

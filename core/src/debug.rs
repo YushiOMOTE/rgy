@@ -2,7 +2,7 @@ use crate::inst::mnem;
 use crate::cpu::Cpu;
 use crate::mmu::Mmu;
 
-use std::io::prelude::*;
+use std::time::Instant;
 use std::string::ToString;
 use std::fmt;
 
@@ -266,26 +266,6 @@ fn parse<'a>(cmd: &'a str) -> CmdResult<(&'a str, Vec<&'a str>)> {
     Ok((cmd, it.collect()))
 }
 
-fn read_input() -> CmdResult<String> {
-    let mut reply = String::new();
-
-    std::io::stdin().read_line(&mut reply)?;
-
-    if reply.chars().last() != Some('\n') {
-        return Err(CmdError::new("Unexpected end of input"));
-    }
-
-    reply.pop();
-
-    if reply.chars().last() == Some('\r') {
-        reply.pop();
-    }
-
-    Ok(reply)
-}
-
-use std::time::Instant;
-
 pub struct Perf {
     counter: u64,
     last: Instant,
@@ -309,7 +289,7 @@ impl Perf {
             let df = now - self.last;
             let df = df.as_secs() * 1000000 + df.subsec_micros() as u64;
 
-            println!("{} ips", sample * 1000000 / df);
+            debug!("{} ips", sample * 1000000 / df);
 
             self.last = now;
         }
