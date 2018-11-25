@@ -122,9 +122,9 @@
 
    let v = cpu.get_a();
    let v = if cpu.get_nf() {
-      v.wrapping_add(lc + hc)
-   } else {
       v.wrapping_sub(lc + hc)
+   } else {
+      v.wrapping_add(lc + hc)
    };
 
    let z = v == 0;
