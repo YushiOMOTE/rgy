@@ -6,6 +6,7 @@ extern crate env_logger;
 extern crate rustyline;
 
 mod cpu;
+mod gpu;
 mod mmu;
 mod inst;
 mod alu;
