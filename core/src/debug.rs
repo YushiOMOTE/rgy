@@ -7,6 +7,8 @@ use std::string::ToString;
 use std::fmt;
 
 use std::collections::HashSet;
+use rustyline::error::ReadlineError;
+use rustyline::Editor;
 
 struct CmdError(String);
 
@@ -94,7 +96,7 @@ impl Debugger {
         let (code, _) = res.cpu.fetch(res.mmu);
 
         println!(
-            "break at {:04x}: {:04x}: {}",
+            "Break at {:04x}: {:04x}: {}",
             res.cpu.get_pc(),
             code,
             mnem(code)
@@ -106,31 +108,57 @@ impl Debugger {
     fn prompt(&mut self, res: &Resource) {
         self.prompt = true;
 
-        loop {
-            let end = match self.prompt_command(res) {
-                Ok(end) => end,
-                Err(e) => {
-                    println!("error: {}", e);
-                    false
-                }
-            };
+        let mut rl = Editor::<()>::new();
 
-            if end {
-                break;
+        if rl.load_history("history.txt").is_err() {
+            println!("No previous history");
+        }
+
+        let abort = loop {
+            let readline = rl.readline(">> ");
+
+            match readline {
+                Ok(line) => {
+                    rl.add_history_entry(line.as_ref());
+
+                    match self.handle(&line, res) {
+                        Ok(end) => if end {
+                            break false;
+                        } else {
+                            continue;
+                        },
+                        Err(e) => {
+                            println!("Command error: {}", e);
+                            continue;
+                        }
+                    }
+                }
+                Err(ReadlineError::Interrupted) => {
+                    println!("Abort");
+                    break true;
+                }
+                Err(ReadlineError::Eof) => {
+                    println!("Resume");
+                    break false;
+                }
+                Err(err) => {
+                    println!("Error: {:?}", err);
+                    break true;
+                }
             }
+        };
+
+        let _ = rl.save_history("history.txt");
+
+        if abort {
+            std::process::exit(1);
         }
 
         self.prompt = false;
     }
 
-    fn prompt_command(&mut self, res: &Resource) -> CmdResult<bool> {
-        let mut stdout = std::io::stdout();
-
-        write!(stdout, "{}", "debug-shell$ ")?;
-        stdout.flush()?;
-
-        let cmd = read_input()?;
-        let (cmd, args) = parse(&cmd)?;
+    fn handle(&mut self, line: &str, res: &Resource) -> CmdResult<bool> {
+        let (cmd, args) = parse(line)?;
 
         if cmd.is_empty() {
             return Ok(false);
@@ -145,7 +173,7 @@ impl Debugger {
             "rrw" => self.remove_rdwatch(parse_addr(args)?),
             "rww" => self.remove_wrwatch(parse_addr(args)?),
             "d" => self.dump(res),
-            "q" => std::process::exit(1),
+            "q" => self.quit(),
             "n" => self.step(),
             "c" => self.resume(),
             _ => Err(CmdError::new("Unknown command")),
@@ -213,7 +241,15 @@ impl Debugger {
     fn resume(&mut self) -> CmdResult<bool> {
         self.stepping = false;
 
+        println!("Resume");
+
         Ok(true)
+    }
+
+    fn quit(&self) -> CmdResult<bool> {
+        println!("Quit");
+
+        std::process::exit(1)
     }
 }
 
