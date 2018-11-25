@@ -273,7 +273,7 @@
 
 {% macro jr(i) %}
   let p = {{ i.operands[0] | getter(bits=i.bits) }};
-  let pc = cpu.get_pc().wrapping_add(alu::signed(p)).wrapping_add({{ i.size }});
+  let pc = cpu.get_pc().wrapping_add(alu::signed(p));
   cpu.set_pc(pc);
 {% endmacro %}
 
@@ -281,9 +281,9 @@
   let flg = {{ i.operands[0] | getter(bits=i.bits) }};
   if flg {
     let p = {{ i.operands[1] | getter(bits=i.bits) }};
-    let pc = cpu.get_pc().wrapping_add(alu::signed(p)).wrapping_add({{ i.size }});
+    let pc = cpu.get_pc().wrapping_add(alu::signed(p));
     cpu.set_pc(pc);
-    return ({{ i.time[0] }}, 0)
+    return ({{ i.time[0] }}, {{ i.size }})
   }
 {% endmacro %}
 

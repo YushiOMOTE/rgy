@@ -778,7 +778,7 @@ fn op_0017(arg: u16, cpu: &Cpu, mmu: &Mmu) -> (usize, usize) {
 #[allow(unused_variables)]
 fn op_0018(arg: u16, cpu: &Cpu, mmu: &Mmu) -> (usize, usize) {
     let p = mmu.get8(cpu.get_pc().wrapping_add(arg));
-    let pc = cpu.get_pc().wrapping_add(alu::signed(p)).wrapping_add(2);
+    let pc = cpu.get_pc().wrapping_add(alu::signed(p));
     cpu.set_pc(pc);
 
     (12, 2)
@@ -874,9 +874,9 @@ fn op_0020(arg: u16, cpu: &Cpu, mmu: &Mmu) -> (usize, usize) {
     let flg = !cpu.get_zf();
     if flg {
         let p = mmu.get8(cpu.get_pc().wrapping_add(arg));
-        let pc = cpu.get_pc().wrapping_add(alu::signed(p)).wrapping_add(2);
+        let pc = cpu.get_pc().wrapping_add(alu::signed(p));
         cpu.set_pc(pc);
-        return (12, 0);
+        return (12, 2);
     }
 
     (8, 2)
@@ -980,9 +980,9 @@ fn op_0028(arg: u16, cpu: &Cpu, mmu: &Mmu) -> (usize, usize) {
     let flg = cpu.get_zf();
     if flg {
         let p = mmu.get8(cpu.get_pc().wrapping_add(arg));
-        let pc = cpu.get_pc().wrapping_add(alu::signed(p)).wrapping_add(2);
+        let pc = cpu.get_pc().wrapping_add(alu::signed(p));
         cpu.set_pc(pc);
-        return (12, 0);
+        return (12, 2);
     }
 
     (8, 2)
@@ -1075,9 +1075,9 @@ fn op_0030(arg: u16, cpu: &Cpu, mmu: &Mmu) -> (usize, usize) {
     let flg = !cpu.get_cf();
     if flg {
         let p = mmu.get8(cpu.get_pc().wrapping_add(arg));
-        let pc = cpu.get_pc().wrapping_add(alu::signed(p)).wrapping_add(2);
+        let pc = cpu.get_pc().wrapping_add(alu::signed(p));
         cpu.set_pc(pc);
-        return (12, 0);
+        return (12, 2);
     }
 
     (8, 2)
@@ -1165,9 +1165,9 @@ fn op_0038(arg: u16, cpu: &Cpu, mmu: &Mmu) -> (usize, usize) {
     let flg = cpu.get_cf();
     if flg {
         let p = mmu.get8(cpu.get_pc().wrapping_add(arg));
-        let pc = cpu.get_pc().wrapping_add(alu::signed(p)).wrapping_add(2);
+        let pc = cpu.get_pc().wrapping_add(alu::signed(p));
         cpu.set_pc(pc);
-        return (12, 0);
+        return (12, 2);
     }
 
     (8, 2)
