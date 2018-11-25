@@ -26,92 +26,92 @@
 {% macro ld(i) %}
   let v = {{ i.operands[1] | getter(bits=i.bits) }};
   {{ i.operands[0] | setter(bits=i.bits) }}v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro ldhl(i) %}
   let p = {{ i.operands[0] | getter(bits=i.bits) }};
   let q = {{ i.operands[1] | getter(bits=i.bits) }};
   let (v, h, c, z) = alu::add16e(p, q, false);
   cpu.set_hl(v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro add8(i) %}
   let p = {{ i.operands[0] | getter(bits=i.bits) }};
   let q = {{ i.operands[1] | getter(bits=i.bits) }};
   let (v, h, c, z) = alu::add8(p, q, false);
   {{ i.operands[0] | setter(bits=i.bits) }}v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro add16(i) %}
   let p = {{ i.operands[0] | getter(bits=i.bits) }};
   let q = {{ i.operands[1] | getter(bits=i.bits) }};
   let (v, h, c, z) = alu::add16(p, q, false);
   {{ i.operands[0] | setter(bits=i.bits) }}v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro addsp(i) %}
   let p = {{ i.operands[0] | getter(bits=i.bits) }};
   let q = {{ i.operands[1] | getter(bits=i.bits) }};
   let (v, h, c, z) = alu::add16e(p, q, false);
   {{ i.operands[0] | setter(bits=i.bits) }}v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro sub(i) %}
   let p = cpu.get_a();
   let q = {{ i.operands[0] | getter(bits=i.bits) }};
   let (v, h, c, z) = alu::sub8(p, q, false);
   cpu.set_a(v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro adc(i) %}
   let p = cpu.get_a();
   let q = {{ i.operands[1] | getter(bits=i.bits) }};
   let (v, h, c, z) = alu::add8(p, q, cpu.get_cf());
   cpu.set_a(v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro sbc(i) %}
   let p = cpu.get_a();
   let q = {{ i.operands[1] | getter(bits=i.bits) }};
   let (v, h, c, z) = alu::sub8(p, q, cpu.get_cf());
   cpu.set_a(v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro and(i) %}
   cpu.set_a(cpu.get_a() & {{ i.operands[0] | getter(bits=i.bits) }});
   let z = cpu.get_a() == 0;
-{% endmacro and %}
+{% endmacro %}
 
 {% macro or(i) %}
   cpu.set_a(cpu.get_a() | {{ i.operands[0] | getter(bits=i.bits) }});
   let z = cpu.get_a() == 0;
-{% endmacro and %}
+{% endmacro %}
 
 {% macro xor(i) %}
   cpu.set_a(cpu.get_a() ^ {{ i.operands[0] | getter(bits=i.bits) }});
   let z = cpu.get_a() == 0;
-{% endmacro and %}
+{% endmacro %}
 
 {% macro cp(i) %}
   let p = cpu.get_a();
   let q = {{ i.operands[0] | getter(bits=i.bits) }};
   let (_, h, c, z) = alu::sub8(p, q, false);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro push(i) %}
   cpu.push(mmu, {{ i.operands[0] | getter(bits=i.bits) }});
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro pop(i) %}
   {{ i.operands[0] | setter(bits=i.bits) }}cpu.pop(mmu));
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro swap(i) %}
   let v = {{ i.operands[0] | getter(bits=i.bits) }};
   let v = v.rotate_left(4);
   {{ i.operands[0] | setter(bits=i.bits) }}v);
   let z = v == 0;
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro daa(i) %}
    let l = cpu.get_a() & 0xf;
@@ -131,35 +131,35 @@
    let c = hc > 0;
 
    cpu.set_a(v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro cpl(i) %}
   cpu.set_a(cpu.get_a() ^ 0xff);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro ccf(i) %}
   let c = !cpu.get_cf();
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro scf(i) %}
   cpu.set_cf(true);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro halt(i) %}
   cpu.halt();
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro stop(i) %}
   cpu.stop();
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro di(i) %}
   cpu.disable_interrupt();
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro ei(i) %}
   cpu.enable_interrupt();
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro rlc(i) %}
   let v = {{ i.operands[0] | getter(bits=i.bits) }};
@@ -167,7 +167,7 @@
   let v = v.rotate_left(1);
   let z = v == 0;
   {{ i.operands[0] | setter(bits=i.bits) }}v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro rlca(i) %}
   let v = cpu.get_a();
@@ -175,7 +175,7 @@
   let v = v.rotate_left(1);
   let z = v == 0;
   cpu.set_a(v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro rl(i) %}
   let v = {{ i.operands[0] | getter(bits=i.bits) }};
@@ -184,7 +184,7 @@
   let v = v | if cpu.get_cf() { 1 } else { 0 };
   let z = v == 0;
   {{ i.operands[0] | setter(bits=i.bits) }}v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro rla(i) %}
   let v = cpu.get_a();
@@ -192,7 +192,7 @@
   let v = v.wrapping_shl(1);
   let v = v | if cpu.get_cf() { 1 } else { 0 };
   cpu.set_a(v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro rrc(i) %}
   let v = {{ i.operands[0] | getter(bits=i.bits) }};
@@ -200,7 +200,7 @@
   let v = v.rotate_right(1);
   let z = v == 0;
   {{ i.operands[0] | setter(bits=i.bits) }}v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro rrca(i) %}
   let v = cpu.get_a();
@@ -208,7 +208,7 @@
   let v = v.rotate_right(1);
   let z = v == 0;
   cpu.set_a(v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro rr(i) %}
   let v = {{ i.operands[0] | getter(bits=i.bits) }};
@@ -217,7 +217,7 @@
   let v = v | if cpu.get_cf() { 0x80 } else { 0 };
   let z = v == 0;
   {{ i.operands[0] | setter(bits=i.bits) }}v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro rra(i) %}
   let v = cpu.get_a();
@@ -225,7 +225,7 @@
   let v = v.wrapping_shr(1);
   let v = v | if cpu.get_cf() { 0x80 } else { 0 };
   cpu.set_a(v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro sla(i) %}
   let v = {{ i.operands[0] | getter(bits=i.bits) }};
@@ -233,7 +233,7 @@
   let v = v.wrapping_shl(1);
   let z = v == 0;
   {{ i.operands[0] | setter(bits=i.bits) }}v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro sra(i) %}
   let v = {{ i.operands[0] | getter(bits=i.bits) }};
@@ -243,7 +243,7 @@
   let v = v | msb;
   let z = v == 0;
   {{ i.operands[0] | setter(bits=i.bits) }}v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro srl(i) %}
   let v = {{ i.operands[0] | getter(bits=i.bits) }};
@@ -251,7 +251,7 @@
   let v = v.wrapping_shr(1);
   let z = v == 0;
   {{ i.operands[0] | setter(bits=i.bits) }}v);
-{% endmacro ld %}
+{% endmacro %}
 
 {% macro bit(i) %}
   let p = {{ i.operands[0] | getter(bits=i.bits) }};
