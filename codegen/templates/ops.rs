@@ -103,7 +103,8 @@
 {% endmacro %}
 
 {% macro pop(i) %}
-  {{ i.operands[0] | setter(bits=i.bits) }}cpu.pop(mmu));
+  let v = cpu.pop(mmu);
+  {{ i.operands[0] | setter(bits=i.bits) }}v);
 {% endmacro %}
 
 {% macro swap(i) %}
@@ -307,18 +308,21 @@
 {% endmacro %}
 
 {% macro ret(i) %}
-  cpu.set_pc(cpu.pop(mmu).wrapping_sub({{i.size}}));
+  let pc = cpu.pop(mmu).wrapping_sub({{i.size}});
+  cpu.set_pc(pc);
 {% endmacro %}
 
 {% macro retif(i) %}
   let flg = {{ i.operands[0] | getter(bits=i.bits) }};
   if flg {
-    cpu.set_pc(cpu.pop(mmu));
+    let pc = cpu.pop(mmu);
+    cpu.set_pc(pc);
     return ({{ i.time[0] }}, 0)
   }
 {% endmacro %}
 
 {% macro reti(i) %}
-  cpu.set_pc(cpu.pop(mmu).wrapping_sub({{i.size}}));
+  let pc = cpu.pop(mmu).wrapping_sub({{i.size}});
+  cpu.set_pc(pc);
   cpu.enable_interrupt_immediate();
 {% endmacro %}

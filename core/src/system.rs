@@ -16,7 +16,7 @@ pub fn run() {
 
     let hd = std::thread::spawn(move || {
         let mut dbg = Debugger::new();
-        let cpu = Cpu::new();
+        let mut cpu = Cpu::new();
         let mut mmu = Mmu::new();
         let gpu = Gpu::new(screen);
 
@@ -34,7 +34,7 @@ pub fn run() {
             let (code, arg) = cpu.fetch(&mmu);
 
             dbg.on_decode(&Resource::new(&cpu, &mmu));
-            let (time, size) = inst::decode(code, arg, &cpu, &mmu);
+            let (time, size) = inst::decode(code, arg, &mut cpu, &mut mmu);
             cpu.set_pc(cpu.get_pc().wrapping_add(size as u16));
 
             gpu.step(time);

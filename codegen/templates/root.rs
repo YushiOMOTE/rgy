@@ -18,7 +18,7 @@ lazy_static! {
 {% for i in insts %}
 /// {{i.operator}} {{i.operands | join(sep=",")}}
 #[allow(unused_variables)]
-fn op_{{i.code | hex}}(arg: u16, cpu: &Cpu, mmu: &Mmu) -> (usize, usize) {
+fn op_{{i.code | hex}}(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     {%- if i.operator == "nop" -%}
 
     {{ macros::nop(i=i) }}
@@ -195,7 +195,7 @@ pub fn mnem(code: u16) -> &'static str {
     MNEMONICS.get(&code).unwrap_or(&"(unknown opcode)")
 }
 
-pub fn decode(code: u16, arg: u16, cpu: &Cpu, mmu: &Mmu) -> (usize, usize) {
+pub fn decode(code: u16, arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     trace!("{:04x}: {:04x}: {}", cpu.get_pc(), code, mnem(code));
 
     match code {

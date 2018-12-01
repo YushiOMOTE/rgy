@@ -4,16 +4,16 @@ use crate::mmu::Mmu;
 use std::fmt;
 
 pub struct Cpu {
-    a: Cell<u8>,
-    b: Cell<u8>,
-    c: Cell<u8>,
-    d: Cell<u8>,
-    e: Cell<u8>,
-    f: Cell<u8>,
-    h: Cell<u8>,
-    l: Cell<u8>,
-    pc: Cell<u16>,
-    sp: Cell<u16>,
+    a: u8,
+    b: u8,
+    c: u8,
+    d: u8,
+    e: u8,
+    f: u8,
+    h: u8,
+    l: u8,
+    pc: u16,
+    sp: u16,
 }
 
 impl fmt::Display for Cpu {
@@ -28,16 +28,16 @@ impl fmt::Display for Cpu {
              sp: [{:04x}]\n\
              flgs: [{}{}{}{}]\
              ",
-            self.a.get(),
-            self.b.get(),
-            self.c.get(),
-            self.d.get(),
-            self.e.get(),
-            self.f.get(),
-            self.h.get(),
-            self.l.get(),
-            self.pc.get(),
-            self.sp.get(),
+            self.a,
+            self.b,
+            self.c,
+            self.d,
+            self.e,
+            self.f,
+            self.h,
+            self.l,
+            self.pc,
+            self.sp,
             if self.get_zf() { "z" } else { "_" },
             if self.get_nf() { "n" } else { "_" },
             if self.get_hf() { "h" } else { "_" },
@@ -49,16 +49,16 @@ impl fmt::Display for Cpu {
 impl Cpu {
     pub fn new() -> Cpu {
         Cpu {
-            a: Cell::new(0),
-            b: Cell::new(0),
-            c: Cell::new(0),
-            d: Cell::new(0),
-            e: Cell::new(0),
-            f: Cell::new(0),
-            h: Cell::new(0),
-            l: Cell::new(0),
-            pc: Cell::new(0),
-            sp: Cell::new(0),
+            a: 0,
+            b: 0,
+            c: 0,
+            d: 0,
+            e: 0,
+            f: 0,
+            h: 0,
+            l: 0,
+            pc: 0,
+            sp: 0,
         }
     }
 
@@ -73,168 +73,168 @@ impl Cpu {
     pub fn stop(&self) {}
 
     pub fn get_zf(&self) -> bool {
-        self.f.get() & 0x80 == 0x80
+        self.f & 0x80 == 0x80
     }
 
     pub fn get_nf(&self) -> bool {
-        self.f.get() & 0x40 == 0x40
+        self.f & 0x40 == 0x40
     }
 
     pub fn get_hf(&self) -> bool {
-        self.f.get() & 0x20 == 0x20
+        self.f & 0x20 == 0x20
     }
 
     pub fn get_cf(&self) -> bool {
-        self.f.get() & 0x10 == 0x10
+        self.f & 0x10 == 0x10
     }
 
-    pub fn set_zf(&self, v: bool) {
+    pub fn set_zf(&mut self, v: bool) {
         if v {
-            self.f.set(self.f.get() | 0x80)
+            self.f = self.f | 0x80
         } else {
-            self.f.set(self.f.get() & !0x80)
+            self.f = self.f & !0x80
         }
     }
 
-    pub fn set_nf(&self, v: bool) {
+    pub fn set_nf(&mut self, v: bool) {
         if v {
-            self.f.set(self.f.get() | 0x40)
+            self.f = self.f | 0x40
         } else {
-            self.f.set(self.f.get() & !0x40)
+            self.f = self.f & !0x40
         }
     }
 
-    pub fn set_hf(&self, v: bool) {
+    pub fn set_hf(&mut self, v: bool) {
         if v {
-            self.f.set(self.f.get() | 0x20)
+            self.f = self.f | 0x20
         } else {
-            self.f.set(self.f.get() & !0x20)
+            self.f = self.f & !0x20
         }
     }
 
-    pub fn set_cf(&self, v: bool) {
+    pub fn set_cf(&mut self, v: bool) {
         if v {
-            self.f.set(self.f.get() | 0x10)
+            self.f = self.f | 0x10
         } else {
-            self.f.set(self.f.get() & !0x10)
+            self.f = self.f & !0x10
         }
     }
 
-    pub fn set_a(&self, v: u8) {
-        self.a.set(v)
+    pub fn set_a(&mut self, v: u8) {
+        self.a = v
     }
 
-    pub fn set_b(&self, v: u8) {
-        self.b.set(v)
+    pub fn set_b(&mut self, v: u8) {
+        self.b = v
     }
 
-    pub fn set_c(&self, v: u8) {
-        self.c.set(v)
+    pub fn set_c(&mut self, v: u8) {
+        self.c = v
     }
 
-    pub fn set_d(&self, v: u8) {
-        self.d.set(v)
+    pub fn set_d(&mut self, v: u8) {
+        self.d = v
     }
 
-    pub fn set_e(&self, v: u8) {
-        self.e.set(v)
+    pub fn set_e(&mut self, v: u8) {
+        self.e = v
     }
 
-    pub fn set_h(&self, v: u8) {
-        self.h.set(v)
+    pub fn set_h(&mut self, v: u8) {
+        self.h = v
     }
 
-    pub fn set_l(&self, v: u8) {
-        self.l.set(v)
+    pub fn set_l(&mut self, v: u8) {
+        self.l = v
     }
 
-    pub fn set_af(&self, v: u16) {
-        self.a.set((v >> 8) as u8);
-        self.f.set(v as u8);
+    pub fn set_af(&mut self, v: u16) {
+        self.a = (v >> 8) as u8;
+        self.f = v as u8;
     }
 
-    pub fn set_bc(&self, v: u16) {
-        self.b.set((v >> 8) as u8);
-        self.c.set(v as u8);
+    pub fn set_bc(&mut self, v: u16) {
+        self.b = (v >> 8) as u8;
+        self.c = v as u8;
     }
 
-    pub fn set_de(&self, v: u16) {
-        self.d.set((v >> 8) as u8);
-        self.e.set(v as u8);
+    pub fn set_de(&mut self, v: u16) {
+        self.d = (v >> 8) as u8;
+        self.e = v as u8;
     }
 
-    pub fn set_hl(&self, v: u16) {
-        self.h.set((v >> 8) as u8);
-        self.l.set(v as u8);
+    pub fn set_hl(&mut self, v: u16) {
+        self.h = (v >> 8) as u8;
+        self.l = v as u8;
     }
 
     pub fn get_a(&self) -> u8 {
-        self.a.get()
+        self.a
     }
 
     pub fn get_b(&self) -> u8 {
-        self.b.get()
+        self.b
     }
 
     pub fn get_c(&self) -> u8 {
-        self.c.get()
+        self.c
     }
 
     pub fn get_d(&self) -> u8 {
-        self.d.get()
+        self.d
     }
 
     pub fn get_e(&self) -> u8 {
-        self.e.get()
+        self.e
     }
 
     pub fn get_h(&self) -> u8 {
-        self.h.get()
+        self.h
     }
 
     pub fn get_l(&self) -> u8 {
-        self.l.get()
+        self.l
     }
 
     pub fn get_af(&self) -> u16 {
-        (self.a.get() as u16) << 8 | self.f.get() as u16
+        (self.a as u16) << 8 | self.f as u16
     }
 
     pub fn get_bc(&self) -> u16 {
-        (self.b.get() as u16) << 8 | self.c.get() as u16
+        (self.b as u16) << 8 | self.c as u16
     }
 
     pub fn get_de(&self) -> u16 {
-        (self.d.get() as u16) << 8 | self.e.get() as u16
+        (self.d as u16) << 8 | self.e as u16
     }
 
     pub fn get_hl(&self) -> u16 {
-        (self.h.get() as u16) << 8 | self.l.get() as u16
+        (self.h as u16) << 8 | self.l as u16
     }
 
     pub fn get_pc(&self) -> u16 {
-        self.pc.get()
+        self.pc
     }
 
-    pub fn set_pc(&self, v: u16) {
-        self.pc.set(v)
+    pub fn set_pc(&mut self, v: u16) {
+        self.pc = v
     }
 
     pub fn get_sp(&self) -> u16 {
-        self.sp.get()
+        self.sp
     }
 
-    pub fn set_sp(&self, v: u16) {
-        self.sp.set(v)
+    pub fn set_sp(&mut self, v: u16) {
+        self.sp = v
     }
 
-    pub fn push(&self, mmu: &Mmu, v: u16) {
+    pub fn push(&mut self, mmu: &Mmu, v: u16) {
         let p = self.get_sp().wrapping_sub(2);
         self.set_sp(self.get_sp().wrapping_sub(2));
         mmu.set16(p, v)
     }
 
-    pub fn pop(&self, mmu: &Mmu) -> u16 {
+    pub fn pop(&mut self, mmu: &Mmu) -> u16 {
         let p = self.get_sp();
         self.set_sp(self.get_sp().wrapping_add(2));
         mmu.get16(p)
