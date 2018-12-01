@@ -13,7 +13,7 @@ pub trait WriteHandler {
 }
 
 pub struct Mmu {
-    ram: RefCell<Vec<u8>>,
+    ram: Vec<u8>,
     rdhooks: HashMap<u16, Rc<RefCell<ReadHandler>>>,
     wrhooks: HashMap<u16, Rc<RefCell<WriteHandler>>>,
 }
@@ -21,7 +21,7 @@ pub struct Mmu {
 impl Mmu {
     pub fn new() -> Mmu {
         Mmu {
-            ram: RefCell::new(vec![0u8; 0x10000]),
+            ram: vec![0u8; 0x10000],
             rdhooks: HashMap::new(),
             wrhooks: HashMap::new(),
         }
@@ -55,7 +55,7 @@ impl Mmu {
         }
     }
 
-    pub fn load(&self) {
+    pub fn load(&mut self) {
         let mut f = File::open("boot.bin").expect("Couldn't open file");
         let mut buf = vec![0; 256];
 
@@ -74,19 +74,19 @@ impl Mmu {
             }
         }
 
-        self.ram.borrow_mut()[addr as usize]
+        self.ram[addr as usize]
     }
 
-    pub fn set8(&self, addr: u16, v: u8) {
+    pub fn set8(&mut self, addr: u16, v: u8) {
         if let Some(handler) = self.wrhooks.get(&addr) {
             if let Some(alt) = handler.borrow_mut().on_write(self, addr, v) {
-                self.ram.borrow_mut()[addr as usize] = v;
+                self.ram[addr as usize] = v;
 
                 return;
             }
         }
 
-        self.ram.borrow_mut()[addr as usize] = v
+        self.ram[addr as usize] = v
     }
 
     pub fn get16(&self, addr: u16) -> u16 {
@@ -95,7 +95,7 @@ impl Mmu {
         (h as u16) << 8 | l as u16
     }
 
-    pub fn set16(&self, addr: u16, v: u16) {
+    pub fn set16(&mut self, addr: u16, v: u16) {
         self.set8(addr, v as u8);
         self.set8(addr + 1, (v >> 8) as u8);
     }

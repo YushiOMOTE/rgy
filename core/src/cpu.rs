@@ -228,13 +228,13 @@ impl Cpu {
         self.sp = v
     }
 
-    pub fn push(&mut self, mmu: &Mmu, v: u16) {
+    pub fn push(&mut self, mmu: &mut Mmu, v: u16) {
         let p = self.get_sp().wrapping_sub(2);
         self.set_sp(self.get_sp().wrapping_sub(2));
         mmu.set16(p, v)
     }
 
-    pub fn pop(&mut self, mmu: &Mmu) -> u16 {
+    pub fn pop(&mut self, mmu: &mut Mmu) -> u16 {
         let p = self.get_sp();
         self.set_sp(self.get_sp().wrapping_add(2));
         mmu.get16(p)
