@@ -63,7 +63,9 @@ impl Mmu {
 
         for i in 0..buf.len() {
             self.set8(i as u16, buf[i]);
-            self.set8(i as u16 + 0x104, buf[i]);
+        }
+        for i in 0..48 {
+            self.set8(i as u16 + 0x104, buf[i + 0xa8]);
         }
     }
 
