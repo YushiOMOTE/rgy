@@ -61,7 +61,7 @@ impl Lcd {
 
     pub fn run(&mut self) {
         let mut window = match Window::new(
-            "Noise Test - Press ESC to exit",
+            "Gay Boy",
             WIDTH,
             HEIGHT,
             WindowOptions {
@@ -79,19 +79,25 @@ impl Lcd {
         // Initial update
         window.update_with_buffer(&self.vram).unwrap();
 
+        let fint = Duration::from_millis(1000 / 60);
+
         // Update
         while window.is_open() && !window.is_key_down(Key::Escape) {
-            match self.rx.try_recv() {
-                Ok(update) => match update {
-                    Update::All(buf) => {
-                        self.vram = buf;
-                    }
-                    Update::Line(line, buf) => for i in 0..buf.len() {
-                        let base = line * WIDTH;
-                        self.vram[base + i] = buf[i];
+            let last = std::time::Instant::now();
+
+            while std::time::Instant::now() - last < fint {
+                match self.rx.try_recv() {
+                    Ok(update) => match update {
+                        Update::All(buf) => {
+                            self.vram = buf;
+                        }
+                        Update::Line(line, buf) => for i in 0..buf.len() {
+                            let base = line * WIDTH;
+                            self.vram[base + i] = buf[i];
+                        },
                     },
-                },
-                Err(_) => {}
+                    Err(_) => {}
+                }
             }
 
             window.get_keys().map(|keys| {

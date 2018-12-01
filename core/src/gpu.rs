@@ -67,6 +67,7 @@ struct Inner {
     bgenable: bool,
     vram: Vec<u32>,
     screen: Box<Screen>,
+    palette: Vec<u32>,
 }
 
 impl Inner {
@@ -88,6 +89,7 @@ impl Inner {
             bgenable: false,
             vram: vec![0; 256 * 256],
             screen: screen,
+            palette: vec![0xdddddd, 0xaaaaaa, 0x888888, 0x555555],
         }
     }
 
@@ -155,18 +157,15 @@ impl Inner {
 
         let tmapbase = self.bgbase;
         let tsetbase = self.bgwinbase;
-        let palette = vec![0x999999, 0xbbbbbb, 0xeeeeee, 0xffffff];
 
         let yy = (self.ly as u16 + self.scy as u16) % 256;
+        let ty = yy / 8;
+        let tyoff = yy % 8;
 
         for x in 0..self.screen.width() as u16 {
             let xx = (x + self.scx as u16) % 256;
-
             let tx = xx / 8;
             let txoff = xx % 8;
-
-            let ty = yy / 8;
-            let tyoff = yy % 8;
 
             let ti = tx + ty * 32;
             let tbase = tsetbase + mmu.get8(tmapbase + ti) as u16 * 16;
@@ -176,7 +175,7 @@ impl Inner {
 
             let l = (l >> (7 - txoff)) & 1;
             let h = ((h >> (7 - txoff)) & 1) << 1;
-            let col = palette[(h | l) as usize];
+            let col = self.palette[(h | l) as usize];
 
             buf[x as usize] = col;
         }

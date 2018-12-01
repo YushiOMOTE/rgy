@@ -47,5 +47,5 @@ pub fn run(debug: bool) {
 
     lcd.run();
 
-    hd.join().unwrap();
+    // hd.join().unwrap();
 }
