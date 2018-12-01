@@ -253,3 +253,35 @@ impl Cpu {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::inst::decode;
+
+    fn write(mmu: &mut Mmu, m: Vec<u8>) {
+        for i in 0..m.len() {
+            mmu.set8(i as u16, m[i]);
+        }
+    }
+
+    fn exec(cpu: &mut Cpu, mmu: &mut Mmu) {
+        let (code, arg) = cpu.fetch(&mmu);
+
+        decode(code, arg, cpu, mmu);
+    }
+
+    #[test]
+    fn op_00af() {
+        // xor a
+        let mut mmu = Mmu::new();
+        let mut cpu = Cpu::new();
+
+        cpu.set_a(0x32);
+
+        write(&mut mmu, vec![0xaf]);
+        exec(&mut cpu, &mut mmu);
+
+        assert_eq!(cpu.get_a(), 0x00);
+    }
+}
