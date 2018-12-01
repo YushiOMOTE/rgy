@@ -173,6 +173,7 @@ impl Debugger {
             "rrw" => self.remove_rdwatch(parse_addr(args)?),
             "rww" => self.remove_wrwatch(parse_addr(args)?),
             "d" => self.dump(res),
+            "s" => self.stack(res),
             "q" => self.quit(),
             "n" => self.step(),
             "c" => self.resume(),
@@ -228,6 +229,20 @@ impl Debugger {
 
     fn dump(&self, res: &Resource) -> CmdResult<bool> {
         println!("{}", res.cpu);
+
+        Ok(false)
+    }
+
+    fn stack(&self, res: &Resource) -> CmdResult<bool> {
+        let sp = res.cpu.get_sp();
+
+        for i in 0..10 {
+            let (p, of) = sp.overflowing_add(i * 2);
+            if of {
+                break
+            }
+            println!("{}: {:04x} [{:04x}]", i, p, res.mmu.get16(p));
+        }
 
         Ok(false)
     }
