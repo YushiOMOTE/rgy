@@ -37,7 +37,7 @@ pub fn run() {
             let (time, size) = inst::decode(code, arg, &mut cpu, &mut mmu);
             cpu.set_pc(cpu.get_pc().wrapping_add(size as u16));
 
-            gpu.step(time);
+            gpu.step(time, &mut mmu);
 
             perf.count();
         }

@@ -17,6 +17,14 @@ pub struct Handle {
 }
 
 impl Screen for Handle {
+    fn width(&self) -> usize {
+        WIDTH
+    }
+
+    fn height(&self) -> usize {
+        HEIGHT
+    }
+
     fn update(&self, buffer: &[u32]) {
         assert_eq!(buffer.len(), WIDTH * HEIGHT);
         let _ = self.tx.send(Update::All(buffer.into()));
