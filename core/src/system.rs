@@ -7,7 +7,7 @@ use crate::debug::{Debugger, Perf, Resource};
 
 use std::rc::Rc;
 
-pub fn run() {
+pub fn run(debug: bool) {
     info!("Initializing...");
 
     let mut lcd = Lcd::new();
@@ -24,7 +24,9 @@ pub fn run() {
         mmu.add_rdhooks((0xff40, 0xff4f), gpu.handler());
         mmu.add_wrhooks((0xff40, 0xff4f), gpu.handler());
 
-        dbg.init(&Resource::new(&cpu, &mmu));
+        if debug {
+            dbg.init(&Resource::new(&cpu, &mmu));
+        }
 
         let mut perf = Perf::new();
 
