@@ -19,6 +19,11 @@ pub fn run(debug: bool) {
         let gpu = Gpu::new(screen);
 
         mmu.load();
+
+        if debug {
+            mmu.add_handler((0x0000, 0xffff), dbg.handler());
+        }
+
         mmu.add_handler((0xff40, 0xff4f), gpu.handler());
 
         if debug {
