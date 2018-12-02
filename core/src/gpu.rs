@@ -264,13 +264,13 @@ impl GpuHandler {
 }
 
 impl ReadHandler for GpuHandler {
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> Option<u8> {
+    fn on_read(&self, mmu: &Mmu, addr: u16) -> Option<u8> {
         self.inner.borrow_mut().on_read(mmu, addr)
     }
 }
 
 impl WriteHandler for GpuHandler {
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> Option<u8> {
+    fn on_write(&self, mmu: &Mmu, addr: u16, value: u8) -> Option<u8> {
         self.inner.borrow_mut().on_write(mmu, addr, value)
     }
 }

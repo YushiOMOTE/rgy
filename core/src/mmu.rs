@@ -1,21 +1,20 @@
 use std::io::prelude::*;
 use std::fs::File;
 use std::rc::Rc;
-use std::cell::RefCell;
 use std::collections::HashMap;
 
 pub trait ReadHandler {
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> Option<u8>;
+    fn on_read(&self, mmu: &Mmu, addr: u16) -> Option<u8>;
 }
 
 pub trait WriteHandler {
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> Option<u8>;
+    fn on_write(&self, mmu: &Mmu, addr: u16, value: u8) -> Option<u8>;
 }
 
 pub struct Mmu {
     ram: Vec<u8>,
-    rdhooks: HashMap<u16, Rc<RefCell<ReadHandler>>>,
-    wrhooks: HashMap<u16, Rc<RefCell<WriteHandler>>>,
+    rdhooks: HashMap<u16, Rc<ReadHandler>>,
+    wrhooks: HashMap<u16, Rc<WriteHandler>>,
 }
 
 impl Mmu {
@@ -28,16 +27,14 @@ impl Mmu {
     }
 
     pub fn add_rdhooks<T: ReadHandler + 'static>(&mut self, range: (u16, u16), handler: T) {
-        let handler = Rc::new(RefCell::new(handler));
-
+        let handler = Rc::new(handler);
         for i in range.0..range.1 {
             self.rdhooks.insert(i, handler.clone());
         }
     }
 
     pub fn add_wrhooks<T: WriteHandler + 'static>(&mut self, range: (u16, u16), handler: T) {
-        let handler = Rc::new(RefCell::new(handler));
-
+        let handler = Rc::new(handler);
         for i in range.0..range.1 {
             self.wrhooks.insert(i, handler.clone());
         }
@@ -71,7 +68,7 @@ impl Mmu {
 
     pub fn get8(&self, addr: u16) -> u8 {
         if let Some(handler) = self.rdhooks.get(&addr) {
-            if let Some(alt) = handler.borrow_mut().on_read(self, addr) {
+            if let Some(alt) = handler.on_read(self, addr) {
                 return alt;
             }
         }
@@ -81,7 +78,7 @@ impl Mmu {
 
     pub fn set8(&mut self, addr: u16, v: u8) {
         if let Some(handler) = self.wrhooks.get(&addr) {
-            if let Some(alt) = handler.borrow_mut().on_write(self, addr, v) {
+            if let Some(alt) = handler.on_write(self, addr, v) {
                 self.ram[addr as usize] = v;
 
                 return;
