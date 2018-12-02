@@ -2,6 +2,7 @@
 extern crate lazy_static;
 #[macro_use]
 extern crate log;
+extern crate cpal;
 extern crate env_logger;
 extern crate minifb;
 extern crate rustyline;
@@ -14,7 +15,7 @@ mod inst;
 mod alu;
 mod system;
 mod debug;
-mod lcd;
+mod device;
 mod sound;
 
 use structopt::StructOpt;

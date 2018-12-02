@@ -1,7 +1,7 @@
 use crate::cpu::Cpu;
 use crate::mmu::Mmu;
 use crate::gpu::Gpu;
-use crate::lcd::Lcd;
+use crate::device::{Lcd, Pcm};
 use crate::sound::Sound;
 use crate::inst;
 use crate::debug::{Debugger, Perf, Resource};
@@ -10,14 +10,16 @@ pub fn run(debug: bool) {
     info!("Initializing...");
 
     let mut lcd = Lcd::new();
+    let mut pcm = Pcm::new();
 
     let screen = Box::new(lcd.handle());
+    let speaker = Box::new(pcm.handle());
 
-    let hd = std::thread::spawn(move || {
+    let _core_thread = std::thread::spawn(move || {
         let mut dbg = Debugger::new();
         let mut cpu = Cpu::new();
         let mut mmu = Mmu::new();
-        let mut sound = Sound::new();
+        let mut sound = Sound::new(speaker);
         let gpu = Gpu::new(screen);
 
         mmu.load();
@@ -50,7 +52,9 @@ pub fn run(debug: bool) {
         }
     });
 
-    lcd.run();
+    let _sound_thread = std::thread::spawn(move || {
+        pcm.run();
+    });
 
-    // hd.join().unwrap();
+    lcd.run();
 }
