@@ -2,6 +2,7 @@ use crate::cpu::Cpu;
 use crate::mmu::Mmu;
 use crate::gpu::Gpu;
 use crate::lcd::Lcd;
+use crate::sound::Sound;
 use crate::inst;
 use crate::debug::{Debugger, Perf, Resource};
 
@@ -16,6 +17,7 @@ pub fn run(debug: bool) {
         let mut dbg = Debugger::new();
         let mut cpu = Cpu::new();
         let mut mmu = Mmu::new();
+        let mut sound = Sound::new();
         let gpu = Gpu::new(screen);
 
         mmu.load();
@@ -24,6 +26,7 @@ pub fn run(debug: bool) {
             mmu.add_handler((0x0000, 0xffff), dbg.handler());
         }
 
+        mmu.add_handler((0xff10, 0xff26), sound.handler());
         mmu.add_handler((0xff40, 0xff4f), gpu.handler());
 
         if debug {

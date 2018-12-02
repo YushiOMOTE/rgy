@@ -15,6 +15,7 @@ mod alu;
 mod system;
 mod debug;
 mod lcd;
+mod sound;
 
 use structopt::StructOpt;
 
