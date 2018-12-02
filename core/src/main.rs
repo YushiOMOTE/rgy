@@ -31,6 +31,9 @@ pub struct Opt {
     /// Delay unit for cpu frequency controller
     #[structopt(short = "u", long = "delayunit", default_value = "10")]
     delay_unit: usize,
+    /// Don't adjust cpu frequency
+    #[structopt(short = "n", long = "native")]
+    native_speed: bool,
     /// Enable debug mode
     #[structopt(short = "d", long = "debug")]
     debug: bool,
@@ -41,5 +44,5 @@ fn main() {
 
     env_logger::init();
 
-    system::run(opt.freq, opt.sample, opt.delay_unit, opt.debug);
+    system::run(opt);
 }

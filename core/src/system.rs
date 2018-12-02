@@ -7,6 +7,7 @@ use crate::inst;
 use crate::debug::{Debugger, Perf, Resource};
 use std::time::Instant;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use crate::Opt;
 
 struct FreqControl {
     last: Instant,
@@ -61,10 +62,10 @@ impl FreqControl {
     }
 }
 
-pub fn run(freq: usize, sample: usize, delay_unit: usize, debug: bool) {
+pub fn run(opt: Opt) {
     info!("Initializing...");
 
-    let mut fc = FreqControl::new(freq, sample, delay_unit);
+    let mut fc = FreqControl::new(opt.freq, opt.sample, opt.delay_unit);
 
     let mut lcd = Lcd::new();
     let pcm = Pcm::new();
@@ -81,14 +82,14 @@ pub fn run(freq: usize, sample: usize, delay_unit: usize, debug: bool) {
 
         mmu.load();
 
-        if debug {
+        if opt.debug {
             mmu.add_handler((0x0000, 0xffff), dbg.handler());
         }
 
         mmu.add_handler((0xff10, 0xff26), sound.handler());
         mmu.add_handler((0xff40, 0xff4f), gpu.handler());
 
-        if debug {
+        if opt.debug {
             dbg.init(&Resource::new(&cpu, &mmu));
         }
 
@@ -115,7 +116,9 @@ pub fn run(freq: usize, sample: usize, delay_unit: usize, debug: bool) {
 
             perf.count();
 
-            fc.adjust();
+            if !opt.native_speed {
+                fc.adjust();
+            }
         }
     });
 
