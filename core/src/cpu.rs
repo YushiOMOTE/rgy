@@ -1,4 +1,3 @@
-use std::cell::Cell;
 use crate::mmu::Mmu;
 
 use std::fmt;

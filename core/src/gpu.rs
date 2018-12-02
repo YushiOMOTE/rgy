@@ -1,7 +1,7 @@
-use crate::mmu::{Mmu, ReadHandler, WriteHandler};
+use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 
 use std::rc::Rc;
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 
 pub trait Screen {
     fn width(&self) -> usize;
@@ -65,7 +65,6 @@ struct Inner {
     spsize: u16,
     spenable: bool,
     bgenable: bool,
-    vram: Vec<u32>,
     screen: Box<Screen>,
     palette: Vec<u32>,
 }
@@ -87,7 +86,6 @@ impl Inner {
             spsize: 8,
             spenable: false,
             bgenable: false,
-            vram: vec![0; 256 * 256],
             screen: screen,
             palette: vec![0xdddddd, 0xaaaaaa, 0x888888, 0x555555],
         }
@@ -205,19 +203,19 @@ impl Inner {
         }
     }
 
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> Option<u8> {
+    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
         trace!("Read GPU register: {:04x}", addr);
 
         if addr == 0xff44 {
-            Some(self.ly)
+            MemRead::Replace(self.ly)
         } else if addr == 0xff45 {
-            Some(self.lyc)
+            MemRead::Replace(self.lyc)
         } else {
-            None
+            MemRead::PassThrough
         }
     }
 
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> Option<u8> {
+    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         trace!("Write GPU register: {:04x} {:02x}", addr, value);
 
         if addr == 0xff40 {
@@ -232,7 +230,7 @@ impl Inner {
             self.lyc = value;
         }
 
-        None
+        MemWrite::PassThrough
     }
 }
 
@@ -243,8 +241,8 @@ impl Gpu {
         }
     }
 
-    pub fn handler(&self) -> GpuHandler {
-        GpuHandler::new(self.inner.clone())
+    pub fn handler(&self) -> GpuMemHandler {
+        GpuMemHandler::new(self.inner.clone())
     }
 
     pub fn step(&self, time: usize, mmu: &mut Mmu) {
@@ -252,25 +250,22 @@ impl Gpu {
     }
 }
 
-#[derive(Clone)]
-pub struct GpuHandler {
+pub struct GpuMemHandler {
     inner: Rc<RefCell<Inner>>,
 }
 
-impl GpuHandler {
-    fn new(inner: Rc<RefCell<Inner>>) -> GpuHandler {
-        GpuHandler { inner }
+impl GpuMemHandler {
+    fn new(inner: Rc<RefCell<Inner>>) -> GpuMemHandler {
+        GpuMemHandler { inner }
     }
 }
 
-impl ReadHandler for GpuHandler {
-    fn on_read(&self, mmu: &Mmu, addr: u16) -> Option<u8> {
+impl MemHandler for GpuMemHandler {
+    fn on_read(&self, mmu: &Mmu, addr: u16) -> MemRead {
         self.inner.borrow_mut().on_read(mmu, addr)
     }
-}
 
-impl WriteHandler for GpuHandler {
-    fn on_write(&self, mmu: &Mmu, addr: u16, value: u8) -> Option<u8> {
+    fn on_write(&self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         self.inner.borrow_mut().on_write(mmu, addr, value)
     }
 }

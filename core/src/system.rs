@@ -5,8 +5,6 @@ use crate::lcd::Lcd;
 use crate::inst;
 use crate::debug::{Debugger, Perf, Resource};
 
-use std::rc::Rc;
-
 pub fn run(debug: bool) {
     info!("Initializing...");
 
@@ -21,8 +19,7 @@ pub fn run(debug: bool) {
         let gpu = Gpu::new(screen);
 
         mmu.load();
-        mmu.add_rdhooks((0xff40, 0xff4f), gpu.handler());
-        mmu.add_wrhooks((0xff40, 0xff4f), gpu.handler());
+        mmu.add_handler((0xff40, 0xff4f), gpu.handler());
 
         if debug {
             dbg.init(&Resource::new(&cpu, &mmu));

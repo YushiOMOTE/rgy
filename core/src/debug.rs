@@ -1,10 +1,12 @@
 use crate::inst::mnem;
 use crate::cpu::Cpu;
-use crate::mmu::Mmu;
+use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 
 use std::time::Instant;
 use std::string::ToString;
 use std::fmt;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 use std::collections::HashSet;
 use rustyline::error::ReadlineError;
@@ -50,6 +52,30 @@ impl<'a> Resource<'a> {
 }
 
 pub struct Debugger {
+    inner: Rc<RefCell<Inner>>,
+}
+
+impl Debugger {
+    pub fn new() -> Debugger {
+        Debugger {
+            inner: Rc::new(RefCell::new(Inner::new())),
+        }
+    }
+
+    pub fn handler(&self) -> DebugMemHandler {
+        DebugMemHandler::new(self.inner.clone())
+    }
+
+    pub fn init(&self, res: &Resource) {
+        self.inner.borrow_mut().init(res)
+    }
+
+    pub fn on_decode(&self, res: &Resource) {
+        self.inner.borrow_mut().on_decode(res)
+    }
+}
+
+struct Inner {
     breaks: HashSet<u16>,
     rd_watches: HashSet<u16>,
     wr_watches: HashSet<u16>,
@@ -57,9 +83,9 @@ pub struct Debugger {
     stepping: bool,
 }
 
-impl Debugger {
-    pub fn new() -> Debugger {
-        Debugger {
+impl Inner {
+    fn new() -> Self {
+        Self {
             breaks: HashSet::new(),
             rd_watches: HashSet::new(),
             wr_watches: HashSet::new(),
@@ -68,13 +94,13 @@ impl Debugger {
         }
     }
 
-    pub fn init(&mut self, res: &Resource) {
+    fn init(&mut self, res: &Resource) {
         println!("Entering debug shell...");
 
         self.prompt(res)
     }
 
-    pub fn on_decode(&mut self, res: &Resource) {
+    fn on_decode(&mut self, res: &Resource) {
         if self.check_break(res) {
             self.do_break(res);
         }
@@ -239,7 +265,7 @@ impl Debugger {
         for i in 0..10 {
             let (p, of) = sp.overflowing_add(i * 2);
             if of {
-                break
+                break;
             }
             println!("{}: {:04x} [{:04x}]", i, p, res.mmu.get16(p));
         }
@@ -266,6 +292,14 @@ impl Debugger {
 
         std::process::exit(1)
     }
+
+    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+        MemRead::PassThrough
+    }
+
+    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+        MemWrite::PassThrough
+    }
 }
 
 fn parse_addr(args: Vec<&str>) -> CmdResult<u16> {
@@ -279,6 +313,26 @@ fn parse<'a>(cmd: &'a str) -> CmdResult<(&'a str, Vec<&'a str>)> {
     let cmd = it.next().ok_or(CmdError::new("No command"))?;
 
     Ok((cmd, it.collect()))
+}
+
+pub struct DebugMemHandler {
+    inner: Rc<RefCell<Inner>>,
+}
+
+impl DebugMemHandler {
+    fn new(inner: Rc<RefCell<Inner>>) -> DebugMemHandler {
+        DebugMemHandler { inner }
+    }
+}
+
+impl MemHandler for DebugMemHandler {
+    fn on_read(&self, mmu: &Mmu, addr: u16) -> MemRead {
+        self.inner.borrow_mut().on_read(mmu, addr)
+    }
+
+    fn on_write(&self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+        self.inner.borrow_mut().on_write(mmu, addr, value)
+    }
 }
 
 pub struct Perf {
