@@ -22,6 +22,15 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 pub struct Opt {
+    /// Cpu frequency
+    #[structopt(short = "f", long = "freq", default_value = "1000000")]
+    freq: usize,
+    /// Sampling rate for cpu frequency controller
+    #[structopt(short = "s", long = "sample", default_value = "1000")]
+    sample: usize,
+    /// Delay unit for cpu frequency controller
+    #[structopt(short = "u", long = "delayunit", default_value = "10")]
+    delay_unit: usize,
     /// Enable debug mode
     #[structopt(short = "d", long = "debug")]
     debug: bool,
@@ -32,5 +41,5 @@ fn main() {
 
     env_logger::init();
 
-    system::run(opt.debug);
+    system::run(opt.freq, opt.sample, opt.delay_unit, opt.debug);
 }
