@@ -2759,12 +2759,22 @@ fn op_00c1(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
 /// jp nz,a16
 #[allow(unused_variables)]
 fn op_00c2(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
+    let flg = !cpu.get_zf();
+    if flg {
+        let pc = mmu.get16(cpu.get_pc().wrapping_add(arg));
+        cpu.set_pc(pc);
+        return (16, 0);
+    }
+
     (12, 3)
 }
 
 /// jp a16
 #[allow(unused_variables)]
 fn op_00c3(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
+    let pc = mmu.get16(cpu.get_pc().wrapping_add(arg));
+    cpu.set_pc(pc.wrapping_sub(3));
+
     (16, 3)
 }
 
@@ -2837,6 +2847,13 @@ fn op_00c9(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
 /// jp z,a16
 #[allow(unused_variables)]
 fn op_00ca(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
+    let flg = cpu.get_zf();
+    if flg {
+        let pc = mmu.get16(cpu.get_pc().wrapping_add(arg));
+        cpu.set_pc(pc);
+        return (16, 0);
+    }
+
     (12, 3)
 }
 
@@ -2916,6 +2933,13 @@ fn op_00d1(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
 /// jp nc,a16
 #[allow(unused_variables)]
 fn op_00d2(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
+    let flg = !cpu.get_cf();
+    if flg {
+        let pc = mmu.get16(cpu.get_pc().wrapping_add(arg));
+        cpu.set_pc(pc);
+        return (16, 0);
+    }
+
     (12, 3)
 }
 
@@ -2989,6 +3013,13 @@ fn op_00d9(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
 /// jp cf,a16
 #[allow(unused_variables)]
 fn op_00da(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
+    let flg = cpu.get_cf();
+    if flg {
+        let pc = mmu.get16(cpu.get_pc().wrapping_add(arg));
+        cpu.set_pc(pc);
+        return (16, 0);
+    }
+
     (12, 3)
 }
 
@@ -3102,6 +3133,9 @@ fn op_00e8(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
 /// jp (hl)
 #[allow(unused_variables)]
 fn op_00e9(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
+    let pc = mmu.get16(cpu.get_hl());
+    cpu.set_pc(pc.wrapping_sub(1));
+
     (4, 1)
 }
 
@@ -6931,6 +6965,6 @@ pub fn decode(code: u16, arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usiz
         0xcbfd => op_cbfd(arg, cpu, mmu),
         0xcbfe => op_cbfe(arg, cpu, mmu),
         0xcbff => op_cbff(arg, cpu, mmu),
-        _ => panic!("Invalid opcode: {:02x}", code),
+        _ => panic!("Invalid opcode: {:04x}: {:04x}", cpu.get_pc(), code),
     }
 }

@@ -159,6 +159,14 @@ fn op_{{i.code | hex}}(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize)
     {{ macros::jr(i=i) }}
     {%- endif -%}
 
+    {%- elif i.operator == "jp" -%}
+
+    {%- if i.time | is_cond == true -%}
+    {{ macros::jpif(i=i) }}
+    {%- else -%}
+    {{ macros::jp(i=i) }}
+    {%- endif -%}
+
     {%- elif i.operator == "call" -%}
 
     {%- if i.time | is_cond == true -%}
@@ -202,6 +210,6 @@ pub fn decode(code: u16, arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usiz
         {%- for i in insts -%}
         0x{{i.code | hex}} => op_{{i.code | hex}}(arg, cpu, mmu),
         {%- endfor -%}
-        _ => panic!("Invalid opcode: {:02x}", code),
+        _ => panic!("Invalid opcode: {:04x}: {:04x}", cpu.get_pc(), code),
     }
 }

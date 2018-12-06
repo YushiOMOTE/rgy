@@ -288,6 +288,20 @@
   }
 {% endmacro %}
 
+{% macro jp(i) %}
+  let pc = {{ i.operands[0] | getter(bits=16) }};
+  cpu.set_pc(pc.wrapping_sub({{ i.size }}));
+{% endmacro %}
+
+{% macro jpif(i) %}
+  let flg = {{ i.operands[0] | getter(bits=16) }};
+  if flg {
+    let pc = {{ i.operands[1] | getter(bits=i.bits) }};
+    cpu.set_pc(pc);
+    return ({{ i.time[0] }}, 0)
+  }
+{% endmacro %}
+
 
 {% macro call(i) %}
   cpu.push(mmu, cpu.get_pc().wrapping_add({{ i.size }}));
