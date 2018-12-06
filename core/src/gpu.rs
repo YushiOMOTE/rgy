@@ -66,7 +66,49 @@ struct Inner {
     spenable: bool,
     bgenable: bool,
     screen: Box<Screen>,
-    palette: Vec<u32>,
+    bg_palette: Vec<Color>,
+    obj_palette1: Vec<Color>,
+    obj_palette2: Vec<Color>,
+}
+
+fn to_palette(p: u8) -> Vec<Color> {
+    vec![
+        ((p >> 0) & 0x3).into(),
+        ((p >> 2) & 0x3).into(),
+        ((p >> 4) & 0x3).into(),
+        ((p >> 6) & 0x3).into(),
+    ]
+}
+
+#[derive(Clone, Debug)]
+enum Color {
+    White,
+    LightGray,
+    DarkGray,
+    Black,
+}
+
+impl From<Color> for u32 {
+    fn from(c: Color) -> u32 {
+        match c {
+            Color::White => 0xdddddd,
+            Color::LightGray => 0xaaaaaa,
+            Color::DarkGray => 0x888888,
+            Color::Black => 0x555555,
+        }
+    }
+}
+
+impl From<u8> for Color {
+    fn from(v: u8) -> Color {
+        match v {
+            0 => Color::White,
+            1 => Color::LightGray,
+            2 => Color::DarkGray,
+            3 => Color::Black,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl Inner {
@@ -87,7 +129,24 @@ impl Inner {
             spenable: false,
             bgenable: false,
             screen: screen,
-            palette: vec![0xdddddd, 0xaaaaaa, 0x888888, 0x555555],
+            bg_palette: vec![
+                Color::White,
+                Color::LightGray,
+                Color::DarkGray,
+                Color::Black,
+            ],
+            obj_palette1: vec![
+                Color::White,
+                Color::LightGray,
+                Color::DarkGray,
+                Color::Black,
+            ],
+            obj_palette2: vec![
+                Color::White,
+                Color::LightGray,
+                Color::DarkGray,
+                Color::Black,
+            ],
         }
     }
 
@@ -173,7 +232,7 @@ impl Inner {
 
             let l = (l >> (7 - txoff)) & 1;
             let h = ((h >> (7 - txoff)) & 1) << 1;
-            let col = self.palette[(h | l) as usize];
+            let col = self.bg_palette[(h | l) as usize].clone().into();
 
             buf[x as usize] = col;
         }
@@ -228,6 +287,15 @@ impl Inner {
             self.ly = 0;
         } else if addr == 0xff45 {
             self.lyc = value;
+        } else if addr == 0xff47 {
+            self.bg_palette = to_palette(value);
+            info!("Bg palette updated: {:?}", self.bg_palette);
+        } else if addr == 0xff48 {
+            self.obj_palette1 = to_palette(value);
+            info!("Object palette 1 updated: {:?}", self.obj_palette2);
+        } else if addr == 0xff49 {
+            self.obj_palette2 = to_palette(value);
+            info!("Object palette 2 updated: {:?}", self.obj_palette1);
         }
 
         MemWrite::PassThrough
