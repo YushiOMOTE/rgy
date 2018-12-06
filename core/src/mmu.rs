@@ -28,6 +28,8 @@ pub struct Mmu {
     handles: HashMap<Handle, (u16, u16)>,
     handlers: HashMap<u16, Vec<(Handle, Rc<MemHandler>)>>,
     hdgen: u64,
+    use_boot_rom: bool,
+    boot_rom: Vec<u8>,
 }
 
 impl Mmu {
@@ -37,6 +39,8 @@ impl Mmu {
             handles: HashMap::new(),
             handlers: HashMap::new(),
             hdgen: 0,
+            use_boot_rom: true,
+            boot_rom: vec![0u8; 0x100],
         }
     }
 
@@ -89,17 +93,30 @@ impl Mmu {
         }
     }
 
-    pub fn load(&mut self) {
+    pub fn setup(&mut self, rom_name: &str) {
+        self.load_boot_rom();
+        self.load_rom(rom_name);
+    }
+
+    fn load_boot_rom(&mut self) {
         let mut f = File::open("boot.bin").expect("Couldn't open file");
-        let mut buf = vec![0; 256];
+        let mut buf = vec![0; 0x100];
 
         f.read(buf.as_mut_slice()).expect("Couldn't read file");
 
         for i in 0..buf.len() {
-            self.set8(i as u16, buf[i]);
+            self.boot_rom[i] = buf[i];
         }
-        for i in 0..48 {
-            self.set8(i as u16 + 0x104, buf[i + 0xa8]);
+    }
+
+    fn load_rom(&mut self, rom_name: &str) {
+        let mut f = File::open(rom_name).expect("Couldn't open file");
+        let mut buf = vec![0; 0x8000];
+
+        f.read(buf.as_mut_slice()).expect("Couldn't read file");
+
+        for i in 0..buf.len() {
+            self.ram[i] = buf[i];
         }
     }
 
@@ -113,7 +130,16 @@ impl Mmu {
             }
         }
 
-        self.ram[addr as usize]
+        if self.use_boot_rom && addr < 0x100 {
+            self.boot_rom[addr as usize]
+        } else {
+            if addr >= 0xe000 && addr <= 0xfdff {
+                // echo ram
+                self.ram[addr as usize - 0x2000]
+            } else {
+                self.ram[addr as usize]
+            }
+        }
     }
 
     pub fn set8(&mut self, addr: u16, v: u8) {
@@ -130,7 +156,21 @@ impl Mmu {
             }
         }
 
-        self.ram[addr as usize] = v
+        if self.use_boot_rom && addr < 0x100 {
+            self.boot_rom[addr as usize] = v
+        } else if self.use_boot_rom && addr == 0xff50 {
+            // Turn off boot rom
+            self.use_boot_rom = false;
+
+            info!("Boot rom turned off");
+        } else {
+            if addr >= 0xe000 && addr <= 0xfdff {
+                // echo ram
+                self.ram[addr as usize - 0x2000] = v
+            } else {
+                self.ram[addr as usize] = v
+            }
+        }
     }
 
     pub fn get16(&self, addr: u16) -> u16 {

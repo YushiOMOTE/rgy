@@ -37,6 +37,8 @@ pub struct Opt {
     /// Enable debug mode
     #[structopt(short = "d", long = "debug")]
     debug: bool,
+    #[structopt(name = "ROM")]
+    rom: String,
 }
 
 fn main() {

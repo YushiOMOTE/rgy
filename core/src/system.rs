@@ -80,7 +80,7 @@ pub fn run(opt: Opt) {
         let mut sound = Sound::new(speaker);
         let gpu = Gpu::new(screen);
 
-        mmu.load();
+        mmu.setup(&opt.rom);
 
         if opt.debug {
             mmu.add_handler((0x0000, 0xffff), dbg.handler());
