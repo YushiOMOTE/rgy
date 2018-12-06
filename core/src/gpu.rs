@@ -248,7 +248,7 @@ impl Inner {
         self.winenable = value & 0x20 != 0;
         self.bgwinbase = if value & 0x10 != 0 { 0x8000 } else { 0x8800 };
         self.bgbase = if value & 0x08 != 0 { 0x9c00 } else { 0x9800 };
-        self.spsize = if value & 0x04 != 0 { 8 } else { 16 };
+        self.spsize = if value & 0x04 != 0 { 16 } else { 8 };
         self.spenable = value & 0x02 != 0;
         self.bgenable = value & 0x01 != 0;
 
@@ -260,6 +260,14 @@ impl Inner {
             info!("LCD disabled");
             self.mode = Mode::None;
         }
+
+        info!("Window base: {:04x}", self.winbase);
+        info!("Window enable: {}", self.winenable);
+        info!("Bg/window base: {:04x}", self.bgwinbase);
+        info!("Background base: {:04x}", self.bgbase);
+        info!("Sprite size: 8x{}", self.spsize);
+        info!("Sprite enable: {}", self.spenable);
+        info!("Background enable: {}", self.bgenable);
     }
 
     fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
