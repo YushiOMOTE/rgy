@@ -27,7 +27,7 @@ impl Sound {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum WaveDuty {
     P125,
     P250,
@@ -54,6 +54,17 @@ impl From<u8> for WaveDuty {
             2 => WaveDuty::P500,
             3 => WaveDuty::P750,
             _ => unreachable!(),
+        }
+    }
+}
+
+impl From<WaveDuty> for f32 {
+    fn from(s: WaveDuty) -> f32 {
+        match s {
+            WaveDuty::P125 => 0.125,
+            WaveDuty::P250 => 0.25,
+            WaveDuty::P500 => 0.5,
+            WaveDuty::P750 => 0.75,
         }
     }
 }
@@ -126,36 +137,46 @@ impl Inner {
     }
 
     fn play_tone1(&mut self) {
-        let vol = self.tone.env_init as f32 / 15.0;
+        let amp = self.tone.env_init as f32 / 15.0;
         let env_count = self.tone.env_count as f32;
-        let diff = vol / 15.0 as f32;
+        let diff = amp / 15.0 as f32;
         let diff = if self.tone.env_inc { diff } else { diff * -1.0 };
         let freq = 131072f32 / (2048f32 - self.tone.freq as f32);
+        let wave_duty = self.tone.wave_duty.clone();
 
         debug!("Freq: {}", freq);
 
         let mut clock = 0f32;
         let mut env_clock = 0f32;
-        let mut vol = vol;
+        let mut amp = amp;
 
         self.speaker.play(Box::new(move |rate| {
-            // Envelop
+            // Envelope
             env_clock += 1.0;
             if env_clock >= rate * env_count / 64.0 {
                 env_clock = 0.0;
-                vol += diff;
-                vol = if vol < 0.0 {
+                amp += diff;
+                amp = if amp < 0.0 {
                     0.0
-                } else if vol > 1.0 {
+                } else if amp > 1.0 {
                     1.0
                 } else {
-                    vol
+                    amp
                 };
             }
 
-            // Sign wave
-            clock += 1.0;
-            Some(((clock % rate) * freq * 2.0 * 3.141592 / rate).sin() * vol)
+            let cycle = rate / freq;
+
+            clock = (clock + 1.0) % cycle;
+
+            let duty: f32 = wave_duty.clone().into();
+            let duty = cycle * duty;
+
+            if clock <= duty {
+                Some(amp)
+            } else {
+                Some(-amp)
+            }
         }));
     }
 
