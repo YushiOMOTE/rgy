@@ -1,3 +1,4 @@
+use log::*;
 use crate::cpu::Cpu;
 use crate::mmu::Mmu;
 use crate::gpu::Gpu;

@@ -1,5 +1,6 @@
 use crate::mmu::Mmu;
 use crate::ic::Ic;
+use log::*;
 
 use std::fmt;
 

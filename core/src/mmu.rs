@@ -2,6 +2,7 @@ use std::io::prelude::*;
 use std::fs::File;
 use std::rc::Rc;
 use std::collections::HashMap;
+use log::*;
 
 pub enum MemRead {
     Replace(u8),

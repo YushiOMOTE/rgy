@@ -1,13 +1,3 @@
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate log;
-extern crate cpal;
-extern crate env_logger;
-extern crate minifb;
-extern crate rustyline;
-extern crate structopt;
-
 mod cpu;
 mod gpu;
 mod mmu;

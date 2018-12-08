@@ -1,6 +1,7 @@
 use crate::inst::mnem;
 use crate::cpu::Cpu;
 use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
+use log::*;
 
 use std::time::Instant;
 use std::string::ToString;

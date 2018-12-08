@@ -2,6 +2,7 @@ use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 use crate::ic::Irq;
 use std::rc::Rc;
 use std::cell::RefCell;
+use log::*;
 
 pub trait Screen {
     fn width(&self) -> usize;

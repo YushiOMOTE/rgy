@@ -1,5 +1,6 @@
 use std::rc::Rc;
 use std::cell::RefCell;
+use log::*;
 
 use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 

@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 use crate::mmu::Mmu;
 use crate::mmu::{MemHandler, MemRead, MemWrite};
+use log::*;
 
 pub struct Ic {
     inner: Arc<Inner>,
