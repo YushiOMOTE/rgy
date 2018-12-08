@@ -61,7 +61,7 @@ impl Mmu {
 
         self.handles.insert(handle.clone(), range);
 
-        for i in range.0..range.1 + 1 {
+        for i in range.0..=range.1 {
             if self.handlers.contains_key(&i) {
                 match self.handlers.get_mut(&i) {
                     Some(v) => v.push((handle.clone(), handler.clone())),

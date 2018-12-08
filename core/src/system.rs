@@ -3,6 +3,7 @@ use crate::mmu::Mmu;
 use crate::gpu::Gpu;
 use crate::device::{Lcd, Pcm};
 use crate::sound::Sound;
+use crate::ic::Ic;
 use crate::inst;
 use crate::debug::{Debugger, Perf, Resource};
 use std::time::Instant;
@@ -78,7 +79,8 @@ pub fn run(opt: Opt) {
         let mut cpu = Cpu::new();
         let mut mmu = Mmu::new();
         let mut sound = Sound::new(speaker);
-        let gpu = Gpu::new(screen);
+        let ic = Ic::new();
+        let gpu = Gpu::new(screen, ic.irq());
 
         mmu.setup(&opt.rom);
 
@@ -88,6 +90,7 @@ pub fn run(opt: Opt) {
 
         mmu.add_handler((0xff10, 0xff26), sound.handler());
         mmu.add_handler((0xff40, 0xff4f), gpu.handler());
+        mmu.add_handler((0xff0f, 0xffff), ic.handler());
 
         if opt.debug {
             dbg.init(&Resource::new(&cpu, &mmu));
@@ -111,6 +114,8 @@ pub fn run(opt: Opt) {
             dbg.on_decode(&Resource::new(&cpu, &mmu));
             let (time, size) = inst::decode(code, arg, &mut cpu, &mut mmu);
             cpu.set_pc(cpu.get_pc().wrapping_add(size as u16));
+
+            cpu.check_interrupt(&mut mmu, &ic);
 
             gpu.step(time, &mut mmu);
 

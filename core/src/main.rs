@@ -17,6 +17,7 @@ mod system;
 mod debug;
 mod device;
 mod sound;
+mod ic;
 
 use structopt::StructOpt;
 

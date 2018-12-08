@@ -1,4 +1,5 @@
 use crate::mmu::Mmu;
+use crate::ic::Ic;
 
 use std::fmt;
 
@@ -13,6 +14,9 @@ pub struct Cpu {
     l: u8,
     pc: u16,
     sp: u16,
+    di: bool,
+    ei: bool,
+    interrupt: bool,
 }
 
 impl fmt::Display for Cpu {
@@ -58,16 +62,58 @@ impl Cpu {
             l: 0,
             pc: 0,
             sp: 0,
+            di: false,
+            ei: false,
+            interrupt: true,
         }
     }
 
     pub fn halt(&self) {}
 
-    pub fn disable_interrupt(&self) {}
+    pub fn disable_interrupt(&mut self) {
+        self.di = true;
+    }
 
-    pub fn enable_interrupt(&self) {}
+    pub fn enable_interrupt(&mut self) {
+        self.ei = true;
+    }
 
-    pub fn enable_interrupt_immediate(&self) {}
+    pub fn check_interrupt(&mut self, mmu: &mut Mmu, ic: &Ic) {
+        let check_intr = self.interrupt;
+
+        if self.di {
+            self.disable_interrupt_immediate();
+            self.di = false;
+        }
+        if self.ei {
+            self.enable_interrupt_immediate();
+            self.ei = false;
+        }
+
+        if !check_intr {
+            return;
+        }
+
+        if let Some(value) = ic.poll() {
+            info!("Inerrupted: {:02x}", value);
+            self.interrupted(mmu, value);
+        }
+    }
+
+    pub fn enable_interrupt_immediate(&mut self) {
+        self.interrupt = true;
+    }
+
+    pub fn disable_interrupt_immediate(&mut self) {
+        self.interrupt = false;
+    }
+
+    fn interrupted(&mut self, mmu: &mut Mmu, value: u8) {
+        self.disable_interrupt_immediate();
+
+        self.push(mmu, self.get_pc());
+        self.set_pc(value as u16);
+    }
 
     pub fn stop(&self) {}
 
