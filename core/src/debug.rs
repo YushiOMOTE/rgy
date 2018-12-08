@@ -327,11 +327,19 @@ impl DebugMemHandler {
 
 impl MemHandler for DebugMemHandler {
     fn on_read(&self, mmu: &Mmu, addr: u16) -> MemRead {
-        self.inner.borrow_mut().on_read(mmu, addr)
+        // Don't hook if it's already hooked
+        match self.inner.try_borrow_mut() {
+            Ok(mut inner) => inner.on_read(mmu, addr),
+            Err(_) => MemRead::PassThrough,
+        }
     }
 
     fn on_write(&self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        self.inner.borrow_mut().on_write(mmu, addr, value)
+        // Don't hook if it's already hooked
+        match self.inner.try_borrow_mut() {
+            Ok(mut inner) => inner.on_write(mmu, addr, value),
+            Err(_) => MemWrite::PassThrough,
+        }
     }
 }
 
