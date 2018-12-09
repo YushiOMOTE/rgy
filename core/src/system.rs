@@ -113,6 +113,7 @@ pub fn run(opt: Opt) {
             let (code, arg) = cpu.fetch(&mmu);
 
             if opt.debug {
+                dbg.check_signal();
                 dbg.take_cpu_snapshot(cpu.clone());
                 dbg.on_decode(&mmu);
             }

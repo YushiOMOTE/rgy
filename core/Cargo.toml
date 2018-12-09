@@ -12,4 +12,4 @@ rustyline = "2.1"
 minifb = "0.11"
 structopt = "0.2"
 cpal = "0.8"
-
+signal-hook = "0.1"

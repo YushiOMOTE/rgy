@@ -9,7 +9,10 @@ use std::string::ToString;
 use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+
+use signal_hook;
 
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
@@ -73,6 +76,10 @@ impl Debugger {
     pub fn on_decode(&self, mmu: &Mmu) {
         self.inner.borrow_mut().on_decode(mmu)
     }
+
+    pub fn check_signal(&self) {
+        self.inner.borrow_mut().check_signal();
+    }
 }
 
 struct Inner {
@@ -82,6 +89,8 @@ struct Inner {
     prompt: bool,
     stepping: bool,
     cpu_state: Cpu,
+    signal: Signal,
+    exec_path: VecDeque<u16>,
 }
 
 impl Inner {
@@ -93,6 +102,8 @@ impl Inner {
             prompt: false,
             stepping: false,
             cpu_state: Cpu::new(),
+            signal: Signal::new(),
+            exec_path: VecDeque::new(),
         }
     }
 
@@ -103,19 +114,38 @@ impl Inner {
     }
 
     fn on_decode(&mut self, mmu: &Mmu) {
-        if self.check_break(mmu) {
+        let pc = self.cpu_state.get_pc();
+
+        self.add_exec_path(pc);
+
+        if self.check_break(pc, mmu) {
             self.do_break("Break", mmu);
         }
     }
 
-    fn check_break(&self, mmu: &Mmu) -> bool {
+    fn add_exec_path(&mut self, pc: u16) {
+        if let Some(p) = self.exec_path.back() {
+            if pc == *p {
+                return;
+            }
+        }
+
+        self.exec_path.push_back(pc);
+    }
+
+    fn check_signal(&mut self) {
+        if self.signal.signaled() {
+            println!("Signaled.");
+            self.stepping = true;
+        }
+    }
+
+    fn check_break(&self, pc: u16, mmu: &Mmu) -> bool {
         if self.prompt {
             false
         } else if self.stepping {
             true
         } else {
-            let pc = self.cpu_state.get_pc();
-
             self.breaks.contains(&pc)
         }
     }
@@ -484,6 +514,13 @@ enum CmdDump {
         #[structopt(name = "to", parse(try_from_str = "parse_addr"))]
         to: u16,
     },
+    /// Execution path
+    #[structopt(name = "path")]
+    Path {
+        /// The number of step to dump
+        #[structopt(name = "size", default_value = "10")]
+        size: usize,
+    },
 }
 
 impl CmdHandler for CmdDump {
@@ -547,6 +584,15 @@ impl CmdHandler for CmdDump {
 
                 if to % 16 != 15 {
                     println!()
+                }
+            }
+            CmdDump::Path { size } => {
+                for (i, pc) in inner.exec_path.iter().rev().take(*size).enumerate() {
+                    let mut cpu = inner.cpu_state.clone();
+                    cpu.set_pc(*pc);
+                    let (code, _) = cpu.fetch(mmu);
+
+                    println!("-{}: {:04x}: {}", i, pc, mnem(code));
                 }
             }
         }
@@ -661,5 +707,22 @@ impl CmdHandler for CmdWatch {
         }
 
         Ok(false)
+    }
+}
+
+struct Signal {
+    sig: Arc<AtomicBool>,
+}
+
+impl Signal {
+    fn new() -> Signal {
+        let sig = Arc::new(AtomicBool::new(false));
+        signal_hook::flag::register(signal_hook::SIGINT, sig.clone())
+            .expect("Couldn't hook signal");
+        Signal { sig }
+    }
+
+    fn signaled(&self) -> bool {
+        self.sig.swap(false, Ordering::Relaxed)
     }
 }
