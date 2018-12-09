@@ -112,8 +112,10 @@ pub fn run(opt: Opt) {
         loop {
             let (code, arg) = cpu.fetch(&mmu);
 
-            dbg.take_cpu_snapshot(cpu.clone());
-            dbg.on_decode(&mmu);
+            if opt.debug {
+                dbg.take_cpu_snapshot(cpu.clone());
+                dbg.on_decode(&mmu);
+            }
 
             let (time, size) = inst::decode(code, arg, &mut cpu, &mut mmu);
             cpu.set_pc(cpu.get_pc().wrapping_add(size as u16));
