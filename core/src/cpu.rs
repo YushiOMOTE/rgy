@@ -4,6 +4,7 @@ use log::*;
 
 use std::fmt;
 
+#[derive(Clone)]
 pub struct Cpu {
     a: u8,
     b: u8,

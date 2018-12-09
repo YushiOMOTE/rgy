@@ -3,16 +3,22 @@ use crate::cpu::Cpu;
 use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 use log::*;
 
+use std::hash::{Hash, Hasher};
 use std::time::Instant;
 use std::string::ToString;
 use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 
-use std::collections::HashSet;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
+use structopt::StructOpt;
+
+use lazy_static::lazy_static;
+
+#[derive(Debug)]
 struct CmdError(String);
 
 impl fmt::Display for CmdError {
@@ -41,17 +47,6 @@ impl From<std::num::ParseIntError> for CmdError {
 
 type CmdResult<T> = std::result::Result<T, CmdError>;
 
-pub struct Resource<'a> {
-    cpu: &'a Cpu,
-    mmu: &'a Mmu,
-}
-
-impl<'a> Resource<'a> {
-    pub fn new(cpu: &'a Cpu, mmu: &'a Mmu) -> Resource<'a> {
-        Resource { cpu, mmu }
-    }
-}
-
 pub struct Debugger {
     inner: Rc<RefCell<Inner>>,
 }
@@ -67,12 +62,16 @@ impl Debugger {
         DebugMemHandler::new(self.inner.clone())
     }
 
-    pub fn init(&self, res: &Resource) {
-        self.inner.borrow_mut().init(res)
+    pub fn init(&self, mmu: &Mmu) {
+        self.inner.borrow_mut().init(mmu)
     }
 
-    pub fn on_decode(&self, res: &Resource) {
-        self.inner.borrow_mut().on_decode(res)
+    pub fn take_cpu_snapshot(&self, cpu: Cpu) {
+        self.inner.borrow_mut().cpu_state = cpu;
+    }
+
+    pub fn on_decode(&self, mmu: &Mmu) {
+        self.inner.borrow_mut().on_decode(mmu)
     }
 }
 
@@ -82,6 +81,7 @@ struct Inner {
     wr_watches: HashSet<u16>,
     prompt: bool,
     stepping: bool,
+    cpu_state: Cpu,
 }
 
 impl Inner {
@@ -92,47 +92,49 @@ impl Inner {
             wr_watches: HashSet::new(),
             prompt: false,
             stepping: false,
+            cpu_state: Cpu::new(),
         }
     }
 
-    fn init(&mut self, res: &Resource) {
+    fn init(&mut self, mmu: &Mmu) {
         println!("Entering debug shell...");
 
-        self.prompt(res)
+        self.prompt(mmu)
     }
 
-    fn on_decode(&mut self, res: &Resource) {
-        if self.check_break(res) {
-            self.do_break(res);
+    fn on_decode(&mut self, mmu: &Mmu) {
+        if self.check_break(mmu) {
+            self.do_break("Break", mmu);
         }
     }
 
-    fn check_break(&self, res: &Resource) -> bool {
+    fn check_break(&self, mmu: &Mmu) -> bool {
         if self.prompt {
             false
         } else if self.stepping {
             true
         } else {
-            let pc = res.cpu.get_pc();
+            let pc = self.cpu_state.get_pc();
 
             self.breaks.contains(&pc)
         }
     }
 
-    fn do_break(&mut self, res: &Resource) {
-        let (code, _) = res.cpu.fetch(res.mmu);
+    fn do_break(&mut self, msg: &str, mmu: &Mmu) {
+        let (code, _) = self.cpu_state.fetch(mmu);
 
         println!(
-            "Break at {:04x}: {:04x}: {}",
-            res.cpu.get_pc(),
+            "{} at {:04x}: {:04x}: {}",
+            msg,
+            self.cpu_state.get_pc(),
             code,
             mnem(code)
         );
 
-        self.prompt(res)
+        self.prompt(mmu)
     }
 
-    fn prompt(&mut self, res: &Resource) {
+    fn prompt(&mut self, mmu: &Mmu) {
         self.prompt = true;
 
         let mut rl = Editor::<()>::new();
@@ -148,14 +150,14 @@ impl Inner {
                 Ok(line) => {
                     rl.add_history_entry(line.as_ref());
 
-                    match self.handle(&line, res) {
+                    match exec_cmd(self, mmu, &line) {
                         Ok(end) => if end {
                             break false;
                         } else {
                             continue;
                         },
                         Err(e) => {
-                            println!("Command error: {}", e);
+                            println!("{}", e);
                             continue;
                         }
                     }
@@ -184,129 +186,21 @@ impl Inner {
         self.prompt = false;
     }
 
-    fn handle(&mut self, line: &str, res: &Resource) -> CmdResult<bool> {
-        let (cmd, args) = parse(line)?;
-
-        if cmd.is_empty() {
-            return Ok(false);
-        }
-
-        match cmd {
-            "ab" => self.add_break(parse_addr(args)?),
-            "rb" => self.remove_break(parse_addr(args)?),
-            "lb" => self.list_breaks(),
-            "arw" => self.add_rdwatch(parse_addr(args)?),
-            "aww" => self.add_wrwatch(parse_addr(args)?),
-            "rrw" => self.remove_rdwatch(parse_addr(args)?),
-            "rww" => self.remove_wrwatch(parse_addr(args)?),
-            "d" => self.dump(res),
-            "s" => self.stack(res),
-            "q" => self.quit(),
-            "n" => self.step(),
-            "c" => self.resume(),
-            _ => Err(CmdError::new("Unknown command")),
-        }
-    }
-
-    fn add_break(&mut self, addr: u16) -> CmdResult<bool> {
-        if self.breaks.insert(addr) {
-            println!("Set break point at {:04x}", addr);
-        } else {
-            println!("Break point already set at {:04x}", addr);
-        }
-
-        Ok(false)
-    }
-
-    fn remove_break(&mut self, addr: u16) -> CmdResult<bool> {
-        if self.breaks.remove(&addr) {
-            println!("Remove break point at {:04x}", addr);
-        } else {
-            println!("Break point isn't set at {:04x}", addr);
-        }
-
-        Ok(false)
-    }
-
-    fn list_breaks(&self) -> CmdResult<bool> {
-        println!("Break points: ");
-
-        for addr in self.breaks.iter() {
-            println!("* {:04x}", addr);
-        }
-
-        Ok(false)
-    }
-
-    fn add_rdwatch(&mut self, addr: u16) -> CmdResult<bool> {
-        unimplemented!()
-    }
-
-    fn remove_rdwatch(&mut self, addr: u16) -> CmdResult<bool> {
-        unimplemented!()
-    }
-
-    fn add_wrwatch(&mut self, addr: u16) -> CmdResult<bool> {
-        unimplemented!()
-    }
-
-    fn remove_wrwatch(&mut self, addr: u16) -> CmdResult<bool> {
-        unimplemented!()
-    }
-
-    fn dump(&self, res: &Resource) -> CmdResult<bool> {
-        println!("{}", res.cpu);
-
-        Ok(false)
-    }
-
-    fn stack(&self, res: &Resource) -> CmdResult<bool> {
-        let sp = res.cpu.get_sp();
-
-        for i in 0..10 {
-            let (p, of) = sp.overflowing_add(i * 2);
-            if of {
-                break;
-            }
-            println!("{}: {:04x} [{:04x}]", i, p, res.mmu.get16(p));
-        }
-
-        Ok(false)
-    }
-
-    fn step(&mut self) -> CmdResult<bool> {
-        self.stepping = true;
-
-        Ok(true)
-    }
-
-    fn resume(&mut self) -> CmdResult<bool> {
-        self.stepping = false;
-
-        println!("Resume");
-
-        Ok(true)
-    }
-
-    fn quit(&self) -> CmdResult<bool> {
-        println!("Quit");
-
-        std::process::exit(1)
-    }
-
     fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+        if self.rd_watches.contains(&addr) {
+            self.do_break(&format!("Reading {:04x}", addr), mmu);
+        }
+
         MemRead::PassThrough
     }
 
     fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+        if self.wr_watches.contains(&addr) {
+            self.do_break(&format!("Writing {:02x} to {:04x}", value, addr), mmu);
+        }
+
         MemWrite::PassThrough
     }
-}
-
-fn parse_addr(args: Vec<&str>) -> CmdResult<u16> {
-    let i = u16::from_str_radix(args.get(0).ok_or(CmdError::new("No arg"))?, 16)?;
-
-    Ok(i)
 }
 
 fn parse<'a>(cmd: &'a str) -> CmdResult<(&'a str, Vec<&'a str>)> {
@@ -371,5 +265,401 @@ impl Perf {
 
             self.last = now;
         }
+    }
+}
+
+fn exec_cmd(inner: &mut Inner, mmu: &Mmu, line: &str) -> CmdResult<bool> {
+    let cmd = match line.split_whitespace().next() {
+        Some(cmd) => cmd,
+        None => return Ok(false),
+    };
+
+    match find_cmd(cmd) {
+        Some(cmd) => (cmd.handler)(inner, mmu, line),
+        None => Err(CmdError::new(format!("Command not found: {}", line))),
+    }
+}
+
+fn find_cmd(s: &str) -> Option<&'static CmdInfo> {
+    for cmd in COMMANDS.iter() {
+        if cmd.name == s || cmd.short == Some(s) {
+            return Some(cmd);
+        }
+    }
+
+    None
+}
+
+struct CmdInfo {
+    name: &'static str,
+    short: Option<&'static str>,
+    desc: &'static str,
+    handler: Box<Fn(&mut Inner, &Mmu, &str) -> CmdResult<bool> + Send + Sync + 'static>,
+}
+
+trait CmdHandler: StructOpt + Sized {
+    fn handle(&self, inner: &mut Inner, mmu: &Mmu) -> CmdResult<bool>;
+
+    fn parse(inner: &mut Inner, mmu: &Mmu, s: &str) -> CmdResult<bool> {
+        let s = s.split_whitespace();
+        match Self::from_iter_safe(s) {
+            Ok(p) => p.handle(inner, mmu),
+            Err(e) => Err(CmdError::new(e)),
+        }
+    }
+}
+
+macro_rules! cc {
+    ($vec: ident, $name: expr, $short: expr, $desc: expr, $handler: tt) => {
+        $vec.push(CmdInfo {
+            name: $name,
+            desc: $desc,
+            short: $short,
+            handler: Box::new(|inner, mmu, line| $handler::parse(inner, mmu, line)),
+        });
+    };
+}
+
+lazy_static! {
+    static ref COMMANDS: Vec<CmdInfo> = {
+        let mut m = Vec::new();
+        cc!(m, "break", Some("b"), "Manage break points.", CmdBreak);
+        cc!(m, "watch", Some("w"), "Manage memory watches.", CmdWatch);
+        cc!(
+            m,
+            "help",
+            Some("h"),
+            "Show the list of commands available.",
+            CmdHelp
+        );
+        cc!(m, "quit", None, "Quit this emulator.", CmdQuit);
+        cc!(m, "cont", Some("c"), "Continue execution.", CmdContinue);
+        cc!(m, "step", Some("n"), "Step execution.", CmdStep);
+        cc!(m, "dump", Some("d"), "Dump information.", CmdDump);
+        m
+    };
+}
+
+fn parse_addr(s: &str) -> CmdResult<u16> {
+    u16::from_str_radix(s, 16).map_err(|e| CmdError::new(e))
+}
+
+#[derive(StructOpt, Debug)]
+#[structopt(name = "break", about = "Manage break points.")]
+enum CmdBreak {
+    /// Add a break point
+    #[structopt(name = "add")]
+    Add {
+        /// Address in hex
+        #[structopt(name = "addr", parse(try_from_str = "parse_addr"))]
+        addr: u16,
+    },
+    /// Remove a break point
+    #[structopt(name = "remove")]
+    Remove {
+        /// Address in hex
+        #[structopt(name = "addr", parse(try_from_str = "parse_addr"))]
+        addr: u16,
+    },
+    /// List break points
+    #[structopt(name = "list")]
+    List,
+}
+
+impl CmdHandler for CmdBreak {
+    fn handle(&self, inner: &mut Inner, _mmu: &Mmu) -> CmdResult<bool> {
+        match self {
+            CmdBreak::Add { addr } => {
+                if inner.breaks.insert(*addr) {
+                    println!("Set break point at {:04x}", addr);
+                } else {
+                    println!("Break point already set at {:04x}", addr);
+                }
+            }
+            CmdBreak::Remove { addr } => {
+                if inner.breaks.remove(&addr) {
+                    println!("Remove break point at {:04x}", addr);
+                } else {
+                    println!("Break point isn't set at {:04x}", addr);
+                }
+            }
+            CmdBreak::List => {
+                println!("Break points: ");
+
+                for addr in inner.breaks.iter() {
+                    println!("* {:04x}", addr);
+                }
+            }
+        }
+
+        Ok(false)
+    }
+}
+
+#[derive(StructOpt, Debug)]
+#[structopt(name = "help", about = "Show the list of available commands.")]
+struct CmdHelp {}
+
+impl CmdHandler for CmdHelp {
+    fn handle(&self, _inner: &mut Inner, _mmu: &Mmu) -> CmdResult<bool> {
+        println!("List of available commands:");
+
+        for cmd in COMMANDS.iter() {
+            println!(
+                "{:>8}: {} {}",
+                cmd.name,
+                cmd.desc,
+                if let Some(short) = cmd.short {
+                    format!("(short: {})", short)
+                } else {
+                    "".into()
+                }
+            );
+        }
+
+        Ok(false)
+    }
+}
+
+#[derive(StructOpt, Debug)]
+#[structopt(name = "quit", about = "Quit this emulator.")]
+struct CmdQuit {}
+
+impl CmdHandler for CmdQuit {
+    fn handle(&self, _inner: &mut Inner, _mmu: &Mmu) -> CmdResult<bool> {
+        println!("Quit.");
+
+        std::process::exit(1)
+    }
+}
+
+#[derive(StructOpt, Debug)]
+#[structopt(name = "cont", about = "Continue execution.")]
+struct CmdContinue {}
+
+impl CmdHandler for CmdContinue {
+    fn handle(&self, inner: &mut Inner, _mmu: &Mmu) -> CmdResult<bool> {
+        println!("Continue.");
+
+        inner.stepping = false;
+
+        Ok(true)
+    }
+}
+
+#[derive(StructOpt, Debug)]
+#[structopt(name = "step", about = "Step execution.")]
+struct CmdStep {}
+
+impl CmdHandler for CmdStep {
+    fn handle(&self, inner: &mut Inner, _mmu: &Mmu) -> CmdResult<bool> {
+        println!("Step.");
+
+        inner.stepping = true;
+
+        Ok(true)
+    }
+}
+
+#[derive(StructOpt, Debug)]
+#[structopt(name = "dump", about = "Dump information.")]
+enum CmdDump {
+    /// Dump cpu state
+    #[structopt(name = "cpu")]
+    Cpu,
+    /// Dump stack
+    #[structopt(name = "stack")]
+    Stack {
+        /// The size of stack to dump
+        #[structopt(name = "size", default_value = "10")]
+        size: u16,
+    },
+    /// Dump memory
+    #[structopt(name = "mem")]
+    Mem {
+        /// The start of the memory region to dump
+        #[structopt(name = "from", parse(try_from_str = "parse_addr"))]
+        from: u16,
+        /// The end of the memory region to dump (inclusive)
+        #[structopt(name = "to", parse(try_from_str = "parse_addr"))]
+        to: u16,
+    },
+}
+
+impl CmdHandler for CmdDump {
+    fn handle(&self, inner: &mut Inner, mmu: &Mmu) -> CmdResult<bool> {
+        match self {
+            CmdDump::Cpu => {
+                println!("{}", inner.cpu_state);
+            }
+            CmdDump::Stack { size } => {
+                let sp = inner.cpu_state.get_sp();
+
+                for i in 0..*size {
+                    let (p, of) = sp.overflowing_add(i * 2);
+                    if of {
+                        break;
+                    }
+                    println!("{}: {:04x} [{:04x}]", i + 1, p, mmu.get16(p));
+                }
+            }
+            CmdDump::Mem { from, to } => {
+                print!("      ");
+                for i in 0..16 {
+                    if i % 2 == 0 {
+                        print!("{:02x}", i)
+                    } else {
+                        print!("{:02x} ", i)
+                    }
+                }
+                println!();
+
+                let pad = from % 16;
+
+                if pad != 0 {
+                    print!("{:04x}: ", from - pad);
+                    for i in 0..pad {
+                        if i % 2 == 0 {
+                            print!("  ");
+                        } else {
+                            print!("   ");
+                        }
+                    }
+                }
+
+                for i in *from..=*to {
+                    if i % 16 == 0 {
+                        print!("{:04x}: ", i);
+                    }
+
+                    let b = mmu.get8(i);
+
+                    if i % 2 == 0 {
+                        print!("{:02x}", b);
+                    } else {
+                        print!("{:02x} ", b);
+                    }
+
+                    if i % 16 == 15 {
+                        println!()
+                    }
+                }
+
+                if to % 16 != 15 {
+                    println!()
+                }
+            }
+        }
+
+        Ok(false)
+    }
+}
+
+#[derive(StructOpt, Debug)]
+#[structopt(name = "watch", about = "Manage watch points.")]
+enum CmdWatch {
+    /// Add a watch point
+    #[structopt(name = "add")]
+    Add {
+        /// Address in hex
+        #[structopt(name = "addr", parse(try_from_str = "parse_addr"))]
+        addr: u16,
+        /// Add watch only for read access
+        #[structopt(long = "readonly", short = "r")]
+        readonly: bool,
+        /// Add watch only for write access
+        #[structopt(long = "writeonly", short = "w")]
+        writeonly: bool,
+    },
+    /// Remove a watch point
+    #[structopt(name = "remove")]
+    Remove {
+        /// Address in hex
+        #[structopt(name = "addr", parse(try_from_str = "parse_addr"))]
+        addr: u16,
+        /// Remove watch only for read access
+        #[structopt(long = "readonly", short = "r")]
+        readonly: bool,
+        /// Remove watch only for write access
+        #[structopt(long = "writeonly", short = "w")]
+        writeonly: bool,
+    },
+    /// List watch points
+    #[structopt(name = "list")]
+    List,
+}
+
+impl CmdHandler for CmdWatch {
+    fn handle(&self, inner: &mut Inner, _mmu: &Mmu) -> CmdResult<bool> {
+        match self {
+            CmdWatch::Add {
+                addr,
+                readonly,
+                writeonly,
+            } => {
+                if *readonly && *writeonly {
+                    println!("Nothing set because both readonly and writeonly are set");
+                    return Ok(false);
+                }
+                if !writeonly {
+                    if inner.rd_watches.insert(*addr) {
+                        println!("Set read watch at {:04x}", addr);
+                    } else {
+                        println!("Read watch already set at {:04x}", addr);
+                    }
+                }
+                if !readonly {
+                    if inner.wr_watches.insert(*addr) {
+                        println!("Set write watch at {:04x}", addr);
+                    } else {
+                        println!("Write watch already set at {:04x}", addr);
+                    }
+                }
+            }
+            CmdWatch::Remove {
+                addr,
+                readonly,
+                writeonly,
+            } => {
+                if *readonly && *writeonly {
+                    println!("Nothing unset because both readonly and writeonly are set");
+                    return Ok(false);
+                }
+                if !writeonly {
+                    if inner.rd_watches.remove(&addr) {
+                        println!("Remove read watch at {:04x}", addr);
+                    } else {
+                        println!("Read watch is already unset at {:04x}", addr);
+                    }
+                }
+                if !readonly {
+                    if inner.wr_watches.remove(&addr) {
+                        println!("Remove writeonly watch at {:04x}", addr);
+                    } else {
+                        println!("Write watch is already unset at {:04x}", addr);
+                    }
+                }
+            }
+            CmdWatch::List => {
+                println!("Watch points: ");
+
+                for addr in inner.rd_watches.union(&inner.wr_watches) {
+                    let wr = if inner.wr_watches.contains(addr) {
+                        'w'
+                    } else {
+                        '_'
+                    };
+                    let rd = if inner.rd_watches.contains(addr) {
+                        'r'
+                    } else {
+                        '_'
+                    };
+
+                    println!("* {:04x} ({}{})", addr, rd, wr);
+                }
+            }
+        }
+
+        Ok(false)
     }
 }

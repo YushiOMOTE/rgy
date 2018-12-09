@@ -6,7 +6,7 @@ use crate::device::{Lcd, Pcm};
 use crate::sound::Sound;
 use crate::ic::Ic;
 use crate::inst;
-use crate::debug::{Debugger, Perf, Resource};
+use crate::debug::{Debugger, Perf};
 use std::time::Instant;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::Opt;
@@ -94,7 +94,7 @@ pub fn run(opt: Opt) {
         mmu.add_handler((0xff0f, 0xffff), ic.handler());
 
         if opt.debug {
-            dbg.init(&Resource::new(&cpu, &mmu));
+            dbg.init(&mmu);
         }
 
         let mut perf = Perf::new();
@@ -112,7 +112,9 @@ pub fn run(opt: Opt) {
         loop {
             let (code, arg) = cpu.fetch(&mmu);
 
-            dbg.on_decode(&Resource::new(&cpu, &mmu));
+            dbg.take_cpu_snapshot(cpu.clone());
+            dbg.on_decode(&mmu);
+
             let (time, size) = inst::decode(code, arg, &mut cpu, &mut mmu);
             cpu.set_pc(cpu.get_pc().wrapping_add(size as u16));
 
