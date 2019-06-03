@@ -1,5 +1,5 @@
-use crate::mmu::Mmu;
 use crate::ic::Ic;
+use crate::mmu::Mmu;
 use log::*;
 
 use std::fmt;
@@ -103,10 +103,12 @@ impl Cpu {
     }
 
     pub fn enable_interrupt_immediate(&mut self) {
+        info!("Enable interrupt");
         self.interrupt = true;
     }
 
     pub fn disable_interrupt_immediate(&mut self) {
+        info!("Disable interrupt");
         self.interrupt = false;
     }
 

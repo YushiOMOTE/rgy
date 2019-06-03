@@ -1,16 +1,19 @@
-use crate::inst::mnem;
 use crate::cpu::Cpu;
+use crate::inst::mnem;
 use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 use log::*;
 
-use std::hash::{Hash, Hasher};
-use std::time::Instant;
-use std::string::ToString;
-use std::fmt;
-use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::rc::Rc;
+use std::string::ToString;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::time::Instant;
 
 use signal_hook;
 
@@ -178,14 +181,16 @@ impl Inner {
 
             match readline {
                 Ok(line) => {
-                    rl.add_history_entry(line.as_ref());
+                    rl.add_history_entry(line.as_str());
 
                     match exec_cmd(self, mmu, &line) {
-                        Ok(end) => if end {
-                            break false;
-                        } else {
-                            continue;
-                        },
+                        Ok(end) => {
+                            if end {
+                                break false;
+                            } else {
+                                continue;
+                            }
+                        }
                         Err(e) => {
                             println!("{}", e);
                             continue;

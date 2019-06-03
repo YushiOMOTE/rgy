@@ -1,8 +1,8 @@
-use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 use crate::ic::Irq;
-use std::rc::Rc;
-use std::cell::RefCell;
+use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 use log::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub trait Screen {
     fn width(&self) -> usize;
@@ -279,7 +279,7 @@ impl Inner {
         if !old_enable && self.enable {
             info!("LCD enabled");
             self.clocks = 0;
-            self.mode = Mode::OAM;
+            self.mode = Mode::HBlank;
             self.irq.vblank(false);
         } else if old_enable && !self.enable {
             info!("LCD disabled");
@@ -287,6 +287,7 @@ impl Inner {
             self.irq.vblank(false);
         }
 
+        info!("Write ctrl: {:02x}", value);
         info!("Window base: {:04x}", self.winbase);
         info!("Window enable: {}", self.winenable);
         info!("Bg/window base: {:04x}", self.bgwinbase);
@@ -332,6 +333,7 @@ impl Inner {
             let p: u8 = self.mode.clone().into();
             p
         };
+        info!("Read Status: {:02x}", v);
         v
     }
 
@@ -352,12 +354,18 @@ impl Inner {
             MemRead::Replace(self.ly)
         } else if addr == 0xff45 {
             MemRead::Replace(self.lyc)
+        } else if addr == 0xff46 {
+            unimplemented!("read ff46 (dma transfer)")
         } else if addr == 0xff47 {
             unimplemented!("read ff47")
         } else if addr == 0xff48 {
             unimplemented!("read ff48")
         } else if addr == 0xff49 {
             unimplemented!("read ff49")
+        } else if addr == 0xff4f {
+            unimplemented!("read ff4f (vram bank)")
+        } else if addr == 0xff68 || addr == 0xff69 || addr == 0xff6a || addr == 0xff6b {
+            unimplemented!("read color")
         } else {
             MemRead::PassThrough
         }
@@ -378,6 +386,8 @@ impl Inner {
             self.ly = 0;
         } else if addr == 0xff45 {
             self.lyc = value;
+        } else if addr == 0xff46 {
+            unimplemented!("write ff46 (dma transfer)")
         } else if addr == 0xff47 {
             self.bg_palette = to_palette(value);
             info!("Bg palette updated: {:?}", self.bg_palette);
@@ -393,6 +403,10 @@ impl Inner {
         } else if addr == 0xff4b {
             info!("Window X: {}", value);
             self.wx = value;
+        } else if addr == 0xff4f {
+            unimplemented!("write ff4f (vram bank)")
+        } else if addr == 0xff68 || addr == 0xff69 || addr == 0xff6a || addr == 0xff6b {
+            unimplemented!("write color")
         }
 
         MemWrite::PassThrough
