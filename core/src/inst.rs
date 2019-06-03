@@ -1,9 +1,9 @@
+use crate::alu;
 use crate::cpu::Cpu;
 use crate::mmu::Mmu;
-use crate::alu;
-use std::collections::HashMap;
 use lazy_static::lazy_static;
 use log::*;
+use std::collections::HashMap;
 
 lazy_static! {
     static ref MNEMONICS: HashMap<u16, &'static str> = {
@@ -236,7 +236,7 @@ lazy_static! {
         m.insert(0x00e6, "and d8");
         m.insert(0x00e7, "rst 0x20");
         m.insert(0x00e8, "add sp,r8");
-        m.insert(0x00e9, "jp (hl)");
+        m.insert(0x00e9, "jp hl");
         m.insert(0x00ea, "ld (a16),a");
         m.insert(0x00ee, "xor d8");
         m.insert(0x00ef, "rst 0x28");
@@ -2819,6 +2819,7 @@ fn op_00c6(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
 /// rst 0x00
 #[allow(unused_variables)]
 fn op_00c7(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
+    cpu.push(mmu, cpu.get_pc().wrapping_add(1));
     cpu.set_pc(0x00u16.wrapping_sub(1));
 
     (16, 1)
@@ -2905,6 +2906,7 @@ fn op_00ce(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
 /// rst 0x08
 #[allow(unused_variables)]
 fn op_00cf(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
+    cpu.push(mmu, cpu.get_pc().wrapping_add(1));
     cpu.set_pc(0x08u16.wrapping_sub(1));
 
     (16, 1)
@@ -2984,6 +2986,7 @@ fn op_00d6(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
 /// rst 0x10
 #[allow(unused_variables)]
 fn op_00d7(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
+    cpu.push(mmu, cpu.get_pc().wrapping_add(1));
     cpu.set_pc(0x10u16.wrapping_sub(1));
 
     (16, 1)
@@ -3056,6 +3059,7 @@ fn op_00de(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
 /// rst 0x18
 #[allow(unused_variables)]
 fn op_00df(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
+    cpu.push(mmu, cpu.get_pc().wrapping_add(1));
     cpu.set_pc(0x18u16.wrapping_sub(1));
 
     (16, 1)
@@ -3112,6 +3116,7 @@ fn op_00e6(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
 /// rst 0x20
 #[allow(unused_variables)]
 fn op_00e7(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
+    cpu.push(mmu, cpu.get_pc().wrapping_add(1));
     cpu.set_pc(0x20u16.wrapping_sub(1));
 
     (16, 1)
@@ -3132,10 +3137,10 @@ fn op_00e8(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     (16, 2)
 }
 
-/// jp (hl)
+/// jp hl
 #[allow(unused_variables)]
 fn op_00e9(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
-    let pc = mmu.get16(cpu.get_hl());
+    let pc = cpu.get_hl();
     cpu.set_pc(pc.wrapping_sub(1));
 
     (4, 1)
@@ -3166,6 +3171,7 @@ fn op_00ee(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
 /// rst 0x28
 #[allow(unused_variables)]
 fn op_00ef(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
+    cpu.push(mmu, cpu.get_pc().wrapping_add(1));
     cpu.set_pc(0x28u16.wrapping_sub(1));
 
     (16, 1)
@@ -3230,6 +3236,7 @@ fn op_00f6(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
 /// rst 0x30
 #[allow(unused_variables)]
 fn op_00f7(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
+    cpu.push(mmu, cpu.get_pc().wrapping_add(1));
     cpu.set_pc(0x30u16.wrapping_sub(1));
 
     (16, 1)
@@ -3293,6 +3300,7 @@ fn op_00fe(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
 /// rst 0x38
 #[allow(unused_variables)]
 fn op_00ff(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
+    cpu.push(mmu, cpu.get_pc().wrapping_add(1));
     cpu.set_pc(0x38u16.wrapping_sub(1));
 
     (16, 1)

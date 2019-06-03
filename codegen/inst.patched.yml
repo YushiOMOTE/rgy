@@ -2660,7 +2660,7 @@
 - code: 233
   operator: jp
   operands:
-    - (hl)
+    - hl
   bits: 0
   size: 1
   time: 4

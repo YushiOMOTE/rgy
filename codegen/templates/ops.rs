@@ -318,6 +318,7 @@
 {% endmacro %}
 
 {% macro rst(i) %}
+  cpu.push(mmu, cpu.get_pc().wrapping_add({{ i.size }}));
   cpu.set_pc({{ i.operands[0] }}u16.wrapping_sub({{i.size}}));
 {% endmacro %}
 
