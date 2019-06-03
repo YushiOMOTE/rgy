@@ -1,7 +1,7 @@
-use std::sync::{Arc, Mutex};
 use crate::mmu::Mmu;
 use crate::mmu::{MemHandler, MemRead, MemWrite};
 use log::*;
+use std::sync::{Arc, Mutex};
 
 pub struct Ic {
     inner: Arc<Inner>,
@@ -148,7 +148,7 @@ impl MemHandler for IcMemHandler {
 
     fn on_write(&self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         if addr == 0xffff {
-            info!("Read interrupt enable: {:02x}", value);
+            info!("Write interrupt enable: {:02x}", value);
             self.inner.enable.lock().unwrap().set(value);
             MemWrite::Block
         } else if addr == 0xff0f {
