@@ -71,10 +71,10 @@ struct Inner {
     wy: u8,
 
     enable: bool,
-    winbase: u16,
+    winmap: u16,
     winenable: bool,
-    bgwinbase: u16,
-    bgbase: u16,
+    tiles: u16,
+    bgmap: u16,
     spsize: u16,
     spenable: bool,
     bgenable: bool,
@@ -142,10 +142,10 @@ impl Inner {
             wx: 0,
             wy: 0,
             enable: false,
-            winbase: 0x9800,
+            winmap: 0x9800,
             winenable: false,
-            bgwinbase: 0x8800,
-            bgbase: 0x9800,
+            tiles: 0x8800,
+            bgmap: 0x9800,
             spsize: 8,
             spenable: false,
             bgenable: false,
@@ -236,30 +236,111 @@ impl Inner {
 
         let mut buf = vec![0; self.screen.width()];
 
-        let tmapbase = self.bgbase;
-        let tsetbase = self.bgwinbase;
+        if self.bgenable {
+            let mapbase = self.bgmap;
+            let tiles = self.tiles;
 
-        let yy = (self.ly as u16 + self.scy as u16) % 256;
-        let ty = yy / 8;
-        let tyoff = yy % 8;
+            let yy = (self.ly as u16 + self.scy as u16) % 256;
+            let ty = yy / 8;
+            let tyoff = yy % 8;
 
-        for x in 0..self.screen.width() as u16 {
-            let xx = (x + self.scx as u16) % 256;
-            let tx = xx / 8;
-            let txoff = xx % 8;
+            for x in 0..self.screen.width() as u16 {
+                let xx = (x + self.scx as u16) % 256;
+                let tx = xx / 8;
+                let txoff = xx % 8;
 
-            let ti = tx + ty * 32;
-            let tbase = tsetbase + mmu.get8(tmapbase + ti) as u16 * 16;
+                let ti = tx + ty * 32;
+                let tbase = if tiles == 0x8000 {
+                    tiles + mmu.get8(mapbase + ti) as u16 * 16
+                } else {
+                    tiles + (0x800 + mmu.get8(mapbase + ti) as i16 * 16) as u16
+                };
 
-            let l = mmu.get8(tbase + tyoff * 2) as u16;
-            let h = mmu.get8(tbase + tyoff * 2 + 1) as u16;
+                let l = mmu.get8(tbase + tyoff * 2) as u16;
+                let h = mmu.get8(tbase + tyoff * 2 + 1) as u16;
 
-            let l = (l >> (7 - txoff)) & 1;
-            let h = ((h >> (7 - txoff)) & 1) << 1;
-            let col = self.bg_palette[(h | l) as usize].clone().into();
+                let l = (l >> (7 - txoff)) & 1;
+                let h = ((h >> (7 - txoff)) & 1) << 1;
+                let col = self.bg_palette[(h | l) as usize].clone().into();
 
-            buf[x as usize] = col;
+                buf[x as usize] = col;
+            }
         }
+
+        if self.winenable {
+            unimplemented!("winbase");
+        }
+
+        if self.spenable {
+            for i in 0..40 {
+                let oam = 0xfe00 + i * 4;
+                let ypos = mmu.get8(oam + 0) as u16;
+                let xpos = mmu.get8(oam + 1) as u16;
+                let ti = mmu.get8(oam + 2);
+                let attr = mmu.get8(oam + 3);
+                let behind_bg = attr & 0x80 != 0;
+                let yflip = attr & 0x40 != 0;
+                let xflip = attr & 0x20 != 0;
+                let palette = if attr & 0x10 != 0 {
+                    &self.obj_palette1
+                } else {
+                    &self.obj_palette2
+                };
+
+                let ly = self.ly as u16;
+                if ly + 16 < ypos {
+                    // This sprite doesn't hit the current ly
+                    continue;
+                }
+                let tyoff = ly as u16 + 16 - ypos; // ly - (ypos - 16)
+                if tyoff >= self.spsize {
+                    // This sprite doesn't hit the current ly
+                    continue;
+                }
+
+                let tiles = 0x8000;
+
+                for x in 0..self.screen.width() as u16 {
+                    if x + 8 < xpos {
+                        continue;
+                    }
+                    let txoff = x + 8 - xpos; // x - (xpos - 8)
+                    if txoff >= 8 {
+                        continue;
+                    }
+
+                    let tbase = tiles + ti as u16 * 16;
+
+                    assert_eq!(false, xflip);
+                    assert_eq!(false, yflip);
+
+                    let l = mmu.get8(tbase + tyoff * 2) as u16;
+                    let h = mmu.get8(tbase + tyoff * 2 + 1) as u16;
+
+                    let l = (l >> (7 - txoff)) & 1;
+                    let h = ((h >> (7 - txoff)) & 1) << 1;
+                    let coli = (h | l) as usize;
+
+                    if coli == 0 {
+                        // Color index 0 means transparent
+                        continue;
+                    }
+
+                    let col = palette[coli].clone();
+
+                    let bgcol = buf[x as usize];
+
+                    if behind_bg && bgcol != Color::White.into() {
+                        // If priority is lower than bg color 1-3, don't draw
+                        continue;
+                    }
+
+                    buf[x as usize] = col.into();
+                }
+            }
+        }
+
+        // TODO: Sprites
 
         self.screen.update_line(self.ly as usize, &buf);
     }
@@ -268,10 +349,10 @@ impl Inner {
         let old_enable = self.enable;
 
         self.enable = value & 0x80 != 0;
-        self.winbase = if value & 0x40 != 0 { 0x9c00 } else { 0x9800 };
+        self.winmap = if value & 0x40 != 0 { 0x9c00 } else { 0x9800 };
         self.winenable = value & 0x20 != 0;
-        self.bgwinbase = if value & 0x10 != 0 { 0x8000 } else { 0x8800 };
-        self.bgbase = if value & 0x08 != 0 { 0x9c00 } else { 0x9800 };
+        self.tiles = if value & 0x10 != 0 { 0x8000 } else { 0x8800 };
+        self.bgmap = if value & 0x08 != 0 { 0x9c00 } else { 0x9800 };
         self.spsize = if value & 0x04 != 0 { 16 } else { 8 };
         self.spenable = value & 0x02 != 0;
         self.bgenable = value & 0x01 != 0;
@@ -288,13 +369,15 @@ impl Inner {
         }
 
         info!("Write ctrl: {:02x}", value);
-        info!("Window base: {:04x}", self.winbase);
+        info!("Window base: {:04x}", self.winmap);
         info!("Window enable: {}", self.winenable);
-        info!("Bg/window base: {:04x}", self.bgwinbase);
-        info!("Background base: {:04x}", self.bgbase);
+        info!("Bg/window base: {:04x}", self.tiles);
+        info!("Background base: {:04x}", self.bgmap);
         info!("Sprite size: 8x{}", self.spsize);
         info!("Sprite enable: {}", self.spenable);
         info!("Background enable: {}", self.bgenable);
+
+        assert_eq!(8, self.spsize);
     }
 
     fn on_write_status(&mut self, value: u8) {
@@ -312,10 +395,10 @@ impl Inner {
     fn on_read_ctrl(&mut self) -> u8 {
         let mut v = 0;
         v |= if self.enable { 0x80 } else { 0x00 };
-        v |= if self.winbase == 0x9c00 { 0x40 } else { 0x00 };
+        v |= if self.winmap == 0x9c00 { 0x40 } else { 0x00 };
         v |= if self.winenable { 0x20 } else { 0x00 };
-        v |= if self.bgwinbase == 0x8000 { 0x10 } else { 0x00 };
-        v |= if self.bgbase == 0x9c00 { 0x08 } else { 0x00 };
+        v |= if self.tiles == 0x8000 { 0x10 } else { 0x00 };
+        v |= if self.bgmap == 0x9c00 { 0x08 } else { 0x00 };
         v |= if self.spsize == 16 { 0x04 } else { 0x00 };
         v |= if self.spenable { 0x02 } else { 0x00 };
         v |= if self.bgenable { 0x01 } else { 0x00 };
@@ -355,7 +438,8 @@ impl Inner {
         } else if addr == 0xff45 {
             MemRead::Replace(self.lyc)
         } else if addr == 0xff46 {
-            unimplemented!("read ff46 (dma transfer)")
+            info!("Read DMA transfer");
+            MemRead::PassThrough
         } else if addr == 0xff47 {
             unimplemented!("read ff47")
         } else if addr == 0xff48 {
@@ -387,7 +471,7 @@ impl Inner {
         } else if addr == 0xff45 {
             self.lyc = value;
         } else if addr == 0xff46 {
-            unimplemented!("write ff46 (dma transfer)")
+            info!("Trigger DMA transfer: {:02x}", value);
         } else if addr == 0xff47 {
             self.bg_palette = to_palette(value);
             info!("Bg palette updated: {:?}", self.bg_palette);
