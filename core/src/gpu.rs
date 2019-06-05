@@ -253,7 +253,7 @@ impl Inner {
                 let tbase = if tiles == 0x8000 {
                     tiles + mmu.get8(mapbase + ti) as u16 * 16
                 } else {
-                    tiles + (0x800 + mmu.get8(mapbase + ti) as i16 * 16) as u16
+                    tiles + (0x800 + mmu.get8(mapbase + ti) as i8 as i16 * 16) as u16
                 };
 
                 let l = mmu.get8(tbase + tyoff * 2) as u16;
@@ -339,8 +339,6 @@ impl Inner {
                 }
             }
         }
-
-        // TODO: Sprites
 
         self.screen.update_line(self.ly as usize, &buf);
     }
