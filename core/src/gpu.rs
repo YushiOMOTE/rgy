@@ -81,8 +81,8 @@ struct Inner {
     screen: Box<Screen>,
 
     bg_palette: Vec<Color>,
+    obj_palette0: Vec<Color>,
     obj_palette1: Vec<Color>,
-    obj_palette2: Vec<Color>,
 }
 
 fn to_palette(p: u8) -> Vec<Color> {
@@ -156,13 +156,13 @@ impl Inner {
                 Color::DarkGray,
                 Color::Black,
             ],
-            obj_palette1: vec![
+            obj_palette0: vec![
                 Color::White,
                 Color::LightGray,
                 Color::DarkGray,
                 Color::Black,
             ],
-            obj_palette2: vec![
+            obj_palette1: vec![
                 Color::White,
                 Color::LightGray,
                 Color::DarkGray,
@@ -235,6 +235,7 @@ impl Inner {
         }
 
         let mut buf = vec![0; self.screen.width()];
+        let mut bgbuf = vec![0; self.screen.width()];
 
         if self.bgenable {
             let mapbase = self.bgmap;
@@ -261,9 +262,11 @@ impl Inner {
 
                 let l = (l >> (7 - txoff)) & 1;
                 let h = ((h >> (7 - txoff)) & 1) << 1;
-                let col = self.bg_palette[(h | l) as usize].clone().into();
+                let coli = (h | l) as usize;
+                let col = self.bg_palette[coli].clone().into();
 
                 buf[x as usize] = col;
+                bgbuf[x as usize] = coli;
             }
         }
 
@@ -340,9 +343,9 @@ impl Inner {
                 let yflip = attr & 0x40 != 0;
                 let xflip = attr & 0x20 != 0;
                 let palette = if attr & 0x10 != 0 {
-                    &self.obj_palette1
+                    &self.obj_palette0
                 } else {
-                    &self.obj_palette2
+                    &self.obj_palette1
                 };
 
                 let ly = self.ly as u16;
@@ -386,9 +389,11 @@ impl Inner {
 
                     let col = palette[coli].clone();
 
-                    let bgcol = buf[x as usize];
+                    let bgcoli = bgbuf[x as usize];
 
-                    if behind_bg && bgcol != Color::White.into() {
+                    assert_eq!(false, behind_bg);
+
+                    if behind_bg && bgcoli != 0 {
                         // If priority is lower than bg color 1-3, don't draw
                         continue;
                     }
@@ -536,11 +541,11 @@ impl Inner {
             self.bg_palette = to_palette(value);
             info!("Bg palette updated: {:?}", self.bg_palette);
         } else if addr == 0xff48 {
-            self.obj_palette1 = to_palette(value);
-            info!("Object palette 1 updated: {:?}", self.obj_palette2);
+            self.obj_palette0 = to_palette(value);
+            info!("Object palette 0 updated: {:?}", self.obj_palette0);
         } else if addr == 0xff49 {
-            self.obj_palette2 = to_palette(value);
-            info!("Object palette 2 updated: {:?}", self.obj_palette1);
+            self.obj_palette1 = to_palette(value);
+            info!("Object palette 1 updated: {:?}", self.obj_palette1);
         } else if addr == 0xff4a {
             info!("Window Y: {}", value);
             self.wy = value;
