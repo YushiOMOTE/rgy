@@ -268,7 +268,65 @@ impl Inner {
         }
 
         if self.winenable {
-            unimplemented!("winbase");
+            let mapbase = self.winmap;
+            let tiles = self.tiles;
+
+            if self.ly >= self.wy {
+                let yy = (self.ly - self.wy) as u16;
+                let ty = yy / 8;
+                let tyoff = yy % 8;
+
+                for x in 0..self.screen.width() as u16 {
+                    if x + 7 < self.wx as u16 {
+                        continue;
+                    }
+                    let xx = (x + 7 - self.wx as u16) as u16; // x - (wx - 7)
+                    let tx = xx / 8;
+                    let txoff = xx % 8;
+
+                    let ti = tx + ty * 32;
+                    let tbase = if tiles == 0x8000 {
+                        tiles + mmu.get8(mapbase + ti) as u16 * 16
+                    } else {
+                        tiles + (0x800 + mmu.get8(mapbase + ti) as i8 as i16 * 16) as u16
+                    };
+
+                    let l = mmu.get8(tbase + tyoff * 2) as u16;
+                    let h = mmu.get8(tbase + tyoff * 2 + 1) as u16;
+
+                    let l = (l >> (7 - txoff)) & 1;
+                    let h = ((h >> (7 - txoff)) & 1) << 1;
+                    let col = self.bg_palette[(h | l) as usize].clone().into();
+
+                    buf[x as usize] = col;
+                }
+            }
+
+            let yy = (self.ly as u16 + self.scy as u16) % 256;
+            let ty = yy / 8;
+            let tyoff = yy % 8;
+
+            for x in 0..self.screen.width() as u16 {
+                let xx = (x + self.scx as u16) % 256;
+                let tx = xx / 8;
+                let txoff = xx % 8;
+
+                let ti = tx + ty * 32;
+                let tbase = if tiles == 0x8000 {
+                    tiles + mmu.get8(mapbase + ti) as u16 * 16
+                } else {
+                    tiles + (0x800 + mmu.get8(mapbase + ti) as i8 as i16 * 16) as u16
+                };
+
+                let l = mmu.get8(tbase + tyoff * 2) as u16;
+                let h = mmu.get8(tbase + tyoff * 2 + 1) as u16;
+
+                let l = (l >> (7 - txoff)) & 1;
+                let h = ((h >> (7 - txoff)) & 1) << 1;
+                let col = self.bg_palette[(h | l) as usize].clone().into();
+
+                buf[x as usize] = col;
+            }
         }
 
         if self.spenable {
@@ -444,6 +502,10 @@ impl Inner {
             unimplemented!("read ff48")
         } else if addr == 0xff49 {
             unimplemented!("read ff49")
+        } else if addr == 0xff4a {
+            MemRead::Replace(self.wy)
+        } else if addr == 0xff4b {
+            MemRead::Replace(self.wx)
         } else if addr == 0xff4f {
             unimplemented!("read ff4f (vram bank)")
         } else if addr == 0xff68 || addr == 0xff69 || addr == 0xff6a || addr == 0xff6b {
