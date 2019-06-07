@@ -4,6 +4,7 @@ use crate::device::{Hardware, HardwareHandle};
 use crate::gpu::Gpu;
 use crate::ic::Ic;
 use crate::inst;
+use crate::joypad::Joypad;
 use crate::mmu::Mmu;
 use crate::sound::Sound;
 use crate::Opt;
@@ -77,6 +78,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, hw: T) {
     let mut sound = Sound::new(hw.clone());
     let ic = Ic::new();
     let gpu = Gpu::new(hw.clone(), ic.irq());
+    let joypad = Joypad::new(hw.clone(), ic.irq());
 
     mmu.setup(&opt.rom);
 
@@ -87,6 +89,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, hw: T) {
     mmu.add_handler((0xff10, 0xff26), sound.handler());
     mmu.add_handler((0xff40, 0xff4f), gpu.handler());
     mmu.add_handler((0xff0f, 0xffff), ic.handler());
+    mmu.add_handler((0xff00, 0xff00), joypad.handler());
 
     if opt.debug {
         dbg.init(&mmu);

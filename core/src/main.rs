@@ -5,6 +5,7 @@ mod device;
 mod gpu;
 mod ic;
 mod inst;
+mod joypad;
 mod mmu;
 mod sound;
 mod system;
