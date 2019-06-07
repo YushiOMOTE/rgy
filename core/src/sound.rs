@@ -1,25 +1,18 @@
-use std::rc::Rc;
-use std::cell::RefCell;
 use log::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
+use crate::device::HardwareHandle;
 use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
-
-pub type Stream = FnMut(f32) -> Option<f32> + Send + Sync + 'static;
-
-pub trait Speaker {
-    fn play(&self, stream: Box<Stream>);
-
-    fn stop(&self);
-}
 
 pub struct Sound {
     inner: Rc<RefCell<Inner>>,
 }
 
 impl Sound {
-    pub fn new(speaker: Box<Speaker>) -> Sound {
+    pub fn new(hw: HardwareHandle) -> Sound {
         Sound {
-            inner: Rc::new(RefCell::new(Inner::new(speaker))),
+            inner: Rc::new(RefCell::new(Inner::new(hw))),
         }
     }
 
@@ -85,12 +78,12 @@ struct Tone {
 }
 
 struct Inner {
-    speaker: Box<Speaker>,
+    hw: HardwareHandle,
     tone: Tone,
 }
 
 impl Inner {
-    fn new(speaker: Box<Speaker>) -> Inner {
+    fn new(hw: HardwareHandle) -> Inner {
         let tone = Tone {
             sweep_time: 0,
             sweep_sub: false,
@@ -104,7 +97,7 @@ impl Inner {
             freq: 0,
         };
 
-        Inner { speaker, tone }
+        Inner { hw, tone }
     }
 
     fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
@@ -151,7 +144,7 @@ impl Inner {
         let mut env_clock = 0f32;
         let mut amp = amp;
 
-        self.speaker.play(Box::new(move |rate| {
+        self.hw.get().borrow_mut().sound_play(Box::new(move |rate| {
             // Envelope
             env_clock += 1.0;
             if env_clock >= rate * env_count / 64.0 {

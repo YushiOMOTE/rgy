@@ -1,14 +1,15 @@
-mod cpu;
-mod gpu;
-mod mmu;
-mod inst;
 mod alu;
-mod system;
+mod cpu;
 mod debug;
 mod device;
-mod sound;
+mod gpu;
 mod ic;
+mod inst;
+mod mmu;
+mod sound;
+mod system;
 
+use crate::device::HardwareImpl;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -37,5 +38,7 @@ fn main() {
 
     env_logger::init();
 
-    system::run(opt);
+    let hw = HardwareImpl::new();
+
+    system::run(opt, hw);
 }

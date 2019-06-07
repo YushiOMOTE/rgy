@@ -1,15 +1,15 @@
-use log::*;
 use crate::cpu::Cpu;
-use crate::mmu::Mmu;
+use crate::debug::{Debugger, Perf};
+use crate::device::{Hardware, HardwareHandle};
 use crate::gpu::Gpu;
-use crate::device::{Lcd, Pcm};
-use crate::sound::Sound;
 use crate::ic::Ic;
 use crate::inst;
-use crate::debug::{Debugger, Perf};
-use std::time::Instant;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use crate::mmu::Mmu;
+use crate::sound::Sound;
 use crate::Opt;
+use log::*;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Instant;
 
 struct FreqControl {
     last: Instant,
@@ -64,78 +64,66 @@ impl FreqControl {
     }
 }
 
-pub fn run(opt: Opt) {
+pub fn run<T: Hardware + 'static>(opt: Opt, hw: T) {
     info!("Initializing...");
 
     let mut fc = FreqControl::new(opt.freq, opt.sample, opt.delay_unit);
 
-    let mut lcd = Lcd::new();
-    let pcm = Pcm::new();
+    let hw = HardwareHandle::new(hw);
 
-    let screen = Box::new(lcd.handle());
-    let speaker = Box::new(pcm.handle());
+    let mut dbg = Debugger::new();
+    let mut cpu = Cpu::new();
+    let mut mmu = Mmu::new();
+    let mut sound = Sound::new(hw.clone());
+    let ic = Ic::new();
+    let gpu = Gpu::new(hw.clone(), ic.irq());
 
-    let _core_thread = std::thread::spawn(move || {
-        let mut dbg = Debugger::new();
-        let mut cpu = Cpu::new();
-        let mut mmu = Mmu::new();
-        let mut sound = Sound::new(speaker);
-        let ic = Ic::new();
-        let gpu = Gpu::new(screen, ic.irq());
+    mmu.setup(&opt.rom);
 
-        mmu.setup(&opt.rom);
+    if opt.debug {
+        mmu.add_handler((0x0000, 0xffff), dbg.handler());
+    }
+
+    mmu.add_handler((0xff10, 0xff26), sound.handler());
+    mmu.add_handler((0xff40, 0xff4f), gpu.handler());
+    mmu.add_handler((0xff0f, 0xffff), ic.handler());
+
+    if opt.debug {
+        dbg.init(&mmu);
+    }
+
+    let mut perf = Perf::new();
+
+    info!("Starting...");
+
+    let mut last = Instant::now();
+    let mut count = AtomicUsize::new(0);
+    let mut delay = 0;
+    let sample = 500;
+    let unit = 100;
+
+    fc.reset();
+
+    while hw.get().borrow_mut().sched() {
+        let (code, arg) = cpu.fetch(&mmu);
 
         if opt.debug {
-            mmu.add_handler((0x0000, 0xffff), dbg.handler());
+            dbg.check_signal();
+            dbg.take_cpu_snapshot(cpu.clone());
+            dbg.on_decode(&mmu);
         }
 
-        mmu.add_handler((0xff10, 0xff26), sound.handler());
-        mmu.add_handler((0xff40, 0xff4f), gpu.handler());
-        mmu.add_handler((0xff0f, 0xffff), ic.handler());
+        let (time, size) = inst::decode(code, arg, &mut cpu, &mut mmu);
+        cpu.set_pc(cpu.get_pc().wrapping_add(size as u16));
 
-        if opt.debug {
-            dbg.init(&mmu);
+        cpu.check_interrupt(&mut mmu, &ic);
+
+        gpu.step(time, &mut mmu);
+
+        perf.count();
+
+        if !opt.native_speed {
+            fc.adjust();
         }
-
-        let mut perf = Perf::new();
-
-        info!("Starting...");
-
-        let mut last = Instant::now();
-        let mut count = AtomicUsize::new(0);
-        let mut delay = 0;
-        let sample = 500;
-        let unit = 100;
-
-        fc.reset();
-
-        loop {
-            let (code, arg) = cpu.fetch(&mmu);
-
-            if opt.debug {
-                dbg.check_signal();
-                dbg.take_cpu_snapshot(cpu.clone());
-                dbg.on_decode(&mmu);
-            }
-
-            let (time, size) = inst::decode(code, arg, &mut cpu, &mut mmu);
-            cpu.set_pc(cpu.get_pc().wrapping_add(size as u16));
-
-            cpu.check_interrupt(&mut mmu, &ic);
-
-            gpu.step(time, &mut mmu);
-
-            perf.count();
-
-            if !opt.native_speed {
-                fc.adjust();
-            }
-        }
-    });
-
-    let _sound_thread = std::thread::spawn(move || {
-        pcm.run();
-    });
-
-    lcd.run();
+    }
 }

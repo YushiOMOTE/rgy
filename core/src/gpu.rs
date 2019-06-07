@@ -1,18 +1,9 @@
+use crate::device::{Hardware, HardwareHandle};
 use crate::ic::Irq;
 use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 use log::*;
 use std::cell::RefCell;
 use std::rc::Rc;
-
-pub trait Screen {
-    fn width(&self) -> usize;
-
-    fn height(&self) -> usize;
-
-    fn update(&self, buffer: &[u32]);
-
-    fn update_line(&self, line: usize, buffer: &[u32]);
-}
 
 #[derive(Debug, Clone)]
 enum Mode {
@@ -78,7 +69,7 @@ struct Inner {
     spsize: u16,
     spenable: bool,
     bgenable: bool,
-    screen: Box<Screen>,
+    hw: HardwareHandle,
 
     bg_palette: Vec<Color>,
     obj_palette0: Vec<Color>,
@@ -126,7 +117,7 @@ impl From<u8> for Color {
 }
 
 impl Inner {
-    fn new(screen: Box<Screen>, irq: Irq) -> Self {
+    fn new(hw: HardwareHandle, irq: Irq) -> Self {
         Self {
             irq: irq,
             clocks: 0,
@@ -149,7 +140,7 @@ impl Inner {
             spsize: 8,
             spenable: false,
             bgenable: false,
-            screen: screen,
+            hw,
             bg_palette: vec![
                 Color::White,
                 Color::LightGray,
@@ -230,12 +221,15 @@ impl Inner {
     }
 
     fn draw(&mut self, mmu: &Mmu) {
-        if self.ly >= self.screen.height() as u8 {
+        let height = self.hw.get().borrow().vram_height();
+        let width = self.hw.get().borrow().vram_width();
+
+        if self.ly >= height as u8 {
             return;
         }
 
-        let mut buf = vec![0; self.screen.width()];
-        let mut bgbuf = vec![0; self.screen.width()];
+        let mut buf = vec![0; width];
+        let mut bgbuf = vec![0; width];
 
         if self.bgenable {
             let mapbase = self.bgmap;
@@ -245,7 +239,7 @@ impl Inner {
             let ty = yy / 8;
             let tyoff = yy % 8;
 
-            for x in 0..self.screen.width() as u16 {
+            for x in 0..width as u16 {
                 let xx = (x + self.scx as u16) % 256;
                 let tx = xx / 8;
                 let txoff = xx % 8;
@@ -279,7 +273,7 @@ impl Inner {
                 let ty = yy / 8;
                 let tyoff = yy % 8;
 
-                for x in 0..self.screen.width() as u16 {
+                for x in 0..width as u16 {
                     if x + 7 < self.wx as u16 {
                         continue;
                     }
@@ -309,7 +303,7 @@ impl Inner {
             let ty = yy / 8;
             let tyoff = yy % 8;
 
-            for x in 0..self.screen.width() as u16 {
+            for x in 0..width as u16 {
                 let xx = (x + self.scx as u16) % 256;
                 let tx = xx / 8;
                 let txoff = xx % 8;
@@ -361,7 +355,7 @@ impl Inner {
 
                 let tiles = 0x8000;
 
-                for x in 0..self.screen.width() as u16 {
+                for x in 0..width as u16 {
                     if x + 8 < xpos {
                         continue;
                     }
@@ -403,7 +397,10 @@ impl Inner {
             }
         }
 
-        self.screen.update_line(self.ly as usize, &buf);
+        self.hw
+            .get()
+            .borrow_mut()
+            .vram_update(self.ly as usize, &buf);
     }
 
     fn on_write_ctrl(&mut self, value: u8) {
@@ -563,9 +560,9 @@ impl Inner {
 }
 
 impl Gpu {
-    pub fn new(screen: Box<Screen>, irq: Irq) -> Gpu {
+    pub fn new(hw: HardwareHandle, irq: Irq) -> Gpu {
         Gpu {
-            inner: Rc::new(RefCell::new(Inner::new(screen, irq))),
+            inner: Rc::new(RefCell::new(Inner::new(hw, irq))),
         }
     }
 
