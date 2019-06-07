@@ -352,6 +352,7 @@ impl Inner {
                     // This sprite doesn't hit the current ly
                     continue;
                 }
+                let tyoff = if yflip { 7 - tyoff } else { tyoff };
 
                 let tiles = 0x8000;
 
@@ -363,11 +364,9 @@ impl Inner {
                     if txoff >= 8 {
                         continue;
                     }
+                    let txoff = if xflip { 7 - txoff } else { txoff };
 
                     let tbase = tiles + ti as u16 * 16;
-
-                    assert_eq!(false, xflip);
-                    assert_eq!(false, yflip);
 
                     let l = mmu.get8(tbase + tyoff * 2) as u16;
                     let h = mmu.get8(tbase + tyoff * 2 + 1) as u16;
@@ -384,8 +383,6 @@ impl Inner {
                     let col = palette[coli].clone();
 
                     let bgcoli = bgbuf[x as usize];
-
-                    assert_eq!(false, behind_bg);
 
                     if behind_bg && bgcoli != 0 {
                         // If priority is lower than bg color 1-3, don't draw
