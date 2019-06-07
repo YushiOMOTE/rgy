@@ -7,6 +7,7 @@ use crate::inst;
 use crate::joypad::Joypad;
 use crate::mmu::Mmu;
 use crate::sound::Sound;
+use crate::timer::Timer;
 use crate::Opt;
 use log::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -79,6 +80,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, hw: T) {
     let ic = Ic::new();
     let gpu = Gpu::new(hw.clone(), ic.irq());
     let joypad = Joypad::new(hw.clone(), ic.irq());
+    let timer = Timer::new(hw.clone(), ic.irq());
 
     mmu.setup(&opt.rom);
 
@@ -90,6 +92,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, hw: T) {
     mmu.add_handler((0xff40, 0xff4f), gpu.handler());
     mmu.add_handler((0xff0f, 0xffff), ic.handler());
     mmu.add_handler((0xff00, 0xff00), joypad.handler());
+    mmu.add_handler((0xff04, 0xff07), timer.handler());
 
     if opt.debug {
         dbg.init(&mmu);
@@ -122,6 +125,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, hw: T) {
         cpu.check_interrupt(&mut mmu, &ic);
 
         gpu.step(time, &mut mmu);
+        timer.step(time);
 
         perf.count();
 

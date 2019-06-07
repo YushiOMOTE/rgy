@@ -97,7 +97,7 @@ impl Cpu {
         }
 
         if let Some(value) = ic.poll() {
-            info!("Inerrupted: {:02x}", value);
+            info!("Interrupted: {:02x}", value);
             self.interrupted(mmu, value);
         }
     }

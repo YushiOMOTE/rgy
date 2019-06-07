@@ -9,6 +9,7 @@ mod joypad;
 mod mmu;
 mod sound;
 mod system;
+mod timer;
 
 use crate::device::HardwareImpl;
 use structopt::StructOpt;
