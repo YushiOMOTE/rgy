@@ -126,10 +126,10 @@ impl Hardware for HardwareImpl {
             Key::Left => minifb::Key::Left,
             Key::Up => minifb::Key::Up,
             Key::Down => minifb::Key::Down,
-            Key::A => minifb::Key::A,
-            Key::B => minifb::Key::B,
-            Key::Select => minifb::Key::Z,
-            Key::Start => minifb::Key::X,
+            Key::A => minifb::Key::Z,
+            Key::B => minifb::Key::X,
+            Key::Select => minifb::Key::Space,
+            Key::Start => minifb::Key::Enter,
             _ => return false,
         };
 
