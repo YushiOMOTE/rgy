@@ -353,6 +353,15 @@ impl Inner {
                     continue;
                 }
                 let tyoff = if yflip { 7 - tyoff } else { tyoff };
+                let ti = if self.spsize == 16 {
+                    if tyoff >= 16 {
+                        ti | 1
+                    } else {
+                        ti & 0xfe
+                    }
+                } else {
+                    ti
+                };
 
                 let tiles = 0x8000;
 
@@ -431,8 +440,6 @@ impl Inner {
         info!("Sprite size: 8x{}", self.spsize);
         info!("Sprite enable: {}", self.spenable);
         info!("Background enable: {}", self.bgenable);
-
-        assert_eq!(8, self.spsize);
     }
 
     fn on_write_status(&mut self, value: u8) {
