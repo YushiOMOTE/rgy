@@ -42,8 +42,10 @@ impl MbcNone {
     fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         if addr <= 0x7fff {
             MemWrite::Block
+        } else if addr >= 0xa000 && addr <= 0xbfff {
+            MemWrite::PassThrough
         } else {
-            unimplemented!()
+            unreachable!("Write to ROM: {:02x} {:02x}", addr, value);
         }
     }
 }
@@ -51,33 +53,69 @@ impl MbcNone {
 struct Mbc1 {
     rom: Vec<u8>,
     rom_bank: usize,
+    ram_bank: usize,
+    ram_enable: bool,
+    ram_select: bool,
 }
 
 impl Mbc1 {
     fn new(rom: Vec<u8>) -> Self {
-        Self { rom, rom_bank: 0 }
+        Self {
+            rom,
+            rom_bank: 0,
+            ram_bank: 0,
+            ram_enable: false,
+            ram_select: false,
+        }
     }
 
     fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
         if addr <= 0x3fff {
             MemRead::Replace(self.rom[addr as usize])
         } else if addr >= 0x4000 && addr <= 0x7fff {
-            let base = self.rom_bank * 0x4000;
+            let base = self.rom_bank.max(1) * 0x4000;
             let offset = addr as usize - 0x4000;
             MemRead::Replace(self.rom[base + offset])
+        } else if addr >= 0xa000 && addr <= 0xbfff {
+            if self.ram_enable {
+                MemRead::PassThrough
+            } else {
+                warn!("Read from disabled external RAM: {:04x}", addr);
+                MemRead::Replace(0)
+            }
         } else {
             MemRead::PassThrough
         }
     }
 
     fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        if addr >= 0x2000 && addr <= 0x3fff {
-            self.rom_bank = (value & 0x1f) as usize;
-            if self.rom_bank == 0 {
-                self.rom_bank = 1;
+        if addr <= 0x1fff {
+            if value == 0x00 {
+                info!("External RAM disabled");
+                self.ram_enable = false;
+            } else if value == 0x0a {
+                info!("External RAM enabled");
+                self.ram_enable = true;
             }
+            MemWrite::Block
+        } else if addr >= 0x2000 && addr <= 0x3fff {
+            self.rom_bank = (self.rom_bank & !0x1f) | (value as usize & 0x1f);
             info!("Switch ROM bank to {}", self.rom_bank);
             MemWrite::Block
+        } else if addr >= 0x4000 && addr <= 0x5fff {
+            if self.ram_select {
+                self.ram_bank = value as usize & 0x3;
+            } else {
+                self.rom_bank = (self.rom_bank & !0xc0) | ((value as usize & 0x3) << 5);
+            }
+            MemWrite::Block
+        } else if addr >= 0xa000 && addr <= 0xbfff {
+            if self.ram_enable {
+                MemWrite::PassThrough
+            } else {
+                warn!("Write to disabled external RAM: {:02x} {:02x}", addr, value);
+                MemWrite::Block
+            }
         } else {
             unimplemented!("write to rom {:02x} {:02x}", addr, value)
         }
