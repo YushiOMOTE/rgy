@@ -88,10 +88,6 @@ impl Inner {
     }
 
     fn step(&mut self, time: usize) {
-        if self.ctrl & 0x04 == 0 {
-            return;
-        }
-
         if self.div_clocks < time {
             self.div = self.div.wrapping_add(1);
             self.div_clock_reset();
@@ -99,6 +95,11 @@ impl Inner {
         } else {
             self.div_clocks -= time;
         }
+
+        if self.ctrl & 0x04 == 0 {
+            return;
+        }
+
         if self.tim_clocks < time {
             let (tim, of) = self.tim.overflowing_add(1);
             self.tim = tim;
