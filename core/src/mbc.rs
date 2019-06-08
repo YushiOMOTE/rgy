@@ -22,33 +22,203 @@ impl Mbc {
     }
 }
 
-#[derive(Debug)]
-enum Type {
-    None,
-    MBC1,
-    MBC2,
-    MBC3,
-    MBC5,
-    HuC1,
+struct MbcNone {
+    rom: Vec<u8>,
 }
 
-impl From<u8> for Type {
-    fn from(code: u8) -> Self {
+impl MbcNone {
+    fn new(rom: Vec<u8>) -> Self {
+        Self { rom }
+    }
+
+    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+        if addr <= 0x7fff {
+            MemRead::Replace(self.rom[addr as usize])
+        } else {
+            MemRead::PassThrough
+        }
+    }
+
+    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+        if addr <= 0x7fff {
+            MemWrite::Block
+        } else {
+            unimplemented!()
+        }
+    }
+}
+
+struct Mbc1 {
+    rom: Vec<u8>,
+    rom_bank: usize,
+}
+
+impl Mbc1 {
+    fn new(rom: Vec<u8>) -> Self {
+        Self { rom, rom_bank: 0 }
+    }
+
+    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+        if addr <= 0x3fff {
+            MemRead::Replace(self.rom[addr as usize])
+        } else if addr >= 0x4000 && addr <= 0x7fff {
+            let base = self.rom_bank * 0x4000;
+            let offset = addr as usize - 0x4000;
+            MemRead::Replace(self.rom[base + offset])
+        } else {
+            MemRead::PassThrough
+        }
+    }
+
+    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+        if addr >= 0x2000 && addr <= 0x3fff {
+            self.rom_bank = (value & 0x1f) as usize;
+            if self.rom_bank == 0 {
+                self.rom_bank = 1;
+            }
+            info!("Switch ROM bank to {}", self.rom_bank);
+            MemWrite::Block
+        } else {
+            unimplemented!("write to rom {:02x} {:02x}", addr, value)
+        }
+    }
+}
+
+struct Mbc2 {
+    rom: Vec<u8>,
+}
+
+impl Mbc2 {
+    fn new(rom: Vec<u8>) -> Self {
+        Self { rom }
+    }
+
+    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+        unimplemented!()
+    }
+
+    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+        unimplemented!()
+    }
+}
+
+struct Mbc3 {
+    rom: Vec<u8>,
+}
+
+impl Mbc3 {
+    fn new(rom: Vec<u8>) -> Self {
+        Self { rom }
+    }
+
+    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+        unimplemented!()
+    }
+
+    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+        unimplemented!()
+    }
+}
+
+struct Mbc5 {
+    rom: Vec<u8>,
+}
+
+impl Mbc5 {
+    fn new(rom: Vec<u8>) -> Self {
+        Self { rom }
+    }
+
+    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+        unimplemented!()
+    }
+
+    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+        unimplemented!()
+    }
+}
+
+struct HuC1 {
+    rom: Vec<u8>,
+}
+
+impl HuC1 {
+    fn new(rom: Vec<u8>) -> Self {
+        Self { rom }
+    }
+
+    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+        unimplemented!()
+    }
+
+    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+        unimplemented!()
+    }
+}
+
+enum MbcType {
+    None(MbcNone),
+    Mbc1(Mbc1),
+    Mbc2(Mbc2),
+    Mbc3(Mbc3),
+    Mbc5(Mbc5),
+    HuC1(HuC1),
+}
+
+impl MbcType {
+    fn new(code: u8, rom: Vec<u8>) -> Self {
         match code {
-            0x00 => Type::None,
-            0x01 | 0x02 | 0x03 => Type::MBC1,
-            0x05 | 0x06 => Type::MBC2,
+            0x00 => MbcType::None(MbcNone::new(rom)),
+            0x01 | 0x02 | 0x03 => MbcType::Mbc1(Mbc1::new(rom)),
+            0x05 | 0x06 => MbcType::Mbc2(Mbc2::new(rom)),
             0x08 | 0x09 => unimplemented!("ROM+RAM: {:02x}", code),
             0x0b | 0x0c | 0x0d => unimplemented!("MMM01: {:02x}", code),
-            0x0f | 0x10 | 0x11 | 0x12 | 0x13 => Type::MBC3,
-            0x15 | 0x16 | 0x17 => unimplemented!("MBC4: {:02x}", code),
-            0x19 | 0x1a | 0x1b | 0x1c | 0x1d | 0x1e => Type::MBC5,
+            0x0f | 0x10 | 0x11 | 0x12 | 0x13 => MbcType::Mbc3(Mbc3::new(rom)),
+            0x15 | 0x16 | 0x17 => unimplemented!("Mbc4: {:02x}", code),
+            0x19 | 0x1a | 0x1b | 0x1c | 0x1d | 0x1e => MbcType::Mbc5(Mbc5::new(rom)),
             0xfc => unimplemented!("POCKET CAMERA"),
             0xfd => unimplemented!("BANDAI TAMAS"),
             0xfe => unimplemented!("HuC3"),
-            0xff => Type::HuC1,
+            0xff => MbcType::HuC1(HuC1::new(rom)),
             _ => unreachable!("Invalid cartridge type: {:02x}", code),
         }
+    }
+
+    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+        match self {
+            MbcType::None(c) => c.on_read(mmu, addr),
+            MbcType::Mbc1(c) => c.on_read(mmu, addr),
+            MbcType::Mbc2(c) => c.on_read(mmu, addr),
+            MbcType::Mbc3(c) => c.on_read(mmu, addr),
+            MbcType::Mbc5(c) => c.on_read(mmu, addr),
+            MbcType::HuC1(c) => c.on_read(mmu, addr),
+        }
+    }
+
+    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+        match self {
+            MbcType::None(c) => c.on_write(mmu, addr, value),
+            MbcType::Mbc1(c) => c.on_write(mmu, addr, value),
+            MbcType::Mbc2(c) => c.on_write(mmu, addr, value),
+            MbcType::Mbc3(c) => c.on_write(mmu, addr, value),
+            MbcType::Mbc5(c) => c.on_write(mmu, addr, value),
+            MbcType::HuC1(c) => c.on_write(mmu, addr, value),
+        }
+    }
+}
+
+impl std::fmt::Display for MbcType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let name = match self {
+            MbcType::None(_) => "None",
+            MbcType::Mbc1(_) => "Mbc1",
+            MbcType::Mbc2(_) => "Mbc2",
+            MbcType::Mbc3(_) => "Mbc3",
+            MbcType::Mbc5(_) => "Mbc5",
+            MbcType::HuC1(_) => "HuC1",
+        };
+
+        write!(f, "{}", name)
     }
 }
 
@@ -61,14 +231,14 @@ fn parse_str(b: &[u8]) -> String {
     String::from_utf8_lossy(&b).to_string()
 }
 
-struct Header {
+struct Cartridge {
     title: String,
     cgb: bool,
     cgb_only: bool,
     license_new: String,
     license_old: u8,
     sgb: bool,
-    mbc_type: Type,
+    mbc: MbcType,
     rom_size: u8,
     ram_size: u8,
     dstcode: u8,
@@ -76,8 +246,32 @@ struct Header {
     rom_checksum: u16,
 }
 
-impl Header {
-    fn new(rom: &[u8]) -> Self {
+fn verify(rom: &[u8], checksum: u16) {
+    let mut sum = 0u16;
+
+    for (i, b) in rom.iter().enumerate() {
+        if i == 0x14e || i == 0x14f {
+            continue;
+        }
+        sum = sum.wrapping_add(*b as u16);
+    }
+
+    if sum == checksum {
+        info!("ROM checksum verified: {:04x}", checksum);
+    } else {
+        warn!(
+            "ROM checksum mismatch: expect: {:02x}, actual: {:02x}",
+            checksum, sum
+        );
+    }
+}
+
+impl Cartridge {
+    fn new(rom: Vec<u8>) -> Self {
+        let checksum = (rom[0x14e] as u16) << 8 | (rom[0x14f] as u16);
+
+        verify(&rom, checksum);
+
         Self {
             title: parse_str(&rom[0x134..0x144]),
             cgb: rom[0x143] & 0x80 != 0,
@@ -85,32 +279,12 @@ impl Header {
             license_new: parse_str(&rom[0x144..0x146]),
             license_old: rom[0x14b],
             sgb: rom[0x146] == 0x03,
-            mbc_type: rom[0x147].into(),
+            mbc: MbcType::new(rom[0x147], rom.clone()),
             rom_size: rom[0x148],
             ram_size: rom[0x149],
             dstcode: rom[0x14a],
             rom_version: rom[0x14c],
-            rom_checksum: (rom[0x14e] as u16) << 8 | (rom[0x14f] as u16),
-        }
-    }
-
-    fn verify(&self, rom: &[u8]) {
-        let mut sum = 0u16;
-
-        for (i, b) in rom.iter().enumerate() {
-            if i == 0x14e || i == 0x14f {
-                continue;
-            }
-            sum = sum.wrapping_add(*b as u16);
-        }
-
-        if sum == self.rom_checksum {
-            info!("ROM checksum verified: {:04x}", self.rom_checksum);
-        } else {
-            warn!(
-                "ROM checksum mismatch: expect: {:02x}, actual: {:02x}",
-                self.rom_checksum, sum
-            );
+            rom_checksum: checksum,
         }
     }
 
@@ -127,7 +301,7 @@ impl Header {
         };
         info!("Destination: {}", dstcode);
 
-        info!("MBC: {:?}", self.mbc_type);
+        info!("Mbc: {}", self.mbc);
         info!(
             "Color: {} (Compat: {}), Super: {}",
             self.cgb, !self.cgb_only, self.sgb,
@@ -139,8 +313,8 @@ impl Header {
             0x02 => "128KByte (8 banks)",
             0x03 => "256KByte (16 banks)",
             0x04 => "512KByte (32 banks)",
-            0x05 => "1MByte (64 banks)  - only 63 banks used by MBC1",
-            0x06 => "2MByte (128 banks) - only 125 banks used by MBC1",
+            0x05 => "1MByte (64 banks)  - only 63 banks used by Mbc1",
+            0x06 => "2MByte (128 banks) - only 125 banks used by Mbc1",
             0x07 => "4MByte (256 banks)",
             0x52 => "1.1MByte (72 banks)",
             0x53 => "1.2MByte (80 banks)",
@@ -157,60 +331,50 @@ impl Header {
         info!("ROM size: {}", rom_size);
         info!("RAM size: {}", ram_size);
     }
+
+    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+        self.mbc.on_read(mmu, addr)
+    }
+
+    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+        self.mbc.on_write(mmu, addr, value)
+    }
 }
 
 struct Inner {
-    hdr: Header,
-    rom: Vec<u8>,
+    cartridge: Cartridge,
     use_boot_rom: bool,
-    rom_bank: usize,
 }
 
 impl Inner {
     fn new(rom: Vec<u8>) -> Self {
-        let hdr = Header::new(&rom);
+        let cartridge = Cartridge::new(rom);
 
-        hdr.show_info();
-        hdr.verify(&rom);
+        cartridge.show_info();
 
         Self {
-            hdr,
-            rom,
+            cartridge,
             use_boot_rom: true,
-            rom_bank: 0,
         }
     }
 
     fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
         if self.use_boot_rom && addr < 0x100 {
             MemRead::Replace(BOOT_ROM[addr as usize])
-        } else if addr <= 0x3fff {
-            MemRead::Replace(self.rom[addr as usize])
-        } else if addr >= 0x4000 && addr <= 0x7fff {
-            let base = self.rom_bank * 0x4000;
-            let offset = addr as usize - 0x4000;
-            MemRead::Replace(self.rom[base + offset])
         } else {
-            MemRead::PassThrough
+            self.cartridge.on_read(mmu, addr)
         }
     }
 
     fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         if self.use_boot_rom && addr < 0x100 {
-            unreachable!("Writing to BOOT rom")
+            unreachable!("Writing to boot ROM")
         } else if addr == 0xff50 {
-            info!("Disable boot rom");
+            info!("Disable boot ROM");
             self.use_boot_rom = false;
-            MemWrite::PassThrough
-        } else if addr >= 0x2000 && addr <= 0x3fff {
-            self.rom_bank = (value & 0x1f) as usize;
-            if self.rom_bank == 0 {
-                self.rom_bank = 1;
-            }
-            info!("Switch ROM bank to {}", self.rom_bank);
             MemWrite::Block
         } else {
-            unimplemented!("write to rom {:02x} {:02x}", addr, value)
+            self.cartridge.on_write(mmu, addr, value)
         }
     }
 }
