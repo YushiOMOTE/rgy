@@ -75,10 +75,10 @@ impl Inner {
 
     fn tim_clock_reset(&mut self) {
         self.tim_clocks = match self.ctrl & 0x3 {
-            0x00 => 1024, // 4096Hz = 1024 cpu clocks
-            0x01 => 16,   // 262144Hz = 16 cpu clocks
-            0x10 => 64,   // 65536Hz = 64 cpu clocks
-            0x11 => 256,  // 16384Hz = 256 cpu clocks
+            0x0 => 1024, // 4096Hz = 1024 cpu clocks
+            0x1 => 16,   // 262144Hz = 16 cpu clocks
+            0x2 => 64,   // 65536Hz = 64 cpu clocks
+            0x3 => 256,  // 16384Hz = 256 cpu clocks
             _ => unreachable!(),
         };
     }
