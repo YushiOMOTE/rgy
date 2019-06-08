@@ -505,9 +505,11 @@ impl Inner {
         } else if addr == 0xff47 {
             unimplemented!("read ff47")
         } else if addr == 0xff48 {
-            unimplemented!("read ff48")
+            debug!("Read Object palette 0");
+            MemRead::PassThrough
         } else if addr == 0xff49 {
-            unimplemented!("read ff49")
+            debug!("Read Object palette 1");
+            MemRead::PassThrough
         } else if addr == 0xff4a {
             MemRead::Replace(self.wy)
         } else if addr == 0xff4b {
