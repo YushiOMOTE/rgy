@@ -298,32 +298,6 @@ impl Inner {
                     buf[x as usize] = col;
                 }
             }
-
-            let yy = (self.ly as u16 + self.scy as u16) % 256;
-            let ty = yy / 8;
-            let tyoff = yy % 8;
-
-            for x in 0..width as u16 {
-                let xx = (x + self.scx as u16) % 256;
-                let tx = xx / 8;
-                let txoff = xx % 8;
-
-                let ti = tx + ty * 32;
-                let tbase = if tiles == 0x8000 {
-                    tiles + mmu.get8(mapbase + ti) as u16 * 16
-                } else {
-                    tiles + (0x800 + mmu.get8(mapbase + ti) as i8 as i16 * 16) as u16
-                };
-
-                let l = mmu.get8(tbase + tyoff * 2) as u16;
-                let h = mmu.get8(tbase + tyoff * 2 + 1) as u16;
-
-                let l = (l >> (7 - txoff)) & 1;
-                let h = ((h >> (7 - txoff)) & 1) << 1;
-                let col = self.bg_palette[(h | l) as usize].clone().into();
-
-                buf[x as usize] = col;
-            }
         }
 
         if self.spenable {
