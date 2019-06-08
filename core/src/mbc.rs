@@ -100,7 +100,7 @@ impl Mbc1 {
             MemWrite::Block
         } else if addr >= 0x2000 && addr <= 0x3fff {
             self.rom_bank = (self.rom_bank & !0x1f) | (value as usize & 0x1f);
-            info!("Switch ROM bank to {}", self.rom_bank);
+            debug!("Switch ROM bank to {}", self.rom_bank);
             MemWrite::Block
         } else if addr >= 0x4000 && addr <= 0x5fff {
             if self.ram_select {
