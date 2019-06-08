@@ -5,6 +5,7 @@ use crate::gpu::Gpu;
 use crate::ic::Ic;
 use crate::inst;
 use crate::joypad::Joypad;
+use crate::mbc::Mbc;
 use crate::mmu::Mmu;
 use crate::sound::Sound;
 use crate::timer::Timer;
@@ -66,7 +67,7 @@ impl FreqControl {
     }
 }
 
-pub fn run<T: Hardware + 'static>(opt: Opt, hw: T) {
+pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
     info!("Initializing...");
 
     let mut fc = FreqControl::new(opt.freq, opt.sample, opt.delay_unit);
@@ -81,13 +82,14 @@ pub fn run<T: Hardware + 'static>(opt: Opt, hw: T) {
     let gpu = Gpu::new(hw.clone(), ic.irq());
     let joypad = Joypad::new(hw.clone(), ic.irq());
     let timer = Timer::new(hw.clone(), ic.irq());
-
-    mmu.setup(&opt.rom);
+    let mbc = Mbc::new(rom);
 
     if opt.debug {
         mmu.add_handler((0x0000, 0xffff), dbg.handler());
     }
 
+    mmu.add_handler((0x0000, 0x7fff), mbc.handler());
+    mmu.add_handler((0xff50, 0xff50), mbc.handler());
     mmu.add_handler((0xff10, 0xff26), sound.handler());
     mmu.add_handler((0xff40, 0xff4f), gpu.handler());
     mmu.add_handler((0xff0f, 0xffff), ic.handler());

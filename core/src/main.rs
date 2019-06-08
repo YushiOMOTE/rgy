@@ -6,12 +6,15 @@ mod gpu;
 mod ic;
 mod inst;
 mod joypad;
+mod mbc;
 mod mmu;
 mod sound;
 mod system;
 mod timer;
 
 use crate::device::HardwareImpl;
+use std::fs::File;
+use std::io::prelude::*;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -35,12 +38,22 @@ pub struct Opt {
     rom: String,
 }
 
+fn load_rom(name: &str) -> Vec<u8> {
+    let mut f = File::open(name).expect("Couldn't open file");
+    let mut buf = Vec::new();
+
+    f.read_to_end(&mut buf).expect("Couldn't read file");
+
+    buf
+}
+
 fn main() {
     let opt = Opt::from_args();
 
     env_logger::init();
 
     let hw = HardwareImpl::new();
+    let rom = load_rom(&opt.rom);
 
-    system::run(opt, hw);
+    system::run(opt, rom, hw);
 }

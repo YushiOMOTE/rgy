@@ -1,6 +1,5 @@
 use log::*;
 use std::collections::HashMap;
-use std::fs::File;
 use std::io::prelude::*;
 use std::rc::Rc;
 
@@ -94,33 +93,6 @@ impl Mmu {
         }
     }
 
-    pub fn setup(&mut self, rom_name: &str) {
-        self.load_boot_rom();
-        self.load_rom(rom_name);
-    }
-
-    fn load_boot_rom(&mut self) {
-        let mut f = File::open("boot.bin").expect("Couldn't open file");
-        let mut buf = vec![0; 0x100];
-
-        f.read(buf.as_mut_slice()).expect("Couldn't read file");
-
-        for i in 0..buf.len() {
-            self.boot_rom[i] = buf[i];
-        }
-    }
-
-    fn load_rom(&mut self, rom_name: &str) {
-        let mut f = File::open(rom_name).expect("Couldn't open file");
-        let mut buf = vec![0; 0x8000];
-
-        f.read(buf.as_mut_slice()).expect("Couldn't read file");
-
-        for i in 0..buf.len() {
-            self.ram[i] = buf[i];
-        }
-    }
-
     pub fn get8(&self, addr: u16) -> u8 {
         if let Some(handlers) = self.handlers.get(&addr) {
             for (_, handler) in handlers {
@@ -131,15 +103,11 @@ impl Mmu {
             }
         }
 
-        if self.use_boot_rom && addr < 0x100 {
-            self.boot_rom[addr as usize]
+        if addr >= 0xe000 && addr <= 0xfdff {
+            // echo ram
+            self.ram[addr as usize - 0x2000]
         } else {
-            if addr >= 0xe000 && addr <= 0xfdff {
-                // echo ram
-                self.ram[addr as usize - 0x2000]
-            } else {
-                self.ram[addr as usize]
-            }
+            self.ram[addr as usize]
         }
     }
 
@@ -165,20 +133,11 @@ impl Mmu {
             }
         }
 
-        if self.use_boot_rom && addr < 0x100 {
-            self.boot_rom[addr as usize] = v
-        } else if self.use_boot_rom && addr == 0xff50 {
-            // Turn off boot rom
-            self.use_boot_rom = false;
-
-            info!("Boot rom turned off");
+        if addr >= 0xe000 && addr <= 0xfdff {
+            // echo ram
+            self.ram[addr as usize - 0x2000] = v
         } else {
-            if addr >= 0xe000 && addr <= 0xfdff {
-                // echo ram
-                self.ram[addr as usize - 0x2000] = v
-            } else {
-                self.ram[addr as usize] = v
-            }
+            self.ram[addr as usize] = v
         }
     }
 
