@@ -113,11 +113,11 @@ impl Mbc1 {
             if self.ram_enable {
                 MemWrite::PassThrough
             } else {
-                warn!("Write to disabled external RAM: {:02x} {:02x}", addr, value);
+                warn!("Write to disabled external RAM: {:04x} {:02x}", addr, value);
                 MemWrite::Block
             }
         } else {
-            unimplemented!("write to rom {:02x} {:02x}", addr, value)
+            unimplemented!("write to rom {:04x} {:02x}", addr, value)
         }
     }
 }
@@ -298,7 +298,7 @@ fn verify(rom: &[u8], checksum: u16) {
         info!("ROM checksum verified: {:04x}", checksum);
     } else {
         warn!(
-            "ROM checksum mismatch: expect: {:02x}, actual: {:02x}",
+            "ROM checksum mismatch: expect: {:04x}, actual: {:04x}",
             checksum, sum
         );
     }
