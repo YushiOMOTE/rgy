@@ -126,7 +126,8 @@ impl Mmu {
         }
 
         if addr == 0xff46 {
-            info!("MMU: Trigger DMA transfer: {:02x}", v);
+            debug!("MMU: Trigger DMA transfer: {:02x}", v);
+
             let src = (v as u16) << 8;
             for i in 0..0xa0 {
                 self.set8(0xfe00 + i, self.get8(src + i));

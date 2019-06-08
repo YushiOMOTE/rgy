@@ -43,7 +43,9 @@ impl Inner {
     fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
         if addr == 0xff00 {
             let p = |key| self.hw.get().borrow_mut().joypad_pressed(key);
-            info!("Joypad read: dir: {:02x}", self.select);
+
+            debug!("Joypad read: dir: {:02x}", self.select);
+
             let mut value = 0xff & self.select;
             if self.select & 0x10 == 0 {
                 value |= if p(Key::Right) { 0x00 } else { 0x01 };

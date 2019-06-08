@@ -537,7 +537,7 @@ impl Inner {
         } else if addr == 0xff45 {
             self.lyc = value;
         } else if addr == 0xff46 {
-            info!("Trigger DMA transfer: {:02x}", value);
+            trace!("DMA is handled by MMU: {:02x}", value);
         } else if addr == 0xff47 {
             self.bg_palette = to_palette(value);
             info!("Bg palette updated: {:?}", self.bg_palette);

@@ -97,18 +97,21 @@ impl Cpu {
         }
 
         if let Some(value) = ic.poll() {
-            info!("Interrupted: {:02x}", value);
+            debug!("Interrupted: {:02x}", value);
+
             self.interrupted(mmu, value);
         }
     }
 
     pub fn enable_interrupt_immediate(&mut self) {
-        info!("Enable interrupt");
+        debug!("Enable interrupt");
+
         self.interrupt = true;
     }
 
     pub fn disable_interrupt_immediate(&mut self) {
-        info!("Disable interrupt");
+        debug!("Disable interrupt");
+
         self.interrupt = false;
     }
 
