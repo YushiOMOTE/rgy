@@ -352,9 +352,13 @@ impl Inner {
                     // This sprite doesn't hit the current ly
                     continue;
                 }
-                let tyoff = if yflip { 7 - tyoff } else { tyoff };
+                let tyoff = if yflip {
+                    self.spsize - 1 - tyoff
+                } else {
+                    tyoff
+                };
                 let ti = if self.spsize == 16 {
-                    if tyoff >= 16 {
+                    if tyoff >= 8 {
                         ti | 1
                     } else {
                         ti & 0xfe
@@ -362,6 +366,7 @@ impl Inner {
                 } else {
                     ti
                 };
+                let tyoff = tyoff % 8;
 
                 let tiles = 0x8000;
 
