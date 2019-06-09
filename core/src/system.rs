@@ -91,7 +91,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
     mmu.add_handler((0x0000, 0x7fff), mbc.handler());
     mmu.add_handler((0xff50, 0xff50), mbc.handler());
     mmu.add_handler((0xa000, 0xbfff), mbc.handler());
-    mmu.add_handler((0xff10, 0xff26), sound.handler());
+    mmu.add_handler((0xff10, 0xff3f), sound.handler());
     mmu.add_handler((0xff40, 0xff4f), gpu.handler());
     mmu.add_handler((0xff0f, 0xffff), ic.handler());
     mmu.add_handler((0xff00, 0xff00), joypad.handler());

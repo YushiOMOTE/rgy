@@ -19,6 +19,13 @@ pub enum Key {
     Start,
 }
 
+pub enum SoundId {
+    Tone1,
+    Tone2,
+    Wave,
+    Noise,
+}
+
 #[derive(Clone)]
 pub struct HardwareHandle(Rc<RefCell<Hardware>>);
 
@@ -47,9 +54,9 @@ pub trait Hardware {
 
     fn joypad_pressed(&mut self, key: Key) -> bool;
 
-    fn sound_play(&mut self, stream: Box<Stream>);
+    fn sound_play(&mut self, id: SoundId, stream: Box<Stream>);
 
-    fn sound_stop(&mut self);
+    fn sound_stop(&mut self, id: SoundId);
 
     fn clock(&mut self) -> u64;
 
@@ -61,7 +68,7 @@ pub trait Hardware {
 pub struct HardwareImpl {
     vram: Vec<u32>,
     window: Window,
-    pcmh: SpeakerHandle,
+    pcms: Vec<SpeakerHandle>,
     inst: Instant,
 }
 
@@ -86,17 +93,21 @@ impl HardwareImpl {
         };
         window.update_with_buffer(&vram).unwrap();
 
-        let pcm = Pcm::new();
-        let pcmh = pcm.handle();
+        let pcms = (0..4)
+            .map(|_| {
+                let pcm = Pcm::new();
+                let handle = pcm.handle();
 
-        std::thread::spawn(move || {
-            pcm.run();
-        });
+                pcm.run_forever();
+
+                handle
+            })
+            .collect();
 
         Self {
             vram,
             window,
-            pcmh,
+            pcms,
             inst: Instant::now(),
         }
     }
@@ -136,12 +147,22 @@ impl Hardware for HardwareImpl {
         self.window.is_key_down(key)
     }
 
-    fn sound_play(&mut self, stream: Box<Stream>) {
-        self.pcmh.play(stream);
+    fn sound_play(&mut self, id: SoundId, stream: Box<Stream>) {
+        match id {
+            SoundId::Tone1 => self.pcms[0].play(stream),
+            SoundId::Tone2 => self.pcms[1].play(stream),
+            SoundId::Wave => self.pcms[2].play(stream),
+            SoundId::Noise => self.pcms[3].play(stream),
+        }
     }
 
-    fn sound_stop(&mut self) {
-        self.pcmh.stop();
+    fn sound_stop(&mut self, id: SoundId) {
+        match id {
+            SoundId::Tone1 => self.pcms[0].stop(),
+            SoundId::Tone2 => self.pcms[1].stop(),
+            SoundId::Wave => self.pcms[2].stop(),
+            SoundId::Noise => self.pcms[3].stop(),
+        }
     }
 
     fn clock(&mut self) -> u64 {
@@ -172,6 +193,12 @@ impl Pcm {
         SpeakerHandle {
             tx: self.tx.clone(),
         }
+    }
+
+    pub fn run_forever(self) {
+        std::thread::spawn(move || {
+            self.run();
+        });
     }
 
     pub fn run(self) {
