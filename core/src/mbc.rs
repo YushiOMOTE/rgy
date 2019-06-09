@@ -73,7 +73,17 @@ impl Mbc1 {
         if addr <= 0x3fff {
             MemRead::Replace(self.rom[addr as usize])
         } else if addr >= 0x4000 && addr <= 0x7fff {
-            let base = self.rom_bank.max(1) * 0x4000;
+            let rom_bank = self.rom_bank.max(1);
+
+            // ROM bank 0x20, 0x40, 0x60 are somehow not available
+            let rom_bank = if rom_bank == 0x20 || rom_bank == 0x40 || rom_bank == 0x60 {
+                warn!("Odd ROM bank selection: {:02x}", rom_bank);
+                rom_bank + 1
+            } else {
+                rom_bank
+            };
+
+            let base = rom_bank * 0x4000;
             let offset = addr as usize - 0x4000;
             MemRead::Replace(self.rom[base + offset])
         } else if addr >= 0xa000 && addr <= 0xbfff {
@@ -142,19 +152,197 @@ impl Mbc2 {
 
 struct Mbc3 {
     rom: Vec<u8>,
+    ram: Vec<u8>,
+    rom_bank: usize,
+    enable: bool,
+    select: u8,
+    rtc_secs: u8,
+    rtc_mins: u8,
+    rtc_hours: u8,
+    rtc_day_low: u8,
+    rtc_day_high: u8,
+    epoch: u64,
+    prelatch: bool,
+}
+
+fn epoch() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .expect("Cannot get epoch")
+        .as_secs() as u64
 }
 
 impl Mbc3 {
     fn new(rom: Vec<u8>) -> Self {
-        Self { rom }
+        Self {
+            rom,
+            ram: vec![0; 0x8000], // 32KiB
+            rom_bank: 0,
+            enable: false,
+            select: 0,
+            rtc_secs: 0,
+            rtc_mins: 0,
+            rtc_hours: 0,
+            rtc_day_low: 0,
+            rtc_day_high: 0,
+            epoch: epoch(),
+            prelatch: false,
+        }
     }
 
     fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
-        unimplemented!()
+        if addr <= 0x3fff {
+            MemRead::Replace(self.rom[addr as usize])
+        } else if addr >= 0x4000 && addr <= 0x7fff {
+            let rom_bank = self.rom_bank.max(1);
+            let base = rom_bank * 0x4000;
+            let offset = addr as usize - 0x4000;
+            MemRead::Replace(self.rom[base + offset])
+        } else if addr >= 0xa000 && addr <= 0xbfff {
+            match self.select {
+                x if x == 0x00 || x == 0x01 || x == 0x02 || x == 0x03 => {
+                    let base = x as usize * 0x2000;
+                    let offset = addr as usize - 0xa000;
+                    MemRead::Replace(self.ram[base + offset])
+                }
+                0x08 => MemRead::Replace(self.rtc_secs),
+                0x09 => MemRead::Replace(self.rtc_mins),
+                0x0a => MemRead::Replace(self.rtc_hours),
+                0x0b => MemRead::Replace(self.rtc_day_low),
+                0x0c => MemRead::Replace(self.rtc_day_high),
+                s => unimplemented!("Unknown selector: {:02x}", s),
+            }
+        } else {
+            unreachable!("Invalid read from ROM: {:02x}", addr);
+        }
     }
 
     fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        unimplemented!()
+        if addr <= 0x1fff {
+            if value == 0x00 {
+                info!("External RAM/RTC disabled");
+                self.enable = false;
+            } else if value == 0x0a {
+                info!("External RAM/RTC enabled");
+                self.enable = true;
+            }
+            MemWrite::Block
+        } else if addr >= 0x2000 && addr <= 0x3fff {
+            self.rom_bank = value as usize & 0x7f;
+            trace!("Switch ROM bank to {}", self.rom_bank);
+            MemWrite::Block
+        } else if addr >= 0x4000 && addr <= 0x5fff {
+            self.select = value;
+            debug!("Select RAM bank/RTC: {:02x}", self.select);
+            MemWrite::Block
+        } else if addr >= 0x6000 && addr <= 0x7fff {
+            if self.prelatch {
+                if value == 0x01 {
+                    self.latch();
+                }
+                self.prelatch = false;
+            } else {
+                if value == 0x00 {
+                    self.prelatch = true;
+                }
+            }
+            MemWrite::Block
+        } else if addr >= 0xa000 && addr <= 0xbfff {
+            match self.select {
+                x if x == 0x00 || x == 0x01 || x == 0x02 || x == 0x03 => {
+                    let base = x as usize * 0x2000;
+                    let offset = addr as usize - 0xa000;
+                    self.ram[base + offset] = value;
+                    MemWrite::Block
+                }
+                0x08 => {
+                    self.rtc_secs = value;
+                    self.update_epoch();
+                    MemWrite::Block
+                }
+                0x09 => {
+                    self.rtc_mins = value;
+                    self.update_epoch();
+                    MemWrite::Block
+                }
+                0x0a => {
+                    self.rtc_hours = value;
+                    self.update_epoch();
+                    MemWrite::Block
+                }
+                0x0b => {
+                    self.rtc_day_low = value;
+                    self.update_epoch();
+                    MemWrite::Block
+                }
+                0x0c => {
+                    self.rtc_day_high = value;
+                    self.update_epoch();
+                    MemWrite::Block
+                }
+                s => unimplemented!("Unknown selector: {:02x}", s),
+            }
+        } else {
+            unimplemented!("write to rom {:04x} {:02x}", addr, value)
+        }
+    }
+
+    fn update_epoch(&mut self) {
+        self.epoch = epoch();
+    }
+
+    fn day(&self) -> u64 {
+        ((self.rtc_day_high as u64 & 1) << 8) & self.rtc_day_low as u64
+    }
+
+    fn dhms_to_secs(&self) -> u64 {
+        let d = self.day();
+        let s = self.rtc_secs as u64;
+        let m = self.rtc_mins as u64;
+        let h = self.rtc_hours as u64;
+        (d * 24 + h) * 3600 + m * 60 + s
+    }
+
+    fn secs_to_dhms(&mut self, secs: u64) {
+        let s = secs % 60;
+        let m = (secs / 60) % 60;
+        let h = (secs / 3600) % 24;
+        let d = secs / (3600 * 24);
+        self.rtc_secs = s as u8;
+        self.rtc_mins = m as u8;
+        self.rtc_hours = h as u8;
+        self.rtc_day_low = d as u8 & 0xff;
+        self.rtc_day_high = (self.rtc_day_high & !1) | ((d >> 8) & 1) as u8;
+    }
+
+    fn latch(&mut self) {
+        let new_epoch = if self.rtc_day_high & 0x40 == 0 {
+            epoch()
+        } else {
+            // Halt
+            self.epoch
+        };
+        let elapsed = new_epoch - self.epoch;
+
+        let last_day = self.day();
+        let last_secs = self.dhms_to_secs();
+        self.secs_to_dhms(last_secs + elapsed);
+        let new_day = self.day();
+
+        // Overflow
+        if new_day < last_day {
+            self.rtc_day_high |= 0x80;
+        }
+
+        debug!(
+            "Latching RTC: {:04}/{:02}:{:02}:{:02}",
+            self.day(),
+            self.rtc_hours,
+            self.rtc_mins,
+            self.rtc_secs
+        );
+
+        self.epoch = new_epoch;
     }
 }
 
