@@ -286,8 +286,6 @@ impl Inner {
         let wavebuf = wave.wave.clone();
         let counter = wave.counter;
 
-        assert_eq!(false, wave.counter);
-
         let mut clock = 0f32;
         let mut elapsed = 0f32;
 
