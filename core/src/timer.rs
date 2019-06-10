@@ -1,4 +1,5 @@
-use crate::device::{HardwareHandle, IoHandler};
+use crate::device::IoHandler;
+use crate::hardware::HardwareHandle;
 use crate::ic::Irq;
 use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 use log::*;

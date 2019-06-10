@@ -1,4 +1,5 @@
-use crate::device::{HardwareHandle, IoHandler, Key};
+use crate::device::IoHandler;
+use crate::hardware::{HardwareHandle, Key};
 use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 use log::*;
 use std::cell::RefCell;

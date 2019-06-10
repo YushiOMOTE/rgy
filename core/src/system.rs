@@ -1,7 +1,8 @@
 use crate::cpu::Cpu;
 use crate::debug::{Debugger, Perf};
-use crate::device::{Device, Hardware, HardwareHandle};
+use crate::device::Device;
 use crate::gpu::Gpu;
+use crate::hardware::{Hardware, HardwareHandle};
 use crate::ic::Ic;
 use crate::inst;
 use crate::joypad::Joypad;

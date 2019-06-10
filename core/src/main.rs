@@ -3,6 +3,7 @@ mod cpu;
 mod debug;
 mod device;
 mod gpu;
+mod hardware;
 mod ic;
 mod inst;
 mod joypad;
@@ -11,8 +12,9 @@ mod mmu;
 mod sound;
 mod system;
 mod timer;
+mod unix;
 
-use crate::device::HardwareImpl;
+use crate::unix::HardwareImpl;
 use std::fs::File;
 use std::io::prelude::*;
 use structopt::StructOpt;

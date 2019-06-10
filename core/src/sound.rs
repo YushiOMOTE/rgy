@@ -4,7 +4,8 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use crate::device::{HardwareHandle, IoHandler, SoundId};
+use crate::device::IoHandler;
+use crate::hardware::{HardwareHandle, SoundId};
 use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 
 #[derive(Debug, Clone)]
