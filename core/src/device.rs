@@ -1,6 +1,8 @@
 use cpal;
+use log::*;
 use minifb::{Scale, Window, WindowOptions};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
@@ -8,6 +10,7 @@ use std::time::{Duration, Instant};
 const WIDTH: usize = 160;
 const HEIGHT: usize = 144;
 
+#[derive(PartialEq, Eq, Hash)]
 pub enum Key {
     Right,
     Left,
@@ -70,6 +73,9 @@ pub struct HardwareImpl {
     window: Window,
     pcms: Vec<SpeakerHandle>,
     inst: Instant,
+    vramupdated: u64,
+    keypolled: u64,
+    keystate: HashMap<Key, bool>,
 }
 
 impl HardwareImpl {
@@ -104,11 +110,24 @@ impl HardwareImpl {
             })
             .collect();
 
+        let mut keystate = HashMap::new();
+        keystate.insert(Key::Right, false);
+        keystate.insert(Key::Left, false);
+        keystate.insert(Key::Up, false);
+        keystate.insert(Key::Down, false);
+        keystate.insert(Key::A, false);
+        keystate.insert(Key::B, false);
+        keystate.insert(Key::Select, false);
+        keystate.insert(Key::Start, false);
+
         Self {
             vram,
             window,
             pcms,
             inst: Instant::now(),
+            vramupdated: 0,
+            keypolled: 0,
+            keystate,
         }
     }
 }
@@ -128,23 +147,18 @@ impl Hardware for HardwareImpl {
             self.vram[base + i] = buf[i];
         }
 
-        self.window.update_with_buffer(&self.vram).unwrap();
+        let now = self.clock();
+        if self.vramupdated == 0 || now.wrapping_sub(self.vramupdated) >= 10_000 {
+            self.vramupdated = now;
+            self.window.update_with_buffer(&self.vram).unwrap();
+        }
     }
 
     fn joypad_pressed(&mut self, key: Key) -> bool {
-        let key = match key {
-            Key::Right => minifb::Key::Right,
-            Key::Left => minifb::Key::Left,
-            Key::Up => minifb::Key::Up,
-            Key::Down => minifb::Key::Down,
-            Key::A => minifb::Key::Z,
-            Key::B => minifb::Key::X,
-            Key::Select => minifb::Key::Space,
-            Key::Start => minifb::Key::Enter,
-            _ => return false,
-        };
-
-        self.window.is_key_down(key)
+        *self
+            .keystate
+            .get(&key)
+            .expect("Logic error in keystate map")
     }
 
     fn sound_play(&mut self, id: SoundId, stream: Box<Stream>) {
@@ -173,7 +187,49 @@ impl Hardware for HardwareImpl {
     }
 
     fn sched(&mut self) -> bool {
-        self.window.is_open() && !self.window.is_key_down(minifb::Key::Escape)
+        let now = self.clock();
+
+        if !self.window.is_open() {
+            return false;
+        }
+
+        if self.keypolled == 0 || now.wrapping_sub(self.keypolled) >= 20_000 {
+            self.keypolled = now;
+
+            match self.window.get_keys() {
+                Some(keys) => {
+                    for (_, v) in self.keystate.iter_mut() {
+                        *v = false;
+                    }
+                    for k in keys {
+                        let gbk = match k {
+                            minifb::Key::Right => Key::Right,
+                            minifb::Key::Left => Key::Left,
+                            minifb::Key::Up => Key::Up,
+                            minifb::Key::Down => Key::Down,
+                            minifb::Key::Z => Key::A,
+                            minifb::Key::X => Key::B,
+                            minifb::Key::Space => Key::Select,
+                            minifb::Key::Enter => Key::Start,
+                            minifb::Key::Escape => return false,
+                            _ => continue,
+                        };
+
+                        match self.keystate.get_mut(&gbk) {
+                            Some(v) => *v = true,
+                            None => unreachable!(),
+                        }
+                    }
+                }
+                None => {
+                    for (_, v) in self.keystate.iter_mut() {
+                        *v = false;
+                    }
+                }
+            }
+        }
+
+        true
     }
 }
 
