@@ -1,26 +1,10 @@
-use crate::device::{HardwareHandle, Key};
+use crate::device::{HardwareHandle, IoHandler, Key};
 use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 use log::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 const BOOT_ROM: &[u8] = include_bytes!("boot.bin");
-
-pub struct Mbc {
-    inner: Rc<RefCell<Inner>>,
-}
-
-impl Mbc {
-    pub fn new(rom: Vec<u8>) -> Self {
-        Self {
-            inner: Rc::new(RefCell::new(Inner::new(rom))),
-        }
-    }
-
-    pub fn handler(&self) -> MbcMemHandler {
-        MbcMemHandler::new(self.inner.clone())
-    }
-}
 
 struct MbcNone {
     rom: Vec<u8>,
@@ -567,13 +551,13 @@ impl Cartridge {
     }
 }
 
-struct Inner {
+pub struct Mbc {
     cartridge: Cartridge,
     use_boot_rom: bool,
 }
 
-impl Inner {
-    fn new(rom: Vec<u8>) -> Self {
+impl Mbc {
+    pub fn new(rom: Vec<u8>) -> Self {
         let cartridge = Cartridge::new(rom);
 
         cartridge.show_info();
@@ -583,7 +567,9 @@ impl Inner {
             use_boot_rom: true,
         }
     }
+}
 
+impl IoHandler for Mbc {
     fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
         if self.use_boot_rom && addr < 0x100 {
             MemRead::Replace(BOOT_ROM[addr as usize])
@@ -602,25 +588,5 @@ impl Inner {
         } else {
             self.cartridge.on_write(mmu, addr, value)
         }
-    }
-}
-
-pub struct MbcMemHandler {
-    inner: Rc<RefCell<Inner>>,
-}
-
-impl MbcMemHandler {
-    fn new(inner: Rc<RefCell<Inner>>) -> Self {
-        Self { inner }
-    }
-}
-
-impl MemHandler for MbcMemHandler {
-    fn on_read(&self, mmu: &Mmu, addr: u16) -> MemRead {
-        self.inner.borrow_mut().on_read(mmu, addr)
-    }
-
-    fn on_write(&self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        self.inner.borrow_mut().on_write(mmu, addr, value)
     }
 }

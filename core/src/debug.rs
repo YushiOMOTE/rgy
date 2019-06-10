@@ -1,4 +1,5 @@
 use crate::cpu::Cpu;
+use crate::device::IoHandler;
 use crate::inst::mnem;
 use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 use log::*;
@@ -54,38 +55,6 @@ impl From<std::num::ParseIntError> for CmdError {
 type CmdResult<T> = std::result::Result<T, CmdError>;
 
 pub struct Debugger {
-    inner: Rc<RefCell<Inner>>,
-}
-
-impl Debugger {
-    pub fn new() -> Debugger {
-        Debugger {
-            inner: Rc::new(RefCell::new(Inner::new())),
-        }
-    }
-
-    pub fn handler(&self) -> DebugMemHandler {
-        DebugMemHandler::new(self.inner.clone())
-    }
-
-    pub fn init(&self, mmu: &Mmu) {
-        self.inner.borrow_mut().init(mmu)
-    }
-
-    pub fn take_cpu_snapshot(&self, cpu: Cpu) {
-        self.inner.borrow_mut().cpu_state = cpu;
-    }
-
-    pub fn on_decode(&self, mmu: &Mmu) {
-        self.inner.borrow_mut().on_decode(mmu)
-    }
-
-    pub fn check_signal(&self) {
-        self.inner.borrow_mut().check_signal();
-    }
-}
-
-struct Inner {
     breaks: HashSet<u16>,
     rd_watches: HashSet<u16>,
     wr_watches: HashSet<u16>,
@@ -96,8 +65,8 @@ struct Inner {
     exec_path: VecDeque<u16>,
 }
 
-impl Inner {
-    fn new() -> Self {
+impl Debugger {
+    pub fn new() -> Self {
         Self {
             breaks: HashSet::new(),
             rd_watches: HashSet::new(),
@@ -110,19 +79,30 @@ impl Inner {
         }
     }
 
-    fn init(&mut self, mmu: &Mmu) {
+    pub fn init(&mut self, mmu: &Mmu) {
         println!("Entering debug shell...");
 
         self.prompt(mmu)
     }
 
-    fn on_decode(&mut self, mmu: &Mmu) {
+    pub fn take_cpu_snapshot(&mut self, cpu: Cpu) {
+        self.cpu_state = cpu;
+    }
+
+    pub fn on_decode(&mut self, mmu: &Mmu) {
         let pc = self.cpu_state.get_pc();
 
         self.add_exec_path(pc);
 
         if self.check_break(pc, mmu) {
             self.do_break("Break", mmu);
+        }
+    }
+
+    pub fn check_signal(&mut self) {
+        if self.signal.signaled() {
+            println!("Signaled.");
+            self.stepping = true;
         }
     }
 
@@ -134,13 +114,6 @@ impl Inner {
         }
 
         self.exec_path.push_back(pc);
-    }
-
-    fn check_signal(&mut self) {
-        if self.signal.signaled() {
-            println!("Signaled.");
-            self.stepping = true;
-        }
     }
 
     fn check_break(&self, pc: u16, mmu: &Mmu) -> bool {
@@ -220,7 +193,9 @@ impl Inner {
 
         self.prompt = false;
     }
+}
 
+impl IoHandler for Debugger {
     fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
         if self.rd_watches.contains(&addr) {
             self.do_break(&format!("Reading {:04x}", addr), mmu);
@@ -243,34 +218,6 @@ fn parse<'a>(cmd: &'a str) -> CmdResult<(&'a str, Vec<&'a str>)> {
     let cmd = it.next().ok_or(CmdError::new("No command"))?;
 
     Ok((cmd, it.collect()))
-}
-
-pub struct DebugMemHandler {
-    inner: Rc<RefCell<Inner>>,
-}
-
-impl DebugMemHandler {
-    fn new(inner: Rc<RefCell<Inner>>) -> DebugMemHandler {
-        DebugMemHandler { inner }
-    }
-}
-
-impl MemHandler for DebugMemHandler {
-    fn on_read(&self, mmu: &Mmu, addr: u16) -> MemRead {
-        // Don't hook if it's already hooked
-        match self.inner.try_borrow_mut() {
-            Ok(mut inner) => inner.on_read(mmu, addr),
-            Err(_) => MemRead::PassThrough,
-        }
-    }
-
-    fn on_write(&self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        // Don't hook if it's already hooked
-        match self.inner.try_borrow_mut() {
-            Ok(mut inner) => inner.on_write(mmu, addr, value),
-            Err(_) => MemWrite::PassThrough,
-        }
-    }
 }
 
 pub struct Perf {
@@ -303,7 +250,7 @@ impl Perf {
     }
 }
 
-fn exec_cmd(inner: &mut Inner, mmu: &Mmu, line: &str) -> CmdResult<bool> {
+fn exec_cmd(inner: &mut Debugger, mmu: &Mmu, line: &str) -> CmdResult<bool> {
     let cmd = match line.split_whitespace().next() {
         Some(cmd) => cmd,
         None => return Ok(false),
@@ -329,13 +276,13 @@ struct CmdInfo {
     name: &'static str,
     short: Option<&'static str>,
     desc: &'static str,
-    handler: Box<Fn(&mut Inner, &Mmu, &str) -> CmdResult<bool> + Send + Sync + 'static>,
+    handler: Box<Fn(&mut Debugger, &Mmu, &str) -> CmdResult<bool> + Send + Sync + 'static>,
 }
 
 trait CmdHandler: StructOpt + Sized {
-    fn handle(&self, inner: &mut Inner, mmu: &Mmu) -> CmdResult<bool>;
+    fn handle(&self, inner: &mut Debugger, mmu: &Mmu) -> CmdResult<bool>;
 
-    fn parse(inner: &mut Inner, mmu: &Mmu, s: &str) -> CmdResult<bool> {
+    fn parse(inner: &mut Debugger, mmu: &Mmu, s: &str) -> CmdResult<bool> {
         let s = s.split_whitespace();
         match Self::from_iter_safe(s) {
             Ok(p) => p.handle(inner, mmu),
@@ -402,7 +349,7 @@ enum CmdBreak {
 }
 
 impl CmdHandler for CmdBreak {
-    fn handle(&self, inner: &mut Inner, _mmu: &Mmu) -> CmdResult<bool> {
+    fn handle(&self, inner: &mut Debugger, _mmu: &Mmu) -> CmdResult<bool> {
         match self {
             CmdBreak::Add { addr } => {
                 if inner.breaks.insert(*addr) {
@@ -436,7 +383,7 @@ impl CmdHandler for CmdBreak {
 struct CmdHelp {}
 
 impl CmdHandler for CmdHelp {
-    fn handle(&self, _inner: &mut Inner, _mmu: &Mmu) -> CmdResult<bool> {
+    fn handle(&self, _inner: &mut Debugger, _mmu: &Mmu) -> CmdResult<bool> {
         println!("List of available commands:");
 
         for cmd in COMMANDS.iter() {
@@ -461,7 +408,7 @@ impl CmdHandler for CmdHelp {
 struct CmdQuit {}
 
 impl CmdHandler for CmdQuit {
-    fn handle(&self, _inner: &mut Inner, _mmu: &Mmu) -> CmdResult<bool> {
+    fn handle(&self, _inner: &mut Debugger, _mmu: &Mmu) -> CmdResult<bool> {
         println!("Quit.");
 
         std::process::exit(1)
@@ -473,7 +420,7 @@ impl CmdHandler for CmdQuit {
 struct CmdContinue {}
 
 impl CmdHandler for CmdContinue {
-    fn handle(&self, inner: &mut Inner, _mmu: &Mmu) -> CmdResult<bool> {
+    fn handle(&self, inner: &mut Debugger, _mmu: &Mmu) -> CmdResult<bool> {
         println!("Continue.");
 
         inner.stepping = false;
@@ -487,7 +434,7 @@ impl CmdHandler for CmdContinue {
 struct CmdStep {}
 
 impl CmdHandler for CmdStep {
-    fn handle(&self, inner: &mut Inner, _mmu: &Mmu) -> CmdResult<bool> {
+    fn handle(&self, inner: &mut Debugger, _mmu: &Mmu) -> CmdResult<bool> {
         println!("Step.");
 
         inner.stepping = true;
@@ -529,7 +476,7 @@ enum CmdDump {
 }
 
 impl CmdHandler for CmdDump {
-    fn handle(&self, inner: &mut Inner, mmu: &Mmu) -> CmdResult<bool> {
+    fn handle(&self, inner: &mut Debugger, mmu: &Mmu) -> CmdResult<bool> {
         match self {
             CmdDump::Cpu => {
                 println!("{}", inner.cpu_state);
@@ -641,7 +588,7 @@ enum CmdWatch {
 }
 
 impl CmdHandler for CmdWatch {
-    fn handle(&self, inner: &mut Inner, _mmu: &Mmu) -> CmdResult<bool> {
+    fn handle(&self, inner: &mut Debugger, _mmu: &Mmu) -> CmdResult<bool> {
         match self {
             CmdWatch::Add {
                 addr,

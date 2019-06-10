@@ -1,4 +1,4 @@
-use crate::device::{Hardware, HardwareHandle};
+use crate::device::{Hardware, HardwareHandle, IoHandler};
 use crate::ic::Irq;
 use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 use log::*;
@@ -39,10 +39,6 @@ impl From<u8> for Mode {
 }
 
 pub struct Gpu {
-    inner: Rc<RefCell<Inner>>,
-}
-
-struct Inner {
     irq: Irq,
 
     clocks: usize,
@@ -116,8 +112,8 @@ impl From<u8> for Color {
     }
 }
 
-impl Inner {
-    fn new(hw: HardwareHandle, irq: Irq) -> Self {
+impl Gpu {
+    pub fn new(hw: HardwareHandle, irq: Irq) -> Self {
         Self {
             irq: irq,
             clocks: 0,
@@ -162,7 +158,7 @@ impl Inner {
         }
     }
 
-    fn step(&mut self, time: usize, mmu: &mut Mmu) {
+    pub fn step(&mut self, time: usize, mmu: &mut Mmu) {
         let clocks = self.clocks + time;
 
         let (clocks, mode) = match &self.mode {
@@ -460,7 +456,9 @@ impl Inner {
         info!("Read Status: {:02x}", v);
         v
     }
+}
 
+impl IoHandler for Gpu {
     fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
         if addr != 0xff44 {
             trace!("Read GPU register: {:04x}", addr);
@@ -541,41 +539,5 @@ impl Inner {
         }
 
         MemWrite::PassThrough
-    }
-}
-
-impl Gpu {
-    pub fn new(hw: HardwareHandle, irq: Irq) -> Gpu {
-        Gpu {
-            inner: Rc::new(RefCell::new(Inner::new(hw, irq))),
-        }
-    }
-
-    pub fn handler(&self) -> GpuMemHandler {
-        GpuMemHandler::new(self.inner.clone())
-    }
-
-    pub fn step(&self, time: usize, mmu: &mut Mmu) {
-        self.inner.borrow_mut().step(time, mmu)
-    }
-}
-
-pub struct GpuMemHandler {
-    inner: Rc<RefCell<Inner>>,
-}
-
-impl GpuMemHandler {
-    fn new(inner: Rc<RefCell<Inner>>) -> GpuMemHandler {
-        GpuMemHandler { inner }
-    }
-}
-
-impl MemHandler for GpuMemHandler {
-    fn on_read(&self, mmu: &Mmu, addr: u16) -> MemRead {
-        self.inner.borrow_mut().on_read(mmu, addr)
-    }
-
-    fn on_write(&self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        self.inner.borrow_mut().on_write(mmu, addr, value)
     }
 }

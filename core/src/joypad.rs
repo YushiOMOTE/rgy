@@ -1,45 +1,27 @@
-use crate::device::{HardwareHandle, Key};
+use crate::device::{HardwareHandle, IoHandler, Key};
 use crate::ic::Irq;
 use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 use log::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-pub trait Keyboard {
-    fn pressed(&self, key: char) -> bool;
-}
-
 pub struct Joypad {
-    inner: Rc<RefCell<Inner>>,
-}
-
-impl Joypad {
-    pub fn new(hw: HardwareHandle, irq: Irq) -> Self {
-        Self {
-            inner: Rc::new(RefCell::new(Inner::new(hw, irq))),
-        }
-    }
-
-    pub fn handler(&self) -> JoypadMemHandler {
-        JoypadMemHandler::new(self.inner.clone())
-    }
-}
-
-struct Inner {
     hw: HardwareHandle,
     irq: Irq,
     select: u8,
 }
 
-impl Inner {
-    fn new(hw: HardwareHandle, irq: Irq) -> Self {
+impl Joypad {
+    pub fn new(hw: HardwareHandle, irq: Irq) -> Self {
         Self {
             hw,
             irq,
             select: 0xff,
         }
     }
+}
 
+impl IoHandler for Joypad {
     fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
         if addr == 0xff00 {
             let p = |key| self.hw.get().borrow_mut().joypad_pressed(key);
@@ -70,25 +52,5 @@ impl Inner {
             self.select = value;
         }
         MemWrite::PassThrough
-    }
-}
-
-pub struct JoypadMemHandler {
-    inner: Rc<RefCell<Inner>>,
-}
-
-impl JoypadMemHandler {
-    fn new(inner: Rc<RefCell<Inner>>) -> Self {
-        Self { inner }
-    }
-}
-
-impl MemHandler for JoypadMemHandler {
-    fn on_read(&self, mmu: &Mmu, addr: u16) -> MemRead {
-        self.inner.borrow_mut().on_read(mmu, addr)
-    }
-
-    fn on_write(&self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        self.inner.borrow_mut().on_write(mmu, addr, value)
     }
 }

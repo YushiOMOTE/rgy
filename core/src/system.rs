@@ -1,6 +1,6 @@
 use crate::cpu::Cpu;
 use crate::debug::{Debugger, Perf};
-use crate::device::{Hardware, HardwareHandle};
+use crate::device::{Device, Hardware, HardwareHandle};
 use crate::gpu::Gpu;
 use crate::ic::Ic;
 use crate::inst;
@@ -74,15 +74,15 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
 
     let hw = HardwareHandle::new(hw);
 
-    let mut dbg = Debugger::new();
+    let dbg = Device::new(Debugger::new());
     let mut cpu = Cpu::new();
     let mut mmu = Mmu::new();
-    let mut sound = Sound::new(hw.clone());
+    let sound = Device::new(Sound::new(hw.clone()));
     let ic = Ic::new();
-    let gpu = Gpu::new(hw.clone(), ic.irq());
-    let joypad = Joypad::new(hw.clone(), ic.irq());
-    let timer = Timer::new(hw.clone(), ic.irq());
-    let mbc = Mbc::new(rom);
+    let gpu = Device::new(Gpu::new(hw.clone(), ic.irq()));
+    let joypad = Device::new(Joypad::new(hw.clone(), ic.irq()));
+    let timer = Device::new(Timer::new(hw.clone(), ic.irq()));
+    let mbc = Device::new(Mbc::new(rom));
 
     if opt.debug {
         mmu.add_handler((0x0000, 0xffff), dbg.handler());
@@ -98,7 +98,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
     mmu.add_handler((0xff04, 0xff07), timer.handler());
 
     if opt.debug {
-        dbg.init(&mmu);
+        dbg.borrow_mut().init(&mmu);
     }
 
     let mut perf = Perf::new();
@@ -117,6 +117,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
         let (code, arg) = cpu.fetch(&mmu);
 
         if opt.debug {
+            let mut dbg = dbg.borrow_mut();
             dbg.check_signal();
             dbg.take_cpu_snapshot(cpu.clone());
             dbg.on_decode(&mmu);
@@ -127,8 +128,8 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
 
         cpu.check_interrupt(&mut mmu, &ic);
 
-        gpu.step(time, &mut mmu);
-        timer.step(time);
+        gpu.borrow_mut().step(time, &mut mmu);
+        timer.borrow_mut().step(time);
 
         perf.count();
 

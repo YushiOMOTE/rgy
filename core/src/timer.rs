@@ -1,4 +1,4 @@
-use crate::device::HardwareHandle;
+use crate::device::{HardwareHandle, IoHandler};
 use crate::ic::Irq;
 use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 use log::*;
@@ -6,26 +6,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 pub struct Timer {
-    inner: Rc<RefCell<Inner>>,
-}
-
-impl Timer {
-    pub fn new(hw: HardwareHandle, irq: Irq) -> Self {
-        Self {
-            inner: Rc::new(RefCell::new(Inner::new(hw, irq))),
-        }
-    }
-
-    pub fn handler(&self) -> TimerMemHandler {
-        TimerMemHandler::new(self.inner.clone())
-    }
-
-    pub fn step(&self, time: usize) {
-        self.inner.borrow_mut().step(time);
-    }
-}
-
-struct Inner {
     hw: HardwareHandle,
     irq: Irq,
     div: u8,
@@ -36,8 +16,8 @@ struct Inner {
     ctrl: u8,
 }
 
-impl Inner {
-    fn new(hw: HardwareHandle, irq: Irq) -> Self {
+impl Timer {
+    pub fn new(hw: HardwareHandle, irq: Irq) -> Self {
         Self {
             hw,
             irq,
@@ -48,29 +28,6 @@ impl Inner {
             tim_load: 0,
             ctrl: 0,
         }
-    }
-
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
-        info!("Timer read: {:04x}", addr);
-        match addr {
-            0xff04 => MemRead::Replace(self.div),
-            0xff05 => MemRead::Replace(self.tim),
-            0xff06 => MemRead::Replace(self.tim_load),
-            0xff07 => MemRead::Replace(self.ctrl),
-            _ => MemRead::PassThrough,
-        }
-    }
-
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        info!("Timer write: {:04x} {:02x}", addr, value);
-        match addr {
-            0xff04 => self.div = 0,
-            0xff05 => self.tim = value,
-            0xff06 => self.tim_load = value,
-            0xff07 => self.ctrl = value,
-            _ => {}
-        }
-        MemWrite::PassThrough
     }
 
     fn tim_clock_reset(&mut self) {
@@ -87,7 +44,7 @@ impl Inner {
         self.div_clocks = 256; // 16384Hz = 256 cpu clocks
     }
 
-    fn step(&mut self, time: usize) {
+    pub fn step(&mut self, time: usize) {
         if self.div_clocks < time {
             self.div = self.div.wrapping_add(1);
             self.div_clock_reset();
@@ -115,22 +72,27 @@ impl Inner {
     }
 }
 
-pub struct TimerMemHandler {
-    inner: Rc<RefCell<Inner>>,
-}
-
-impl TimerMemHandler {
-    fn new(inner: Rc<RefCell<Inner>>) -> Self {
-        Self { inner }
-    }
-}
-
-impl MemHandler for TimerMemHandler {
-    fn on_read(&self, mmu: &Mmu, addr: u16) -> MemRead {
-        self.inner.borrow_mut().on_read(mmu, addr)
+impl IoHandler for Timer {
+    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+        info!("Timer read: {:04x}", addr);
+        match addr {
+            0xff04 => MemRead::Replace(self.div),
+            0xff05 => MemRead::Replace(self.tim),
+            0xff06 => MemRead::Replace(self.tim_load),
+            0xff07 => MemRead::Replace(self.ctrl),
+            _ => MemRead::PassThrough,
+        }
     }
 
-    fn on_write(&self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        self.inner.borrow_mut().on_write(mmu, addr, value)
+    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+        info!("Timer write: {:04x} {:02x}", addr, value);
+        match addr {
+            0xff04 => self.div = 0,
+            0xff05 => self.tim = value,
+            0xff06 => self.tim_load = value,
+            0xff07 => self.ctrl = value,
+            _ => {}
+        }
+        MemWrite::PassThrough
     }
 }
