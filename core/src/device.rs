@@ -1,4 +1,3 @@
-use log::*;
 use std::cell::{Ref, RefCell, RefMut};
 use std::rc::Rc;
 

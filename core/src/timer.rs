@@ -1,13 +1,9 @@
 use crate::device::IoHandler;
-use crate::hardware::HardwareHandle;
 use crate::ic::Irq;
-use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
+use crate::mmu::{MemRead, MemWrite, Mmu};
 use log::*;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 pub struct Timer {
-    hw: HardwareHandle,
     irq: Irq,
     div: u8,
     div_clocks: usize,
@@ -18,9 +14,8 @@ pub struct Timer {
 }
 
 impl Timer {
-    pub fn new(hw: HardwareHandle, irq: Irq) -> Self {
+    pub fn new(irq: Irq) -> Self {
         Self {
-            hw,
             irq,
             div: 0,
             div_clocks: 0,
@@ -49,7 +44,7 @@ impl Timer {
         if self.div_clocks < time {
             self.div = self.div.wrapping_add(1);
             self.div_clock_reset();
-            self.div_clocks -= (time - self.div_clocks);
+            self.div_clocks -= time - self.div_clocks;
         } else {
             self.div_clocks -= time;
         }
@@ -66,7 +61,7 @@ impl Timer {
                 self.irq.timer(true);
             }
             self.tim_clock_reset();
-            self.tim_clocks -= (time - self.tim_clocks);
+            self.tim_clocks -= time - self.tim_clocks;
         } else {
             self.tim_clocks -= time;
         }
@@ -74,7 +69,7 @@ impl Timer {
 }
 
 impl IoHandler for Timer {
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
         info!("Timer read: {:04x}", addr);
         match addr {
             0xff04 => MemRead::Replace(self.div),
@@ -85,7 +80,7 @@ impl IoHandler for Timer {
         }
     }
 
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         info!("Timer write: {:04x} {:02x}", addr, value);
         match addr {
             0xff04 => self.div = 0,

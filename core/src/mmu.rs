@@ -1,6 +1,5 @@
 use log::*;
 use std::collections::HashMap;
-use std::io::prelude::*;
 use std::rc::Rc;
 
 pub enum MemRead {
@@ -26,10 +25,8 @@ pub struct Handle(u64);
 pub struct Mmu {
     ram: Vec<u8>,
     handles: HashMap<Handle, (u16, u16)>,
-    handlers: HashMap<u16, Vec<(Handle, Rc<MemHandler>)>>,
+    handlers: HashMap<u16, Vec<(Handle, Rc<dyn MemHandler>)>>,
     hdgen: u64,
-    use_boot_rom: bool,
-    boot_rom: Vec<u8>,
 }
 
 impl Mmu {
@@ -39,8 +36,6 @@ impl Mmu {
             handles: HashMap::new(),
             handlers: HashMap::new(),
             hdgen: 0,
-            use_boot_rom: true,
-            boot_rom: vec![0u8; 0x100],
         }
     }
 

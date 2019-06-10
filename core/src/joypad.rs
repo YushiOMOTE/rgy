@@ -1,10 +1,8 @@
 use crate::device::IoHandler;
 use crate::hardware::{HardwareHandle, Key};
 use crate::ic::Irq;
-use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
+use crate::mmu::{MemRead, MemWrite, Mmu};
 use log::*;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 pub struct Joypad {
     hw: HardwareHandle,
@@ -23,7 +21,7 @@ impl Joypad {
 }
 
 impl IoHandler for Joypad {
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
         if addr == 0xff00 {
             let p = |key| self.hw.get().borrow_mut().joypad_pressed(key);
 
@@ -48,7 +46,7 @@ impl IoHandler for Joypad {
         }
     }
 
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         if addr == 0xff00 {
             self.select = value;
         }

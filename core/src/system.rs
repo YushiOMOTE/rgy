@@ -82,7 +82,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
     let ic = Ic::new();
     let gpu = Device::new(Gpu::new(hw.clone(), ic.irq()));
     let joypad = Device::new(Joypad::new(hw.clone(), ic.irq()));
-    let timer = Device::new(Timer::new(hw.clone(), ic.irq()));
+    let timer = Device::new(Timer::new(ic.irq()));
     let mbc = Device::new(Mbc::new(rom));
 
     if opt.debug {
@@ -105,12 +105,6 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
     let mut perf = Perf::new();
 
     info!("Starting...");
-
-    let mut last = Instant::now();
-    let mut count = AtomicUsize::new(0);
-    let mut delay = 0;
-    let sample = 500;
-    let unit = 100;
 
     fc.reset();
 

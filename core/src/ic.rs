@@ -132,7 +132,7 @@ impl IcMemHandler {
 }
 
 impl MemHandler for IcMemHandler {
-    fn on_read(&self, mmu: &Mmu, addr: u16) -> MemRead {
+    fn on_read(&self, _mmu: &Mmu, addr: u16) -> MemRead {
         if addr == 0xffff {
             let v = self.inner.enable.lock().unwrap().get();
             info!("Read interrupt enable: {:02x}", v);
@@ -146,7 +146,7 @@ impl MemHandler for IcMemHandler {
         }
     }
 
-    fn on_write(&self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         if addr == 0xffff {
             info!("Write interrupt enable: {:02x}", value);
             self.inner.enable.lock().unwrap().set(value);

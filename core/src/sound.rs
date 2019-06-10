@@ -1,12 +1,10 @@
 use log::*;
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use crate::device::IoHandler;
 use crate::hardware::{HardwareHandle, SoundId};
-use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
+use crate::mmu::{MemRead, MemWrite, Mmu};
 
 #[derive(Debug, Clone)]
 enum WaveDuty {
@@ -221,16 +219,14 @@ impl Sound {
             }),
         );
     }
-
-    fn play_noise(&mut self) {}
 }
 
 impl IoHandler for Sound {
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+    fn on_read(&mut self, _mmu: &Mmu, _addr: u16) -> MemRead {
         MemRead::PassThrough
     }
 
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         if addr == 0xff10 {
             self.tone1.sweep_time = ((value >> 4) & 0x7) as usize;
             self.tone1.sweep_sub = value & 0x08 != 0;

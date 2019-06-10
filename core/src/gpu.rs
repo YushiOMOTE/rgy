@@ -1,10 +1,8 @@
 use crate::device::IoHandler;
 use crate::hardware::HardwareHandle;
 use crate::ic::Irq;
-use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
+use crate::mmu::{MemRead, MemWrite, Mmu};
 use log::*;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 enum Mode {
@@ -460,7 +458,7 @@ impl Gpu {
 }
 
 impl IoHandler for Gpu {
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
         if addr != 0xff44 {
             trace!("Read GPU register: {:04x}", addr);
         }
@@ -501,7 +499,7 @@ impl IoHandler for Gpu {
         }
     }
 
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         trace!("Write GPU register: {:04x} {:02x}", addr, value);
 
         if addr == 0xff40 {

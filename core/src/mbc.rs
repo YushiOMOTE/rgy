@@ -1,9 +1,6 @@
 use crate::device::IoHandler;
-use crate::hardware::{HardwareHandle, Key};
-use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
+use crate::mmu::{MemRead, MemWrite, Mmu};
 use log::*;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 const BOOT_ROM: &[u8] = include_bytes!("boot.bin");
 

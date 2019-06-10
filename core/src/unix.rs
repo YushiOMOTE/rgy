@@ -1,11 +1,8 @@
 use cpal;
-use log::*;
 use minifb::{Scale, Window, WindowOptions};
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::hardware::{Hardware, Key, SoundId, Stream, VRAM_HEIGHT, VRAM_WIDTH};
 

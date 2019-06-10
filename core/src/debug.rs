@@ -1,14 +1,11 @@
 use crate::cpu::Cpu;
 use crate::device::IoHandler;
 use crate::inst::mnem;
-use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
+use crate::mmu::{MemRead, MemWrite, Mmu};
 use log::*;
 
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque};
 use std::fmt;
-use std::hash::{Hash, Hasher};
-use std::rc::Rc;
 use std::string::ToString;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -116,7 +113,7 @@ impl Debugger {
         self.exec_path.push_back(pc);
     }
 
-    fn check_break(&self, pc: u16, mmu: &Mmu) -> bool {
+    fn check_break(&self, pc: u16, _mmu: &Mmu) -> bool {
         if self.prompt {
             false
         } else if self.stepping {
@@ -213,13 +210,6 @@ impl IoHandler for Debugger {
     }
 }
 
-fn parse<'a>(cmd: &'a str) -> CmdResult<(&'a str, Vec<&'a str>)> {
-    let mut it = cmd.split(" ");
-    let cmd = it.next().ok_or(CmdError::new("No command"))?;
-
-    Ok((cmd, it.collect()))
-}
-
 pub struct Perf {
     counter: u64,
     last: Instant,
@@ -276,7 +266,7 @@ struct CmdInfo {
     name: &'static str,
     short: Option<&'static str>,
     desc: &'static str,
-    handler: Box<Fn(&mut Debugger, &Mmu, &str) -> CmdResult<bool> + Send + Sync + 'static>,
+    handler: Box<dyn Fn(&mut Debugger, &Mmu, &str) -> CmdResult<bool> + Send + Sync + 'static>,
 }
 
 trait CmdHandler: StructOpt + Sized {
