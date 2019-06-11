@@ -43,8 +43,9 @@ impl Timer {
     pub fn step(&mut self, time: usize) {
         if self.div_clocks < time {
             self.div = self.div.wrapping_add(1);
+            let rem = time - self.div_clocks;
             self.div_clock_reset();
-            self.div_clocks -= time - self.div_clocks;
+            self.div_clocks -= rem;
         } else {
             self.div_clocks -= time;
         }
@@ -60,8 +61,9 @@ impl Timer {
                 self.tim = self.tim_load;
                 self.irq.timer(true);
             }
+            let rem = time - self.tim_clocks;
             self.tim_clock_reset();
-            self.tim_clocks -= time - self.tim_clocks;
+            self.tim_clocks -= rem;
         } else {
             self.tim_clocks -= time;
         }
