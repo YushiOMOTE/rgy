@@ -80,7 +80,13 @@ fn to_palette(p: u8) -> Vec<Color> {
     ]
 }
 
-#[derive(Clone, Debug)]
+fn from_palette(p: Vec<Color>) -> u8 {
+    assert_eq!(p.len(), 4);
+
+    u8::from(p[0]) | u8::from(p[1]) << 2 | u8::from(p[2]) << 4 | u8::from(p[3]) << 6
+}
+
+#[derive(Clone, Copy, Debug)]
 enum Color {
     White,
     LightGray,
@@ -95,6 +101,17 @@ impl From<Color> for u32 {
             Color::LightGray => 0xaaaaaa,
             Color::DarkGray => 0x888888,
             Color::Black => 0x555555,
+        }
+    }
+}
+
+impl From<Color> for u8 {
+    fn from(c: Color) -> u8 {
+        match c {
+            Color::White => 0,
+            Color::LightGray => 1,
+            Color::DarkGray => 2,
+            Color::Black => 3,
         }
     }
 }
@@ -258,7 +275,7 @@ impl Gpu {
                 let l = (l >> (7 - txoff)) & 1;
                 let h = ((h >> (7 - txoff)) & 1) << 1;
                 let coli = (h | l) as usize;
-                let col = self.bg_palette[coli].clone().into();
+                let col = self.bg_palette[coli].into();
 
                 buf[x as usize] = col;
                 bgbuf[x as usize] = coli;
@@ -294,7 +311,7 @@ impl Gpu {
 
                     let l = (l >> (7 - txoff)) & 1;
                     let h = ((h >> (7 - txoff)) & 1) << 1;
-                    let col = self.bg_palette[(h | l) as usize].clone().into();
+                    let col = self.bg_palette[(h | l) as usize].into();
 
                     buf[x as usize] = col;
                 }
@@ -369,7 +386,7 @@ impl Gpu {
                         continue;
                     }
 
-                    let col = palette[coli].clone();
+                    let col = palette[coli];
 
                     let bgcoli = bgbuf[x as usize];
 
@@ -485,13 +502,14 @@ impl IoHandler for Gpu {
             warn!("Read DMA transfer");
             MemRead::PassThrough
         } else if addr == 0xff47 {
-            unimplemented!("read ff47")
+            debug!("Read Bg palette");
+            MemRead::Replace(from_palette(self.bg_palette.clone()))
         } else if addr == 0xff48 {
             debug!("Read Object palette 0");
-            MemRead::PassThrough
+            MemRead::Replace(from_palette(self.obj_palette0.clone()))
         } else if addr == 0xff49 {
             debug!("Read Object palette 1");
-            MemRead::PassThrough
+            MemRead::Replace(from_palette(self.obj_palette1.clone()))
         } else if addr == 0xff4a {
             MemRead::Replace(self.wy)
         } else if addr == 0xff4b {
@@ -501,7 +519,7 @@ impl IoHandler for Gpu {
         } else if addr == 0xff68 || addr == 0xff69 || addr == 0xff6a || addr == 0xff6b {
             unimplemented!("read color")
         } else {
-            MemRead::PassThrough
+            unreachable!("Unsupported gpu register read: {:04x}", addr)
         }
     }
 
