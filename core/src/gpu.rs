@@ -189,6 +189,10 @@ impl Gpu {
                 if clocks >= 172 {
                     self.draw(mmu);
 
+                    if self.hblank_interrupt {
+                        self.irq.lcd(true);
+                    }
+
                     (0, Mode::HBlank)
                 } else {
                     (clocks, Mode::VRAM)
@@ -201,8 +205,16 @@ impl Gpu {
                     if self.ly == 143 {
                         self.irq.vblank(true);
 
+                        if self.vblank_interrupt {
+                            self.irq.lcd(true);
+                        }
+
                         (0, Mode::VBlank)
                     } else {
+                        if self.oam_interrupt {
+                            self.irq.lcd(true);
+                        }
+
                         (0, Mode::OAM)
                     }
                 } else {
@@ -215,7 +227,10 @@ impl Gpu {
 
                     if self.ly > 153 {
                         self.ly = 0;
-                        self.irq.vblank(false);
+
+                        if self.oam_interrupt {
+                            self.irq.lcd(true);
+                        }
 
                         (0, Mode::OAM)
                     } else {
@@ -230,8 +245,6 @@ impl Gpu {
 
         if self.lyc_interrupt && self.lyc == self.ly {
             self.irq.lcd(true);
-        } else {
-            self.irq.lcd(false);
         }
 
         self.clocks = clocks;
