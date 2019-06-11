@@ -328,7 +328,7 @@ impl Gpu {
                 let behind_bg = attr & 0x80 != 0;
                 let yflip = attr & 0x40 != 0;
                 let xflip = attr & 0x20 != 0;
-                let palette = if attr & 0x10 != 0 {
+                let palette = if attr & 0x10 == 0 {
                     &self.obj_palette0
                 } else {
                     &self.obj_palette1
