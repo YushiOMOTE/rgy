@@ -224,6 +224,10 @@ impl Sound {
             }),
         );
     }
+
+    fn stop_wave(&self) {
+        self.hw.get().borrow_mut().sound_stop(SoundId::Wave);
+    }
 }
 
 impl IoHandler for Sound {
@@ -269,6 +273,11 @@ impl IoHandler for Sound {
         } else if addr == 0xff1a {
             debug!("Wave enable: {:02x}", value);
             self.wave.enable = value & 0x80 != 0;
+            if self.wave.enable {
+                self.play_wave(self.wave.clone());
+            } else {
+                self.stop_wave();
+            }
         } else if addr == 0xff1b {
             debug!("Wave len: {:02x}", value);
             self.wave.sound_len = value as usize;
