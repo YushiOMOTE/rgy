@@ -79,10 +79,11 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
     let mut cpu = Cpu::new();
     let mut mmu = Mmu::new();
     let sound = Device::new(Sound::new(hw.clone()));
-    let ic = Ic::new();
-    let gpu = Device::new(Gpu::new(hw.clone(), ic.irq()));
-    let joypad = Device::new(Joypad::new(hw.clone(), ic.irq()));
-    let timer = Device::new(Timer::new(ic.irq()));
+    let ic = Device::new(Ic::new());
+    let irq = ic.borrow().irq().clone();
+    let gpu = Device::new(Gpu::new(hw.clone(), irq.clone()));
+    let joypad = Device::new(Joypad::new(hw.clone(), irq.clone()));
+    let timer = Device::new(Timer::new(irq.clone()));
     let mbc = Device::new(Mbc::new(rom));
 
     if opt.debug {

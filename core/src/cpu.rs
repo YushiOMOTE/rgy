@@ -1,3 +1,4 @@
+use crate::device::Device;
 use crate::ic::Ic;
 use crate::mmu::Mmu;
 use log::*;
@@ -80,7 +81,7 @@ impl Cpu {
         self.ei = true;
     }
 
-    pub fn check_interrupt(&mut self, mmu: &mut Mmu, ic: &Ic) {
+    pub fn check_interrupt(&mut self, mmu: &mut Mmu, ic: &Device<Ic>) {
         let check_intr = self.interrupt;
 
         if self.di {
@@ -96,7 +97,7 @@ impl Cpu {
             return;
         }
 
-        if let Some(value) = ic.poll() {
+        if let Some(value) = ic.borrow_mut().poll() {
             debug!("Interrupted: {:02x}", value);
 
             self.interrupted(mmu, value);

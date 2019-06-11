@@ -1,80 +1,37 @@
-use crate::mmu::Mmu;
-use crate::mmu::{MemHandler, MemRead, MemWrite};
+use crate::device::IoHandler;
+use crate::mmu::{MemRead, MemWrite, Mmu};
 use log::*;
-use std::sync::{Arc, Mutex};
-
-pub struct Ic {
-    inner: Arc<Inner>,
-}
-
-impl Ic {
-    pub fn new() -> Ic {
-        Ic {
-            inner: Arc::new(Inner::new()),
-        }
-    }
-
-    pub fn handler(&self) -> IcMemHandler {
-        IcMemHandler::new(self.inner.clone())
-    }
-
-    pub fn irq(&self) -> Irq {
-        Irq::new(self.inner.clone())
-    }
-
-    pub fn poll(&self) -> Option<u8> {
-        let e = self.inner.enable.lock().unwrap();
-        let mut r = self.inner.request.lock().unwrap();
-
-        if e.vblank && r.vblank {
-            r.vblank = false;
-            Some(0x40)
-        } else if e.lcd && r.lcd {
-            r.lcd = false;
-            Some(0x48)
-        } else if e.timer && r.timer {
-            r.timer = false;
-            Some(0x50)
-        } else if e.serial && r.serial {
-            r.serial = false;
-            Some(0x58)
-        } else if e.joypad && r.joypad {
-            r.joypad = false;
-            Some(0x60)
-        } else {
-            None
-        }
-    }
-}
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct Irq {
-    inner: Arc<Inner>,
+    request: Rc<RefCell<Ints>>,
 }
 
 impl Irq {
-    fn new(inner: Arc<Inner>) -> Irq {
-        Irq { inner }
+    fn new(request: Rc<RefCell<Ints>>) -> Irq {
+        Irq { request }
     }
 
     pub fn vblank(&self, v: bool) {
-        self.inner.request.lock().unwrap().vblank = v;
+        self.request.borrow_mut().vblank = v;
     }
 
     pub fn lcd(&self, v: bool) {
-        self.inner.request.lock().unwrap().lcd = v;
+        self.request.borrow_mut().lcd = v;
     }
 
     pub fn timer(&self, v: bool) {
-        self.inner.request.lock().unwrap().timer = v;
+        self.request.borrow_mut().timer = v;
     }
 
     pub fn serial(&self, v: bool) {
-        self.inner.request.lock().unwrap().serial = v;
+        self.request.borrow_mut().serial = v;
     }
 
     pub fn joypad(&self, v: bool) {
-        self.inner.request.lock().unwrap().joypad = v;
+        self.request.borrow_mut().joypad = v;
     }
 }
 
@@ -107,38 +64,56 @@ impl Ints {
     }
 }
 
-struct Inner {
-    enable: Mutex<Ints>,
-    request: Mutex<Ints>,
+pub struct Ic {
+    enable: Rc<RefCell<Ints>>,
+    request: Rc<RefCell<Ints>>,
 }
 
-impl Inner {
-    fn new() -> Inner {
-        Inner {
-            enable: Mutex::new(Ints::default()),
-            request: Mutex::new(Ints::default()),
+impl Ic {
+    pub fn new() -> Ic {
+        Ic {
+            enable: Rc::new(RefCell::new(Ints::default())),
+            request: Rc::new(RefCell::new(Ints::default())),
+        }
+    }
+
+    pub fn irq(&self) -> Irq {
+        Irq::new(self.request.clone())
+    }
+
+    pub fn poll(&self) -> Option<u8> {
+        let e = self.enable.borrow();
+        let mut r = self.request.borrow_mut();
+
+        if e.vblank && r.vblank {
+            r.vblank = false;
+            Some(0x40)
+        } else if e.lcd && r.lcd {
+            r.lcd = false;
+            Some(0x48)
+        } else if e.timer && r.timer {
+            r.timer = false;
+            Some(0x50)
+        } else if e.serial && r.serial {
+            r.serial = false;
+            Some(0x58)
+        } else if e.joypad && r.joypad {
+            r.joypad = false;
+            Some(0x60)
+        } else {
+            None
         }
     }
 }
 
-pub struct IcMemHandler {
-    inner: Arc<Inner>,
-}
-
-impl IcMemHandler {
-    fn new(inner: Arc<Inner>) -> IcMemHandler {
-        IcMemHandler { inner }
-    }
-}
-
-impl MemHandler for IcMemHandler {
-    fn on_read(&self, _mmu: &Mmu, addr: u16) -> MemRead {
+impl IoHandler for Ic {
+    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
         if addr == 0xffff {
-            let v = self.inner.enable.lock().unwrap().get();
+            let v = self.enable.borrow().get();
             info!("Read interrupt enable: {:02x}", v);
             MemRead::Replace(v)
         } else if addr == 0xff0f {
-            let v = self.inner.request.lock().unwrap().get();
+            let v = self.request.borrow().get();
             info!("Read interrupt: {:02x}", v);
             MemRead::Replace(v)
         } else {
@@ -146,14 +121,14 @@ impl MemHandler for IcMemHandler {
         }
     }
 
-    fn on_write(&self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         if addr == 0xffff {
             info!("Write interrupt enable: {:02x}", value);
-            self.inner.enable.lock().unwrap().set(value);
+            self.enable.borrow_mut().set(value);
             MemWrite::Block
         } else if addr == 0xff0f {
             info!("Write interrupt: {:02x}", value);
-            self.inner.request.lock().unwrap().set(value);
+            self.request.borrow_mut().set(value);
             MemWrite::Block
         } else {
             MemWrite::PassThrough
