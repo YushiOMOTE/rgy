@@ -86,18 +86,12 @@ impl Mbc1 {
 
     fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         if addr <= 0x1fff {
-            if value == 0x00 {
-                info!("External RAM disabled");
-                self.ram_enable = false;
-            } else if value == 0x0a {
+            if value & 0xf == 0x0a {
                 info!("External RAM enabled");
                 self.ram_enable = true;
             } else {
-                unimplemented!(
-                    "Unexpected value for RAM enable: {:04x} {:02x}",
-                    addr,
-                    value
-                );
+                info!("External RAM disabled");
+                self.ram_enable = false;
             }
             MemWrite::Block
         } else if addr >= 0x2000 && addr <= 0x3fff {
