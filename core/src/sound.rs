@@ -215,7 +215,12 @@ impl Sound {
                 };
 
                 let a = (amp.load(Ordering::SeqCst) as f32) / 100.0;
-                Some((-1.0 + level * 0.25) * a)
+                let v = (-1.0 + level * 0.125) * a;
+
+                assert_eq!(true, v >= -1.0 && v <= 1.0);
+
+                // 0.5 to emphaise tone
+                Some(v * 0.5)
             }),
         );
     }
