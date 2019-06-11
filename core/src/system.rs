@@ -42,14 +42,16 @@ impl FreqControl {
         self.last = Instant::now();
     }
 
-    fn adjust(&mut self) {
-        self.count += 1;
+    fn adjust(&mut self, time: usize) {
+        self.count += time;
 
         for _ in 0..self.delay {
             self.barrier.fetch_add(1, Ordering::Relaxed);
         }
 
-        if self.count % self.sample == 0 {
+        if self.count > self.sample {
+            self.count = self.count - self.sample;
+
             let now = Instant::now();
             let df = now - self.last;
             let df = df.as_secs() as usize * 1000000 + df.subsec_micros() as usize;
@@ -130,7 +132,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
         perf.count();
 
         if !opt.native_speed {
-            fc.adjust();
+            fc.adjust(time);
         }
     }
 }

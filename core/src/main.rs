@@ -22,7 +22,7 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt)]
 pub struct Opt {
     /// Cpu frequency
-    #[structopt(short = "f", long = "freq", default_value = "1000000")]
+    #[structopt(short = "f", long = "freq", default_value = "4200000")]
     freq: usize,
     /// Sampling rate for cpu frequency controller
     #[structopt(short = "s", long = "sample", default_value = "1000")]
