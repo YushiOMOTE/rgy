@@ -211,6 +211,12 @@ impl Gpu {
             Mode::None => (0, Mode::None),
         };
 
+        if self.lyc_interrupt && self.lyc == self.ly {
+            self.irq.lcd(true);
+        } else {
+            self.irq.lcd(false);
+        }
+
         self.clocks = clocks;
         self.mode = mode;
     }
@@ -452,7 +458,7 @@ impl Gpu {
             let p: u8 = self.mode.clone().into();
             p
         };
-        info!("Read Status: {:02x}", v);
+        trace!("Read Status: {:02x}", v);
         v
     }
 }
@@ -476,7 +482,7 @@ impl IoHandler for Gpu {
         } else if addr == 0xff45 {
             MemRead::Replace(self.lyc)
         } else if addr == 0xff46 {
-            info!("Read DMA transfer");
+            warn!("Read DMA transfer");
             MemRead::PassThrough
         } else if addr == 0xff47 {
             unimplemented!("read ff47")
@@ -509,6 +515,7 @@ impl IoHandler for Gpu {
         } else if addr == 0xff42 {
             self.scy = value;
         } else if addr == 0xff43 {
+            info!("Write SCX: {}", value);
             self.scx = value;
         } else if addr == 0xff44 {
             self.ly = 0;
@@ -518,13 +525,13 @@ impl IoHandler for Gpu {
             trace!("DMA is handled by MMU: {:02x}", value);
         } else if addr == 0xff47 {
             self.bg_palette = to_palette(value);
-            info!("Bg palette updated: {:?}", self.bg_palette);
+            debug!("Bg palette updated: {:?}", self.bg_palette);
         } else if addr == 0xff48 {
             self.obj_palette0 = to_palette(value);
-            info!("Object palette 0 updated: {:?}", self.obj_palette0);
+            debug!("Object palette 0 updated: {:?}", self.obj_palette0);
         } else if addr == 0xff49 {
             self.obj_palette1 = to_palette(value);
-            info!("Object palette 1 updated: {:?}", self.obj_palette1);
+            debug!("Object palette 1 updated: {:?}", self.obj_palette1);
         } else if addr == 0xff4a {
             info!("Window Y: {}", value);
             self.wy = value;
