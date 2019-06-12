@@ -178,7 +178,7 @@ impl Cpu {
 
     pub fn set_af(&mut self, v: u16) {
         self.a = (v >> 8) as u8;
-        self.f = v as u8;
+        self.f = (v & 0xf0) as u8;
     }
 
     pub fn set_bc(&mut self, v: u16) {
@@ -296,7 +296,9 @@ mod test {
     fn exec(cpu: &mut Cpu, mmu: &mut Mmu) {
         let (code, arg) = cpu.fetch(&mmu);
 
-        decode(code, arg, cpu, mmu);
+        let (_, size) = decode(code, arg, cpu, mmu);
+
+        cpu.set_pc(cpu.get_pc().wrapping_add(size as u16));
     }
 
     #[test]
@@ -311,5 +313,34 @@ mod test {
         exec(&mut cpu, &mut mmu);
 
         assert_eq!(cpu.get_a(), 0x00);
+    }
+
+    #[test]
+    fn op_00f1() {
+        // pop af
+        let mut mmu = Mmu::new();
+        let mut cpu = Cpu::new();
+
+        cpu.set_bc(0x1301);
+        write(
+            &mut mmu,
+            vec![0xc5, 0xf1, 0xf5, 0xd1, 0x79, 0xe6, 0xf0, 0xbb],
+        );
+        exec(&mut cpu, &mut mmu); // push bc
+        assert_eq!(cpu.get_bc(), 0x1301);
+        exec(&mut cpu, &mut mmu); // pop af
+        assert_eq!(cpu.get_af(), 0x1300); // because the lower 4 bits of `f` are always zero
+        exec(&mut cpu, &mut mmu); // push af
+        exec(&mut cpu, &mut mmu); // pop de
+        assert_eq!(cpu.get_de(), 0x1300);
+        assert_eq!(cpu.get_c(), 0x01);
+        exec(&mut cpu, &mut mmu); // ld a,c
+        assert_eq!(cpu.get_a(), 0x01);
+        assert_eq!(cpu.get_c(), 0x01);
+        exec(&mut cpu, &mut mmu); // and 0xf0
+        assert_eq!(cpu.get_a(), 0x00);
+        assert_eq!(cpu.get_e(), 0x00);
+        exec(&mut cpu, &mut mmu); // cp e
+        assert_eq!(cpu.get_zf(), true);
     }
 }
