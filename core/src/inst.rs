@@ -951,21 +951,24 @@ fn op_0026(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
 /// daa
 #[allow(unused_variables)]
 fn op_0027(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
-    let l = cpu.get_a() & 0xf;
-    let h = cpu.get_a() >> 4;
+    let mut adj = 0;
 
-    let lc = if l > 9 || cpu.get_hf() { 0x06 } else { 0x00 };
-    let hc = if h > 9 || cpu.get_cf() { 0x60 } else { 0x00 };
+    let v = cpu.get_a() as usize;
 
-    let v = cpu.get_a();
-    let v = if cpu.get_nf() {
-        v.wrapping_sub(lc + hc)
+    if cpu.get_hf() || (!cpu.get_nf() && (v & 0xf) > 9) {
+        adj |= 0x6;
+    }
+
+    let c = if cpu.get_cf() || (!cpu.get_nf() && v > 0x99) {
+        adj |= 0x60;
+        true
     } else {
-        v.wrapping_add(lc + hc)
+        false
     };
 
+    let v = if cpu.get_nf() { v - adj } else { v + adj };
+    let v = (v & 0xff) as u8;
     let z = v == 0;
-    let c = hc > 0;
 
     cpu.set_a(v);
     cpu.set_zf(z);

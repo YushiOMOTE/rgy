@@ -115,23 +115,26 @@
 {% endmacro %}
 
 {% macro daa(i) %}
-   let l = cpu.get_a() & 0xf;
-   let h = cpu.get_a() >> 4;
+  let mut adj = 0;
 
-   let lc = if l > 9 || cpu.get_hf() { 0x06 } else { 0x00 };
-   let hc = if h > 9 || cpu.get_cf() { 0x60 } else { 0x00 };
+  let v = cpu.get_a() as usize;
 
-   let v = cpu.get_a();
-   let v = if cpu.get_nf() {
-      v.wrapping_sub(lc + hc)
-   } else {
-      v.wrapping_add(lc + hc)
-   };
+  if cpu.get_hf() || (!cpu.get_nf() && (v & 0xf) > 9) {
+      adj |= 0x6;
+  }
 
-   let z = v == 0;
-   let c = hc > 0;
+  let c = if cpu.get_cf() || (!cpu.get_nf() && v > 0x99) {
+      adj |= 0x60;
+      true
+  } else {
+      false
+  };
 
-   cpu.set_a(v);
+  let v = if cpu.get_nf() { v - adj } else { v + adj };
+  let v = (v & 0xff) as u8;
+  let z = v == 0;
+
+  cpu.set_a(v);
 {% endmacro %}
 
 {% macro cpl(i) %}
