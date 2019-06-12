@@ -132,19 +132,72 @@ impl Mbc1 {
 
 struct Mbc2 {
     rom: Vec<u8>,
+    ram: Vec<u8>,
+    rom_bank: usize,
+    ram_enable: bool,
 }
 
 impl Mbc2 {
     fn new(rom: Vec<u8>) -> Self {
-        Self { rom }
+        Self {
+            rom,
+            ram: vec![0; 0x200],
+            rom_bank: 1,
+            ram_enable: false,
+        }
     }
 
     fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
-        unimplemented!()
+        if addr <= 0x3fff {
+            MemRead::Replace(self.rom[addr as usize])
+        } else if addr >= 0x4000 && addr <= 0x7fff {
+            let base = self.rom_bank.max(1) * 0x4000;
+            let offset = addr as usize - 0x4000;
+            MemRead::Replace(self.rom[base + offset])
+        } else if addr >= 0xa000 && addr <= 0xa1ff {
+            if self.ram_enable {
+                MemRead::Replace(self.ram[addr as usize - 0xa000] & 0xf)
+            } else {
+                warn!("Read from disabled cart RAM: {:04x}", addr);
+                MemRead::Replace(0)
+            }
+        } else {
+            MemRead::PassThrough
+        }
     }
 
     fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        unimplemented!()
+        if addr <= 0x3fff {
+            if addr & 0x100 == 0 {
+                self.ram_enable = (value & 0x0f) == 0x0a;
+                info!(
+                    "Cart RAM {}",
+                    if self.ram_enable {
+                        "enabled"
+                    } else {
+                        "disabled"
+                    }
+                );
+            } else {
+                self.rom_bank = (value as usize & 0xf).max(1);
+                debug!("Switch ROM bank to {:02x}", self.rom_bank);
+            }
+            MemWrite::Block
+        } else if addr >= 0x4000 && addr <= 0x7fff {
+            warn!("Writing to read-only range: {:04x} {:02x}", addr, value);
+            MemWrite::Block
+        } else if addr >= 0xa000 && addr <= 0xa1ff {
+            if self.ram_enable {
+                self.ram[addr as usize - 0xa000] = value & 0xf;
+                MemWrite::Block
+            } else {
+                warn!("Write to disabled cart RAM: {:04x} {:02x}", addr, value);
+                MemWrite::Block
+            }
+        } else {
+            warn!("write to rom {:04x} {:02x}", addr, value);
+            MemWrite::PassThrough
+        }
     }
 }
 
