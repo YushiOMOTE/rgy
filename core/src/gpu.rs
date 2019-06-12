@@ -574,12 +574,13 @@ impl IoHandler for Gpu {
             unimplemented!("write ff4f (vram bank)")
         } else if addr == 0xff68 || addr == 0xff69 || addr == 0xff6a || addr == 0xff6b {
             unimplemented!("write color")
+        } else {
+            warn!(
+                "Unsupported GPU register is written: {:04x} {:02x}",
+                addr, value
+            );
         }
 
-        warn!(
-            "Unsupported GPU register is written: {:04x} {:02x}",
-            addr, value
-        );
-        MemWrite::Block
+        MemWrite::PassThrough
     }
 }
