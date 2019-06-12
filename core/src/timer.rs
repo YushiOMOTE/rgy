@@ -55,15 +55,22 @@ impl Timer {
         }
 
         if self.tim_clocks < time {
-            let (tim, of) = self.tim.overflowing_add(1);
-            self.tim = tim;
-            if of {
-                self.tim = self.tim_load;
-                self.irq.timer(true);
+            let mut rem = time - self.tim_clocks;
+
+            loop {
+                let (tim, of) = self.tim.overflowing_add(1);
+                self.tim = tim;
+                if of {
+                    self.tim = self.tim_load;
+                    self.irq.timer(true);
+                }
+                self.tim_clock_reset();
+                if rem <= self.tim_clocks {
+                    self.tim_clocks -= rem;
+                    break;
+                }
+                rem -= self.tim_clocks;
             }
-            let rem = time - self.tim_clocks;
-            self.tim_clock_reset();
-            self.tim_clocks -= rem;
         } else {
             self.tim_clocks -= time;
         }
@@ -88,7 +95,15 @@ impl IoHandler for Timer {
             0xff04 => self.div = 0,
             0xff05 => self.tim = value,
             0xff06 => self.tim_load = value,
-            0xff07 => self.ctrl = value,
+            0xff07 => {
+                let old_ctrl = self.ctrl;
+                self.ctrl = value;
+
+                if old_ctrl & 4 == 0 && value & 4 != 0 {
+                    debug!("Timer started");
+                    self.tim_clock_reset();
+                }
+            }
             _ => {}
         }
         MemWrite::PassThrough
