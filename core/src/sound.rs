@@ -6,7 +6,7 @@ use crate::device::IoHandler;
 use crate::hardware::{HardwareHandle, SoundId};
 use crate::mmu::{MemRead, MemWrite, Mmu};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 enum WaveDuty {
     P125,
     P250,
@@ -37,13 +37,13 @@ impl From<u8> for WaveDuty {
     }
 }
 
-impl From<WaveDuty> for f32 {
-    fn from(s: WaveDuty) -> f32 {
+impl From<WaveDuty> for usize {
+    fn from(s: WaveDuty) -> usize {
         match s {
-            WaveDuty::P125 => 0.125,
-            WaveDuty::P250 => 0.25,
-            WaveDuty::P500 => 0.5,
-            WaveDuty::P750 => 0.75,
+            WaveDuty::P125 => 125,
+            WaveDuty::P250 => 250,
+            WaveDuty::P500 => 500,
+            WaveDuty::P750 => 750,
         }
     }
 }
@@ -79,6 +79,138 @@ impl Tone {
     }
 }
 
+const AMP_UNIT: usize = u16::max_value() as usize / 15;
+
+struct ToneStream {
+    tone: Tone,
+
+    stop_clock: usize,
+    env_clock: usize,
+    sweep_clock: usize,
+    wave_clock: usize,
+
+    amp: usize,
+    freq: usize,
+}
+
+impl ToneStream {
+    fn new(tone: Tone) -> Self {
+        let freq = tone.freq;
+        let amp = tone.env_init * AMP_UNIT;
+
+        Self {
+            tone,
+            stop_clock: 0,
+            env_clock: 0,
+            sweep_clock: 0,
+            amp,
+            freq: 131072 / (2048 - freq),
+            wave_clock: 0,
+        }
+    }
+
+    fn next(&mut self, rate: u32, sweep: bool) -> Option<u16> {
+        let rate = rate as usize;
+
+        if self.amp == 0 {
+            return None;
+        }
+
+        // Stop/continuous
+        if self.tone.counter {
+            if self.stop_clock >= rate * (64 - self.tone.sound_len) / 256 {
+                return None;
+            } else {
+                self.stop_clock += 1;
+            }
+        }
+
+        // Envelop
+        self.env_clock += 1;
+        if self.env_clock >= rate * self.tone.env_count / 64 {
+            self.env_clock = 0;
+            self.amp = if self.tone.env_inc {
+                self.amp.saturating_add(AMP_UNIT)
+            } else {
+                self.amp.saturating_sub(AMP_UNIT)
+            };
+        }
+
+        // Sweep
+        if sweep && self.tone.sweep_time != 0 {
+            self.sweep_clock += 1;
+            if self.sweep_clock >= rate * self.tone.sweep_time / 128 {
+                self.sweep_clock = 0;
+
+                let f = self.freq;
+                self.freq = if self.tone.sweep_sub {
+                    (f - f / 2usize.pow(self.tone.sweep_shift as u32)).max(1)
+                } else {
+                    f + f / 2usize.pow(self.tone.sweep_shift as u32)
+                };
+            }
+        }
+
+        // Square wave generation
+        let cycle = rate as usize / self.freq;
+
+        self.wave_clock = (self.wave_clock + 1) % cycle;
+
+        if self.wave_clock <= usize::from(self.tone.wave_duty) * cycle / 1000 {
+            Some(self.amp as u16)
+        } else {
+            Some(0)
+        }
+    }
+}
+
+struct WaveStream {
+    wave: Wave,
+
+    stop_clock: usize,
+    wave_clock: usize,
+}
+
+impl WaveStream {
+    fn new(wave: Wave) -> Self {
+        Self {
+            wave,
+            stop_clock: 0,
+            wave_clock: 0,
+        }
+    }
+
+    fn next(&mut self, rate: u32) -> Option<u16> {
+        let rate = rate as usize;
+
+        // Stop/continuous
+        if self.wave.counter {
+            if self.stop_clock >= rate * (256 - self.wave.sound_len) / 256 {
+                return None;
+            } else {
+                self.stop_clock += 1;
+            }
+        }
+
+        let freq = 65536 / (2048 - self.wave.freq.load(Ordering::SeqCst) as usize);
+        let cycle = rate / freq;
+
+        self.wave_clock = (self.wave_clock + 1) % cycle;
+
+        let slots = self.wave.wavebuf.len() * 2;
+        let index = (self.wave_clock * slots / cycle) % slots;
+
+        let amp = if index % 2 == 0 {
+            self.wave.wavebuf[index / 2] >> 4
+        } else {
+            self.wave.wavebuf[index / 2] & 0xf
+        };
+        let amp = amp as usize * self.wave.volume.load(Ordering::SeqCst) / 100;
+
+        Some((amp * AMP_UNIT) as u16)
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Wave {
     enable: bool,
@@ -86,7 +218,7 @@ struct Wave {
     volume: Arc<AtomicUsize>,
     counter: bool,
     freq: Arc<AtomicUsize>,
-    wave: [u8; 16],
+    wavebuf: [u8; 16],
 }
 
 impl Wave {
@@ -97,7 +229,7 @@ impl Wave {
             volume: Arc::new(AtomicUsize::new(0)),
             counter: false,
             freq: Arc::new(AtomicUsize::new(0)),
-            wave: [0; 16],
+            wavebuf: [0; 16],
         }
     }
 }
@@ -120,83 +252,12 @@ impl Sound {
     }
 
     fn play_tone(&mut self, id: SoundId, tone: Tone, sweep: bool) {
-        let amp = tone.env_init as f32 / 15.0;
-        let env_count = tone.env_count as f32;
-        let diff = amp / 15.0 as f32;
-        let diff = if tone.env_inc { diff } else { diff * -1.0 };
-        let mut freq = 131072f32 / (2048f32 - tone.freq as f32);
-        let wave_duty = tone.wave_duty.clone();
-        let counter = tone.counter;
-        let len = tone.sound_len as f32;
+        let mut stream = ToneStream::new(tone);
 
-        let sweep_sub = tone.sweep_sub;
-        let sweep_shift = tone.sweep_shift as f32;
-
-        let mut clock = 0f32;
-        let mut env_clock = 0f32;
-        let mut sweep_clock = 0f32;
-        let mut sweep_step = 0f32;
-        let mut elapsed = 0f32;
-        let mut amp = amp;
-
-        // Sweep time in seconds
-        let sweep_time: f32 = (tone.sweep_time as f32) * 0.0078;
-
-        self.hw.get().borrow_mut().sound_play(
-            id,
-            Box::new(move |rate| {
-                if counter {
-                    if elapsed >= rate * (64.0 - len) / 256.0 {
-                        return None;
-                    } else {
-                        elapsed += 1.0;
-                    }
-                }
-
-                // Envelope
-                env_clock += 1.0;
-                if env_clock >= rate * env_count / 64.0 {
-                    env_clock = 0.0;
-                    amp += diff;
-                    amp = if amp < 0.0 {
-                        0.0
-                    } else if amp > 1.0 {
-                        1.0
-                    } else {
-                        amp
-                    };
-                }
-
-                if sweep && sweep_time != 0.0 {
-                    sweep_clock += 1.0;
-                    if sweep_clock >= rate * sweep_time {
-                        sweep_clock = 0.0;
-
-                        let new_freq = if sweep_sub {
-                            // min to avoid zero division
-                            (freq - freq / (2f32.powf(sweep_shift))).max(1.0)
-                        } else {
-                            (freq + freq / (2f32.powf(sweep_shift)))
-                        };
-
-                        freq = new_freq;
-                    }
-                }
-
-                let cycle = rate / freq;
-
-                clock = (clock + 1.0) % cycle;
-
-                let duty: f32 = wave_duty.clone().into();
-                let duty = cycle * duty;
-
-                if clock <= duty {
-                    Some(amp)
-                } else {
-                    Some(-amp)
-                }
-            }),
-        );
+        self.hw
+            .get()
+            .borrow_mut()
+            .sound_play(id, Box::new(move |rate| stream.next(rate, sweep)));
     }
 
     fn play_wave(&mut self, wave: Wave) {
@@ -204,49 +265,11 @@ impl Sound {
             return;
         }
 
-        debug!("Play wave: {:#?}", wave);
-
-        let amp = wave.volume.clone();
-        let freq = wave.freq.clone();
-        let len = wave.sound_len as f32;
-        let wavebuf = wave.wave.clone();
-        let counter = wave.counter;
-
-        let mut clock = 0f32;
-        let mut elapsed = 0f32;
-
-        self.hw.get().borrow_mut().sound_play(
-            SoundId::Wave,
-            Box::new(move |rate| {
-                if counter {
-                    if elapsed >= rate * (256.0 - len) / 256.0 {
-                        return None;
-                    } else {
-                        elapsed += 1.0;
-                    }
-                }
-
-                let f = 65536f32 / (2048f32 - freq.load(Ordering::SeqCst) as f32);
-                let cycle = rate / f;
-
-                clock = (clock + 1.0) % cycle;
-
-                let idx = (clock / (cycle / 32.0)) as usize % wavebuf.len();
-                let level = if idx % 2 == 0 {
-                    (wavebuf[idx / 2] % 0xf) as f32
-                } else {
-                    (wavebuf[idx / 2] >> 4) as f32
-                };
-
-                let a = (amp.load(Ordering::SeqCst) as f32) / 100.0;
-                let v = (-1.0 + level * 0.125) * a;
-
-                assert_eq!(true, v >= -1.0 && v <= 1.0);
-
-                // 0.5 to emphaise tone
-                Some(v * 0.5)
-            }),
-        );
+        let mut stream = WaveStream::new(wave);
+        self.hw
+            .get()
+            .borrow_mut()
+            .sound_play(SoundId::Wave, Box::new(move |rate| stream.next(rate)));
     }
 
     fn stop_wave(&self) {
@@ -335,7 +358,7 @@ impl IoHandler for Sound {
             }
         } else if addr >= 0xff30 && addr <= 0xff3f {
             debug!("Sound buffer: {:02x}", value);
-            self.wave.wave[(addr - 0xff30) as usize] = value;
+            self.wave.wavebuf[(addr - 0xff30) as usize] = value;
         }
 
         MemWrite::Block

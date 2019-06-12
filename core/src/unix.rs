@@ -200,7 +200,7 @@ impl Pcm {
         let format = device
             .default_output_format()
             .expect("Failed to get default output format");
-        let sample_rate = format.sample_rate.0 as f32;
+        let sample_rate = format.sample_rate.0;
         let event_loop = cpal::EventLoop::new();
         let stream_id = event_loop.build_output_stream(&device, &format).unwrap();
         event_loop.play_stream(stream_id.clone());
@@ -225,7 +225,7 @@ impl Pcm {
                     for sample in buffer.chunks_mut(format.channels as usize) {
                         let value = match &mut stream {
                             Some(s) => match s(sample_rate) {
-                                Some(ss) => ((ss * 0.5 + 0.5) * std::u16::MAX as f32) as u16,
+                                Some(ss) => ss,
                                 None => u16::max_value() / 2,
                             },
                             None => u16::max_value() / 2,
@@ -242,7 +242,7 @@ impl Pcm {
                     for sample in buffer.chunks_mut(format.channels as usize) {
                         let value = match &mut stream {
                             Some(s) => match s(sample_rate) {
-                                Some(ss) => (ss * std::i16::MAX as f32) as i16,
+                                Some(ss) => ((ss as i32 * 2) - u16::max_value() as i32) as i16,
                                 None => 0,
                             },
                             None => 0,
@@ -259,7 +259,7 @@ impl Pcm {
                     for sample in buffer.chunks_mut(format.channels as usize) {
                         let value = match &mut stream {
                             Some(s) => match s(sample_rate) {
-                                Some(ss) => ss,
+                                Some(ss) => (ss as f32 / u16::max_value() as f32) * 2.0 - 1.0,
                                 None => 0.0,
                             },
                             None => 0.0,

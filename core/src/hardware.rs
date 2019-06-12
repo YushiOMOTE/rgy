@@ -27,7 +27,7 @@ pub enum SoundId {
 #[derive(Clone)]
 pub struct HardwareHandle(Rc<RefCell<dyn Hardware>>);
 
-pub type Stream = dyn FnMut(f32) -> Option<f32> + Send + Sync + 'static;
+pub type Stream = dyn FnMut(u32) -> Option<u16> + Send + 'static;
 
 impl HardwareHandle {
     pub fn new<T: Hardware + 'static>(inner: T) -> Self {
