@@ -124,15 +124,23 @@ impl Sound {
         let env_count = tone.env_count as f32;
         let diff = amp / 15.0 as f32;
         let diff = if tone.env_inc { diff } else { diff * -1.0 };
-        let freq = 131072f32 / (2048f32 - tone.freq as f32);
+        let mut freq = 131072f32 / (2048f32 - tone.freq as f32);
         let wave_duty = tone.wave_duty.clone();
         let counter = tone.counter;
         let len = tone.sound_len as f32;
 
+        let sweep_sub = tone.sweep_sub;
+        let sweep_shift = tone.sweep_shift as f32;
+
         let mut clock = 0f32;
         let mut env_clock = 0f32;
+        let mut sweep_clock = 0f32;
+        let mut sweep_step = 0f32;
         let mut elapsed = 0f32;
         let mut amp = amp;
+
+        // Sweep time in seconds
+        let sweep_time: f32 = (tone.sweep_time as f32) * 0.0078;
 
         self.hw.get().borrow_mut().sound_play(
             id,
@@ -157,6 +165,22 @@ impl Sound {
                     } else {
                         amp
                     };
+                }
+
+                if sweep && sweep_time != 0.0 {
+                    sweep_clock += 1.0;
+                    if sweep_clock >= rate * sweep_time {
+                        sweep_clock = 0.0;
+
+                        let new_freq = if sweep_sub {
+                            // min to avoid zero division
+                            (freq - freq / (2f32.powf(sweep_shift))).max(1.0)
+                        } else {
+                            (freq + freq / (2f32.powf(sweep_shift)))
+                        };
+
+                        freq = new_freq;
+                    }
                 }
 
                 let cycle = rate / freq;
