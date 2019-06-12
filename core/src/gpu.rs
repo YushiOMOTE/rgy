@@ -532,7 +532,8 @@ impl IoHandler for Gpu {
         } else if addr == 0xff68 || addr == 0xff69 || addr == 0xff6a || addr == 0xff6b {
             unimplemented!("read color")
         } else {
-            unreachable!("Unsupported gpu register read: {:04x}", addr)
+            warn!("Unsupported GPU register read: {:04x}", addr);
+            MemRead::Replace(0)
         }
     }
 
@@ -575,6 +576,10 @@ impl IoHandler for Gpu {
             unimplemented!("write color")
         }
 
-        MemWrite::PassThrough
+        warn!(
+            "Unsupported GPU register is written: {:04x} {:02x}",
+            addr, value
+        );
+        MemWrite::Block
     }
 }
