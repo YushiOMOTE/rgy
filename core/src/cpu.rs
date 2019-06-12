@@ -77,7 +77,7 @@ impl Cpu {
 
     pub fn execute(&mut self, mmu: &mut Mmu) -> usize {
         if self.halt {
-            1
+            4
         } else {
             let (code, arg) = self.fetch(mmu);
             let (time, size) = decode(code, arg, self, mmu);
