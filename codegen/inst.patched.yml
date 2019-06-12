@@ -3298,7 +3298,7 @@
   z: Z
   n: "0"
   h: "0"
-  c: "0"
+  c: C
 - code: 52009
   operator: sra
   operands:
@@ -3309,7 +3309,7 @@
   z: Z
   n: "0"
   h: "0"
-  c: "0"
+  c: C
 - code: 52010
   operator: sra
   operands:
@@ -3320,7 +3320,7 @@
   z: Z
   n: "0"
   h: "0"
-  c: "0"
+  c: C
 - code: 52011
   operator: sra
   operands:
@@ -3331,7 +3331,7 @@
   z: Z
   n: "0"
   h: "0"
-  c: "0"
+  c: C
 - code: 52012
   operator: sra
   operands:
@@ -3342,7 +3342,7 @@
   z: Z
   n: "0"
   h: "0"
-  c: "0"
+  c: C
 - code: 52013
   operator: sra
   operands:
@@ -3353,7 +3353,7 @@
   z: Z
   n: "0"
   h: "0"
-  c: "0"
+  c: C
 - code: 52014
   operator: sra
   operands:
@@ -3364,7 +3364,7 @@
   z: Z
   n: "0"
   h: "0"
-  c: "0"
+  c: C
 - code: 52015
   operator: sra
   operands:
@@ -3375,7 +3375,7 @@
   z: Z
   n: "0"
   h: "0"
-  c: "0"
+  c: C
 - code: 52016
   operator: swap
   operands:

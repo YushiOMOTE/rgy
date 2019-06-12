@@ -3978,7 +3978,7 @@ fn op_cb28(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     cpu.set_zf(z);
     cpu.set_nf(false);
     cpu.set_hf(false);
-    cpu.set_cf(false);
+    cpu.set_cf(c);
 
     (8, 2)
 }
@@ -3996,7 +3996,7 @@ fn op_cb29(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     cpu.set_zf(z);
     cpu.set_nf(false);
     cpu.set_hf(false);
-    cpu.set_cf(false);
+    cpu.set_cf(c);
 
     (8, 2)
 }
@@ -4014,7 +4014,7 @@ fn op_cb2a(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     cpu.set_zf(z);
     cpu.set_nf(false);
     cpu.set_hf(false);
-    cpu.set_cf(false);
+    cpu.set_cf(c);
 
     (8, 2)
 }
@@ -4032,7 +4032,7 @@ fn op_cb2b(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     cpu.set_zf(z);
     cpu.set_nf(false);
     cpu.set_hf(false);
-    cpu.set_cf(false);
+    cpu.set_cf(c);
 
     (8, 2)
 }
@@ -4050,7 +4050,7 @@ fn op_cb2c(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     cpu.set_zf(z);
     cpu.set_nf(false);
     cpu.set_hf(false);
-    cpu.set_cf(false);
+    cpu.set_cf(c);
 
     (8, 2)
 }
@@ -4068,7 +4068,7 @@ fn op_cb2d(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     cpu.set_zf(z);
     cpu.set_nf(false);
     cpu.set_hf(false);
-    cpu.set_cf(false);
+    cpu.set_cf(c);
 
     (8, 2)
 }
@@ -4086,7 +4086,7 @@ fn op_cb2e(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     cpu.set_zf(z);
     cpu.set_nf(false);
     cpu.set_hf(false);
-    cpu.set_cf(false);
+    cpu.set_cf(c);
 
     (16, 2)
 }
@@ -4104,7 +4104,7 @@ fn op_cb2f(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     cpu.set_zf(z);
     cpu.set_nf(false);
     cpu.set_hf(false);
-    cpu.set_cf(false);
+    cpu.set_cf(c);
 
     (8, 2)
 }
