@@ -17,9 +17,7 @@ pub struct Cpu {
     l: u8,
     pc: u16,
     sp: u16,
-    di: bool,
-    ei: bool,
-    interrupt: bool,
+    ime: bool,
 }
 
 impl fmt::Display for Cpu {
@@ -65,35 +63,24 @@ impl Cpu {
             l: 0,
             pc: 0,
             sp: 0,
-            di: false,
-            ei: false,
-            interrupt: true,
+            ime: true,
         }
     }
 
     pub fn halt(&self) {}
 
     pub fn disable_interrupt(&mut self) {
-        self.di = true;
+        debug!("Disable interrupt");
+        self.ime = false;
     }
 
     pub fn enable_interrupt(&mut self) {
-        self.ei = true;
+        debug!("Enable interrupt");
+        self.ime = true;
     }
 
     pub fn check_interrupt(&mut self, mmu: &mut Mmu, ic: &Device<Ic>) {
-        let check_intr = self.interrupt;
-
-        if self.di {
-            self.disable_interrupt_immediate();
-            self.di = false;
-        }
-        if self.ei {
-            self.enable_interrupt_immediate();
-            self.ei = false;
-        }
-
-        if !check_intr {
+        if !self.ime {
             return;
         }
 
@@ -104,20 +91,8 @@ impl Cpu {
         }
     }
 
-    pub fn enable_interrupt_immediate(&mut self) {
-        debug!("Enable interrupt");
-
-        self.interrupt = true;
-    }
-
-    pub fn disable_interrupt_immediate(&mut self) {
-        debug!("Disable interrupt");
-
-        self.interrupt = false;
-    }
-
     fn interrupted(&mut self, mmu: &mut Mmu, value: u8) {
-        self.disable_interrupt_immediate();
+        self.disable_interrupt();
 
         self.push(mmu, self.get_pc());
         self.set_pc(value as u16);

@@ -3010,7 +3010,7 @@ fn op_00d8(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
 fn op_00d9(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     let pc = cpu.pop(mmu).wrapping_sub(1);
     cpu.set_pc(pc);
-    cpu.enable_interrupt_immediate();
+    cpu.enable_interrupt();
 
     (16, 1)
 }

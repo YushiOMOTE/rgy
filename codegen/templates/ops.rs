@@ -339,5 +339,5 @@
 {% macro reti(i) %}
   let pc = cpu.pop(mmu).wrapping_sub({{i.size}});
   cpu.set_pc(pc);
-  cpu.enable_interrupt_immediate();
+  cpu.enable_interrupt();
 {% endmacro %}
