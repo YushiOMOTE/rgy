@@ -1,5 +1,6 @@
 use crate::device::Device;
 use crate::ic::Ic;
+use crate::inst::decode;
 use crate::mmu::Mmu;
 use log::*;
 
@@ -18,6 +19,7 @@ pub struct Cpu {
     pc: u16,
     sp: u16,
     ime: bool,
+    halt: bool,
 }
 
 impl fmt::Display for Cpu {
@@ -64,10 +66,25 @@ impl Cpu {
             pc: 0,
             sp: 0,
             ime: true,
+            halt: false,
         }
     }
 
-    pub fn halt(&self) {}
+    pub fn halt(&mut self) {
+        debug!("Halted");
+        self.halt = true;
+    }
+
+    pub fn execute(&mut self, mmu: &mut Mmu) -> usize {
+        if self.halt {
+            1
+        } else {
+            let (code, arg) = self.fetch(mmu);
+            let (time, size) = decode(code, arg, self, mmu);
+            self.set_pc(self.get_pc().wrapping_add(size as u16));
+            time
+        }
+    }
 
     pub fn disable_interrupt(&mut self) {
         debug!("Disable interrupt");
@@ -81,6 +98,15 @@ impl Cpu {
 
     pub fn check_interrupt(&mut self, mmu: &mut Mmu, ic: &Device<Ic>) {
         if !self.ime {
+            if self.halt {
+                // If HALT is executed while interrupt is disabled,
+                // the interrupt wakes up CPU without being consumed.
+                if let Some(value) = ic.borrow_mut().peek() {
+                    debug!("Interrupted on halt + ime=0: {:02x}", value);
+                    self.halt = false;
+                }
+            }
+
             return;
         }
 
@@ -88,6 +114,8 @@ impl Cpu {
             debug!("Interrupted: {:02x}", value);
 
             self.interrupted(mmu, value);
+
+            self.halt = false;
         }
     }
 

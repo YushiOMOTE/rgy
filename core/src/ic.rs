@@ -81,24 +81,32 @@ impl Ic {
         Irq::new(self.request.clone())
     }
 
+    pub fn peek(&self) -> Option<u8> {
+        self.check(false)
+    }
+
     pub fn poll(&self) -> Option<u8> {
+        self.check(true)
+    }
+
+    fn check(&self, consume: bool) -> Option<u8> {
         let e = self.enable.borrow();
         let mut r = self.request.borrow_mut();
 
         if e.vblank && r.vblank {
-            r.vblank = false;
+            r.vblank = !consume;
             Some(0x40)
         } else if e.lcd && r.lcd {
-            r.lcd = false;
+            r.lcd = !consume;
             Some(0x48)
         } else if e.timer && r.timer {
-            r.timer = false;
+            r.timer = !consume;
             Some(0x50)
         } else if e.serial && r.serial {
-            r.serial = false;
+            r.serial = !consume;
             Some(0x58)
         } else if e.joypad && r.joypad {
-            r.joypad = false;
+            r.joypad = !consume;
             Some(0x60)
         } else {
             None

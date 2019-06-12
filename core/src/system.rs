@@ -4,7 +4,6 @@ use crate::device::Device;
 use crate::gpu::Gpu;
 use crate::hardware::{Hardware, HardwareHandle};
 use crate::ic::Ic;
-use crate::inst;
 use crate::joypad::Joypad;
 use crate::mbc::Mbc;
 use crate::mmu::Mmu;
@@ -116,8 +115,6 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
     fc.reset();
 
     while hw.get().borrow_mut().sched() {
-        let (code, arg) = cpu.fetch(&mmu);
-
         if let Some(dbg) = dbg.as_ref() {
             let mut dbg = dbg.borrow_mut();
             dbg.check_signal();
@@ -125,8 +122,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
             dbg.on_decode(&mmu);
         }
 
-        let (time, size) = inst::decode(code, arg, &mut cpu, &mut mmu);
-        cpu.set_pc(cpu.get_pc().wrapping_add(size as u16));
+        let time = cpu.execute(&mut mmu);
 
         cpu.check_interrupt(&mut mmu, &ic);
 
