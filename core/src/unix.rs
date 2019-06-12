@@ -25,7 +25,7 @@ impl HardwareImpl {
             VRAM_WIDTH,
             VRAM_HEIGHT,
             WindowOptions {
-                resize: true,
+                resize: false,
                 scale: Scale::X4,
                 ..WindowOptions::default()
             },
