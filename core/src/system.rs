@@ -77,7 +77,11 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
 
     let hw = HardwareHandle::new(hw);
 
-    let dbg = Device::new(Debugger::new());
+    let dbg = if opt.debug {
+        Some(Device::new(Debugger::new()))
+    } else {
+        None
+    };
     let mut cpu = Cpu::new();
     let mut mmu = Mmu::new();
     let sound = Device::new(Sound::new(hw.clone()));
@@ -88,7 +92,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
     let timer = Device::new(Timer::new(irq.clone()));
     let mbc = Device::new(Mbc::new(rom));
 
-    if opt.debug {
+    if let Some(dbg) = dbg.as_ref() {
         mmu.add_handler((0x0000, 0xffff), dbg.handler());
     }
 
@@ -101,7 +105,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
     mmu.add_handler((0xff00, 0xff00), joypad.handler());
     mmu.add_handler((0xff04, 0xff07), timer.handler());
 
-    if opt.debug {
+    if let Some(dbg) = dbg.as_ref() {
         dbg.borrow_mut().init(&mmu);
     }
 
@@ -114,7 +118,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
     while hw.get().borrow_mut().sched() {
         let (code, arg) = cpu.fetch(&mmu);
 
-        if opt.debug {
+        if let Some(dbg) = dbg.as_ref() {
             let mut dbg = dbg.borrow_mut();
             dbg.check_signal();
             dbg.take_cpu_snapshot(cpu.clone());
