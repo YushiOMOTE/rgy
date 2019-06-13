@@ -4,9 +4,9 @@ use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Instant;
 
-use crate::hardware::{Hardware, Key, SoundId, Stream, VRAM_HEIGHT, VRAM_WIDTH};
+use crate::hardware::{self, Key, SoundId, Stream, VRAM_HEIGHT, VRAM_WIDTH};
 
-pub struct HardwareImpl {
+pub struct Hardware {
     vram: Vec<u32>,
     window: Window,
     pcms: Vec<SpeakerHandle>,
@@ -16,7 +16,7 @@ pub struct HardwareImpl {
     keystate: HashMap<Key, bool>,
 }
 
-impl HardwareImpl {
+impl Hardware {
     pub fn new() -> Self {
         let vram = vec![0; VRAM_WIDTH * VRAM_HEIGHT];
 
@@ -70,7 +70,7 @@ impl HardwareImpl {
     }
 }
 
-impl Hardware for HardwareImpl {
+impl hardware::Hardware for Hardware {
     fn vram_update(&mut self, line: usize, buf: &[u32]) {
         for i in 0..buf.len() {
             let base = line * VRAM_WIDTH;

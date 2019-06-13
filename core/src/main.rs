@@ -14,7 +14,7 @@ mod system;
 mod timer;
 mod unix;
 
-use crate::unix::HardwareImpl;
+use crate::unix::Hardware;
 use std::fs::File;
 use std::io::prelude::*;
 use structopt::StructOpt;
@@ -54,7 +54,7 @@ fn main() {
 
     env_logger::init();
 
-    let hw = HardwareImpl::new();
+    let hw = Hardware::new();
     let rom = load_rom(&opt.rom);
 
     system::run(opt, rom, hw);
