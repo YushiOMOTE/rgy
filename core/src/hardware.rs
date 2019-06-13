@@ -40,14 +40,6 @@ impl HardwareHandle {
 }
 
 pub trait Hardware {
-    fn vram_height(&self) -> usize {
-        VRAM_HEIGHT
-    }
-
-    fn vram_width(&self) -> usize {
-        VRAM_WIDTH
-    }
-
     fn vram_update(&mut self, line: usize, buffer: &[u32]);
 
     fn joypad_pressed(&mut self, key: Key) -> bool;

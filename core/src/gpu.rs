@@ -1,5 +1,5 @@
 use crate::device::IoHandler;
-use crate::hardware::HardwareHandle;
+use crate::hardware::{HardwareHandle, VRAM_HEIGHT, VRAM_WIDTH};
 use crate::ic::Irq;
 use crate::mmu::{MemRead, MemWrite, Mmu};
 use log::*;
@@ -252,8 +252,8 @@ impl Gpu {
     }
 
     fn draw(&mut self, mmu: &Mmu) {
-        let height = self.hw.get().borrow().vram_height();
-        let width = self.hw.get().borrow().vram_width();
+        let height = VRAM_HEIGHT;
+        let width = VRAM_WIDTH;
 
         if self.ly >= height as u8 {
             return;

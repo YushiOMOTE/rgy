@@ -71,17 +71,9 @@ impl HardwareImpl {
 }
 
 impl Hardware for HardwareImpl {
-    fn vram_height(&self) -> usize {
-        VRAM_HEIGHT
-    }
-
-    fn vram_width(&self) -> usize {
-        VRAM_WIDTH
-    }
-
     fn vram_update(&mut self, line: usize, buf: &[u32]) {
         for i in 0..buf.len() {
-            let base = line * self.vram_width();
+            let base = line * VRAM_WIDTH;
             self.vram[base + i] = buf[i];
         }
 
