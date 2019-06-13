@@ -71,6 +71,7 @@ impl Mmu {
         handle
     }
 
+    #[allow(unused)]
     pub fn remove_handler<T>(&mut self, handle: &Handle)
     where
         T: MemHandler + 'static,

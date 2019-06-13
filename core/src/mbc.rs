@@ -13,7 +13,7 @@ impl MbcNone {
         Self { rom }
     }
 
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
         if addr <= 0x7fff {
             MemRead::Replace(self.rom[addr as usize])
         } else {
@@ -21,7 +21,7 @@ impl MbcNone {
         }
     }
 
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         if addr <= 0x7fff {
             MemWrite::Block
         } else if addr >= 0xa000 && addr <= 0xbfff {
@@ -53,7 +53,7 @@ impl Mbc1 {
         }
     }
 
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
         if addr <= 0x3fff {
             MemRead::Replace(self.rom[addr as usize])
         } else if addr >= 0x4000 && addr <= 0x7fff {
@@ -84,7 +84,7 @@ impl Mbc1 {
         }
     }
 
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         if addr <= 0x1fff {
             if value & 0xf == 0x0a {
                 info!("External RAM enabled");
@@ -147,7 +147,7 @@ impl Mbc2 {
         }
     }
 
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
         if addr <= 0x3fff {
             MemRead::Replace(self.rom[addr as usize])
         } else if addr >= 0x4000 && addr <= 0x7fff {
@@ -166,7 +166,7 @@ impl Mbc2 {
         }
     }
 
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         if addr <= 0x3fff {
             if addr & 0x100 == 0 {
                 self.ram_enable = (value & 0x0f) == 0x0a;
@@ -241,7 +241,7 @@ impl Mbc3 {
         }
     }
 
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
         if addr <= 0x3fff {
             MemRead::Replace(self.rom[addr as usize])
         } else if addr >= 0x4000 && addr <= 0x7fff {
@@ -268,7 +268,7 @@ impl Mbc3 {
         }
     }
 
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         if addr <= 0x1fff {
             if value == 0x00 {
                 info!("External RAM/RTC disabled");
@@ -406,11 +406,11 @@ impl Mbc5 {
         Self { rom }
     }
 
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+    fn on_read(&mut self, _mmu: &Mmu, _addr: u16) -> MemRead {
         unimplemented!()
     }
 
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&mut self, _mmu: &Mmu, _addr: u16, _value: u8) -> MemWrite {
         unimplemented!()
     }
 }
@@ -424,11 +424,11 @@ impl HuC1 {
         Self { rom }
     }
 
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+    fn on_read(&mut self, _mmu: &Mmu, _addr: u16) -> MemRead {
         unimplemented!()
     }
 
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&mut self, _mmu: &Mmu, _addr: u16, _value: u8) -> MemWrite {
         unimplemented!()
     }
 }
@@ -520,7 +520,6 @@ struct Cartridge {
     ram_size: u8,
     dstcode: u8,
     rom_version: u8,
-    rom_checksum: u16,
 }
 
 fn verify(rom: &[u8], checksum: u16) {
@@ -561,7 +560,6 @@ impl Cartridge {
             ram_size: rom[0x149],
             dstcode: rom[0x14a],
             rom_version: rom[0x14c],
-            rom_checksum: checksum,
         }
     }
 

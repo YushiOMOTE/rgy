@@ -200,7 +200,7 @@ impl Pcm {
         let mut stream = None;
 
         event_loop.run(move |_, data| {
-            let cmd = match self.rx.try_recv() {
+            match self.rx.try_recv() {
                 Ok(SpeakerCmd::Play(s)) => {
                     stream = Some(s);
                 }
@@ -208,7 +208,7 @@ impl Pcm {
                     stream = None;
                 }
                 Err(_) => {}
-            };
+            }
 
             match data {
                 cpal::StreamData::Output {
