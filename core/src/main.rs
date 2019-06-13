@@ -9,6 +9,7 @@ mod inst;
 mod joypad;
 mod mbc;
 mod mmu;
+mod serial;
 mod sound;
 mod system;
 mod timer;

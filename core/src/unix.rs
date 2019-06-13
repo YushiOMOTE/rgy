@@ -1,4 +1,5 @@
 use cpal;
+use log::*;
 use minifb::{Scale, Window, WindowOptions};
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -107,6 +108,14 @@ impl hardware::Hardware for Hardware {
             SoundId::Wave => self.pcms[2].stop(),
             SoundId::Noise => self.pcms[3].stop(),
         }
+    }
+
+    fn send_byte(&mut self, b: u8) {
+        info!("Send byte: {:02x}", b);
+    }
+
+    fn recv_byte(&mut self) -> Option<u8> {
+        None
     }
 
     fn clock(&mut self) -> u64 {

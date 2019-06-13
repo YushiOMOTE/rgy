@@ -7,6 +7,7 @@ use crate::ic::Ic;
 use crate::joypad::Joypad;
 use crate::mbc::Mbc;
 use crate::mmu::Mmu;
+use crate::serial::Serial;
 use crate::sound::Sound;
 use crate::timer::Timer;
 use crate::Opt;
@@ -89,6 +90,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
     let gpu = Device::new(Gpu::new(hw.clone(), irq.clone()));
     let joypad = Device::new(Joypad::new(hw.clone(), irq.clone()));
     let timer = Device::new(Timer::new(irq.clone()));
+    let serial = Device::new(Serial::new(hw.clone(), irq.clone()));
     let mbc = Device::new(Mbc::new(rom));
 
     if let Some(dbg) = dbg.as_ref() {
@@ -103,6 +105,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
     mmu.add_handler((0xff0f, 0xffff), ic.handler());
     mmu.add_handler((0xff00, 0xff00), joypad.handler());
     mmu.add_handler((0xff04, 0xff07), timer.handler());
+    mmu.add_handler((0xff01, 0xff02), serial.handler());
 
     if let Some(dbg) = dbg.as_ref() {
         dbg.borrow_mut().init(&mmu);
@@ -128,6 +131,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
 
         gpu.borrow_mut().step(time, &mut mmu);
         timer.borrow_mut().step(time);
+        serial.borrow_mut().step(time);
         joypad.borrow_mut().poll();
 
         perf.count();

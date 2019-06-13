@@ -50,6 +50,10 @@ pub trait Hardware {
 
     fn clock(&mut self) -> u64;
 
+    fn send_byte(&mut self, b: u8);
+
+    fn recv_byte(&mut self) -> Option<u8>;
+
     fn sched(&mut self) -> bool {
         true
     }
