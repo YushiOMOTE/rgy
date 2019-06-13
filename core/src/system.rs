@@ -128,6 +128,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
 
         gpu.borrow_mut().step(time, &mut mmu);
         timer.borrow_mut().step(time);
+        joypad.borrow_mut().poll();
 
         perf.count();
 
