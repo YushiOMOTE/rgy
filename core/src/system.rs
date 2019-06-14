@@ -125,9 +125,9 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
             dbg.on_decode(&mmu);
         }
 
-        let time = cpu.execute(&mut mmu);
+        let mut time = cpu.execute(&mut mmu);
 
-        cpu.check_interrupt(&mut mmu, &ic);
+        time += cpu.check_interrupt(&mut mmu, &ic);
 
         gpu.borrow_mut().step(time, &mut mmu);
         timer.borrow_mut().step(time);

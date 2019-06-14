@@ -96,7 +96,7 @@ impl Cpu {
         self.ime = true;
     }
 
-    pub fn check_interrupt(&mut self, mmu: &mut Mmu, ic: &Device<Ic>) {
+    pub fn check_interrupt(&mut self, mmu: &mut Mmu, ic: &Device<Ic>) -> usize {
         if !self.ime {
             if self.halt {
                 // If HALT is executed while interrupt is disabled,
@@ -107,15 +107,17 @@ impl Cpu {
                 }
             }
 
-            return;
-        }
-
-        if let Some(value) = ic.borrow_mut().poll() {
+            0
+        } else if let Some(value) = ic.borrow_mut().poll() {
             debug!("Interrupted: {:02x}", value);
 
             self.interrupted(mmu, value);
 
             self.halt = false;
+
+            16
+        } else {
+            0
         }
     }
 
