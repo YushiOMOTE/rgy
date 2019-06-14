@@ -31,14 +31,26 @@ impl Serial {
             return;
         }
 
-        if self.clock < time {
-            self.data = self.recv;
+        if self.ctrl & 0x01 != 0 {
+            if self.clock < time {
+                debug!("Serial transfer completed");
+                self.data = self.recv;
 
-            // End of transfer
-            self.ctrl &= !0x80;
-            self.irq.serial(true);
+                // End of transfer
+                self.ctrl &= !0x80;
+                self.irq.serial(true);
+            } else {
+                self.clock -= time;
+            }
         } else {
-            self.clock -= time;
+            if let Some(data) = self.hw.get().borrow_mut().recv_byte() {
+                self.hw.get().borrow_mut().send_byte(self.data);
+                self.data = data;
+
+                // End of transfer
+                self.ctrl &= !0x80;
+                self.irq.serial(true);
+            }
         }
     }
 }
@@ -47,7 +59,7 @@ impl IoHandler for Serial {
     fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
         if addr == 0xff01 {
             MemRead::Replace(self.data)
-        } else if addr == 0xff01 {
+        } else if addr == 0xff02 {
             MemRead::Replace(self.ctrl)
         } else {
             unreachable!("Read from serial: {:04x}", addr)
@@ -62,19 +74,18 @@ impl IoHandler for Serial {
             self.ctrl = value;
 
             if self.ctrl & 0x80 != 0 {
-                debug!("Serial transfer: {:02x}", self.data);
+                if self.ctrl & 0x01 != 0 {
+                    debug!("Serial transfer (Internal): {:02x}", self.data);
 
-                self.clock = if self.ctrl & 0x01 != 0 {
                     // Internal clock is 8192 Hz = 512 cpu clocks
-                    512 * 8
-                } else {
-                    // External clock can be any; assume 65536 Hz = 64 cpu clocks
-                    64 * 8
-                };
+                    self.clock = 512 * 8;
 
-                // Do transfer one byte at once
-                self.hw.get().borrow_mut().send_byte(self.data);
-                self.recv = self.hw.get().borrow_mut().recv_byte().unwrap_or(0xff);
+                    // Do transfer one byte at once
+                    self.hw.get().borrow_mut().send_byte(self.data);
+                    self.recv = self.hw.get().borrow_mut().recv_byte().unwrap_or(0xff);
+                } else {
+                    debug!("Serial transfer (External): {:02x}", self.data);
+                }
             }
             MemWrite::Block
         } else {
