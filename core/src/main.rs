@@ -2,6 +2,7 @@ mod alu;
 mod cpu;
 mod debug;
 mod device;
+mod fc;
 mod gpu;
 mod hardware;
 mod ic;
