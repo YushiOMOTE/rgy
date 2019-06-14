@@ -1,49 +1,59 @@
+use crate::hardware::HardwareHandle;
+use log::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Instant;
 
 pub struct FreqControl {
-    last: Instant,
-    count: usize,
+    hw: HardwareHandle,
+    last: u64,
+    cycles: usize,
     barrier: AtomicUsize,
     sample: usize,
     delay: usize,
     delay_unit: usize,
-    target: usize,
+    target_freq: usize,
 }
 
 impl FreqControl {
-    pub fn new(target: usize, sample: usize, delay_unit: usize) -> Self {
+    pub fn new(hw: HardwareHandle, target_freq: usize, sample: usize, delay_unit: usize) -> Self {
         Self {
-            last: Instant::now(),
-            count: 0,
+            hw,
+            last: 0,
+            cycles: 0,
             barrier: AtomicUsize::new(0),
             delay: 0,
             sample,
             delay_unit,
-            target,
+            target_freq,
         }
     }
 
     pub fn reset(&mut self) {
-        self.last = Instant::now();
+        self.last = self.hw.get().borrow_mut().clock();
     }
 
     pub fn adjust(&mut self, time: usize) {
-        self.count += time;
+        self.cycles += time;
 
         for _ in 0..self.delay {
             self.barrier.fetch_add(1, Ordering::Relaxed);
         }
 
-        if self.count > self.sample {
-            self.count = self.count - self.sample;
+        if self.cycles > self.sample {
+            self.cycles -= self.sample;
 
-            let now = Instant::now();
-            let df = now - self.last;
-            let df = df.as_secs() as usize * 1000000 + df.subsec_micros() as usize;
-            let ips = self.sample * 1000000 / df;
+            let now = self.hw.get().borrow_mut().clock();
+            let (diff, of) = now.overflowing_sub(self.last);
+            if of || diff == 0 {
+                warn!("Overflow: {} - {}", self.last, now);
+                self.last = now;
+                return;
+            }
+            // get cycles per second
+            let freq = self.sample * 1000_000 / diff as usize;
 
-            if ips > self.target {
+            debug!("Frequency: {}", freq);
+
+            if freq > self.target_freq {
                 self.delay += self.delay_unit;
             } else {
                 if self.delay > 0 {

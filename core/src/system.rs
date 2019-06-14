@@ -17,9 +17,9 @@ use log::*;
 pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
     info!("Initializing...");
 
-    let mut fc = FreqControl::new(opt.freq, opt.sample, opt.delay_unit);
-
     let hw = HardwareHandle::new(hw);
+
+    let mut fc = FreqControl::new(hw.clone(), opt.freq, opt.sample, opt.delay_unit);
 
     let dbg = if opt.debug {
         Some(Device::new(Debugger::new()))
