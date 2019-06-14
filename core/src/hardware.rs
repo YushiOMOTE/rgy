@@ -48,6 +48,7 @@ pub trait Hardware {
 
     fn sound_stop(&mut self, id: SoundId);
 
+    /// Epoch in microseconds
     fn clock(&mut self) -> u64;
 
     fn send_byte(&mut self, b: u8);

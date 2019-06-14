@@ -3,7 +3,7 @@ use log::*;
 use minifb::{Scale, Window, WindowOptions};
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::time::Instant;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::hardware::{self, Key, SoundId, Stream, VRAM_HEIGHT, VRAM_WIDTH};
 
@@ -11,7 +11,6 @@ pub struct Hardware {
     vram: Vec<u32>,
     window: Window,
     pcms: Vec<SpeakerHandle>,
-    inst: Instant,
     vramupdated: u64,
     keypolled: u64,
     keystate: HashMap<Key, bool>,
@@ -63,7 +62,6 @@ impl Hardware {
             vram,
             window,
             pcms,
-            inst: Instant::now(),
             vramupdated: 0,
             keypolled: 0,
             keystate,
@@ -119,10 +117,10 @@ impl hardware::Hardware for Hardware {
     }
 
     fn clock(&mut self) -> u64 {
-        let d = self.inst.elapsed();
-        d.as_secs()
-            .wrapping_mul(1000_000)
-            .wrapping_add(d.subsec_micros().into())
+        let epoch = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Couldn't get epoch");
+        epoch.as_micros() as u64
     }
 
     fn sched(&mut self) -> bool {
