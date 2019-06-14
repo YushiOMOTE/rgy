@@ -3631,7 +3631,7 @@
     - (hl)
   bits: 8
   size: 2
-  time: 16
+  time: 12
   z: Z
   n: "0"
   h: "1"
@@ -3727,7 +3727,7 @@
     - (hl)
   bits: 8
   size: 2
-  time: 16
+  time: 12
   z: Z
   n: "0"
   h: "1"
@@ -3823,7 +3823,7 @@
     - (hl)
   bits: 8
   size: 2
-  time: 16
+  time: 12
   z: Z
   n: "0"
   h: "1"
@@ -3919,7 +3919,7 @@
     - (hl)
   bits: 8
   size: 2
-  time: 16
+  time: 12
   z: Z
   n: "0"
   h: "1"
@@ -4015,7 +4015,7 @@
     - (hl)
   bits: 8
   size: 2
-  time: 16
+  time: 12
   z: Z
   n: "0"
   h: "1"
@@ -4111,7 +4111,7 @@
     - (hl)
   bits: 8
   size: 2
-  time: 16
+  time: 12
   z: Z
   n: "0"
   h: "1"
@@ -4207,7 +4207,7 @@
     - (hl)
   bits: 8
   size: 2
-  time: 16
+  time: 12
   z: Z
   n: "0"
   h: "1"
@@ -4303,7 +4303,7 @@
     - (hl)
   bits: 8
   size: 2
-  time: 16
+  time: 12
   z: Z
   n: "0"
   h: "1"

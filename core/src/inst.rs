@@ -4445,7 +4445,7 @@ fn op_cb46(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     cpu.set_nf(false);
     cpu.set_hf(true);
 
-    (16, 2)
+    (12, 2)
 }
 
 /// bit 0,a
@@ -4549,7 +4549,7 @@ fn op_cb4e(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     cpu.set_nf(false);
     cpu.set_hf(true);
 
-    (16, 2)
+    (12, 2)
 }
 
 /// bit 1,a
@@ -4653,7 +4653,7 @@ fn op_cb56(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     cpu.set_nf(false);
     cpu.set_hf(true);
 
-    (16, 2)
+    (12, 2)
 }
 
 /// bit 2,a
@@ -4757,7 +4757,7 @@ fn op_cb5e(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     cpu.set_nf(false);
     cpu.set_hf(true);
 
-    (16, 2)
+    (12, 2)
 }
 
 /// bit 3,a
@@ -4861,7 +4861,7 @@ fn op_cb66(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     cpu.set_nf(false);
     cpu.set_hf(true);
 
-    (16, 2)
+    (12, 2)
 }
 
 /// bit 4,a
@@ -4965,7 +4965,7 @@ fn op_cb6e(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     cpu.set_nf(false);
     cpu.set_hf(true);
 
-    (16, 2)
+    (12, 2)
 }
 
 /// bit 5,a
@@ -5069,7 +5069,7 @@ fn op_cb76(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     cpu.set_nf(false);
     cpu.set_hf(true);
 
-    (16, 2)
+    (12, 2)
 }
 
 /// bit 6,a
@@ -5173,7 +5173,7 @@ fn op_cb7e(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     cpu.set_nf(false);
     cpu.set_hf(true);
 
-    (16, 2)
+    (12, 2)
 }
 
 /// bit 7,a

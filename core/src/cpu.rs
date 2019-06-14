@@ -72,7 +72,7 @@ impl Cpu {
 
     pub fn halt(&mut self) {
         debug!("Halted");
-        // TODO: self.halt = true;
+        self.halt = true;
     }
 
     pub fn execute(&mut self, mmu: &mut Mmu) -> usize {
