@@ -3,6 +3,7 @@ mod hardware;
 
 use crate::{debug::Debugger, hardware::Hardware};
 
+use log::*;
 use std::fs::File;
 use std::io::prelude::*;
 use structopt::StructOpt;
@@ -45,6 +46,19 @@ fn to_cfg(opt: Opt) -> rgy::Config {
         .native_speed(opt.native_speed)
 }
 
+fn set_affinity() {
+    let set = || {
+        let core_ids = core_affinity::get_core_ids()?;
+        core_affinity::set_for_current(*core_ids.get(0)?);
+        Some(())
+    };
+
+    match set() {
+        None => warn!("Couldn't set CPU affinity"),
+        _ => {}
+    }
+}
+
 fn main() {
     let opt = Opt::from_args();
 
@@ -52,6 +66,8 @@ fn main() {
 
     let hw = Hardware::new();
     let rom = load_rom(&opt.rom);
+
+    set_affinity();
 
     if opt.debug {
         rgy::run_debug(to_cfg(opt), rom, hw, Debugger::new());
