@@ -1,13 +1,11 @@
 use crate::hardware::HardwareHandle;
 use crate::system::Config;
 use log::*;
-use core::sync::atomic::{AtomicUsize, Ordering};
 
 pub struct FreqControl {
     hw: HardwareHandle,
     last: u64,
     cycles: u64,
-    barrier: AtomicUsize,
     sample: u64,
     delay: u64,
     delay_unit: u64,
@@ -20,7 +18,6 @@ impl FreqControl {
             hw,
             last: 0,
             cycles: 0,
-            barrier: AtomicUsize::new(0),
             delay: 0,
             sample: cfg.sample,
             delay_unit: cfg.delay_unit,
@@ -36,7 +33,7 @@ impl FreqControl {
         self.cycles += time as u64;
 
         for _ in 0..self.delay {
-            self.barrier.fetch_add(1, Ordering::Relaxed);
+            let _ = unsafe { core::ptr::read_volatile(&self.sample) };
         }
 
         if self.cycles > self.sample {
@@ -49,18 +46,17 @@ impl FreqControl {
                 self.last = now;
                 return;
             }
+
             // get cycles per second
             let freq = self.sample * 1000_000 / diff;
 
             debug!("Frequency: {}", freq);
 
-            if freq > self.target_freq {
-                self.delay += self.delay_unit;
+            self.delay = if freq > self.target_freq {
+                self.delay.saturating_add(self.delay_unit)
             } else {
-                if self.delay > 0 {
-                    self.delay -= self.delay_unit;
-                }
-            }
+                self.delay.saturating_sub(self.delay_unit)
+            };
 
             self.last = now;
         }

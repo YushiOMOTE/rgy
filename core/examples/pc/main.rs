@@ -13,10 +13,10 @@ pub struct Opt {
     #[structopt(short = "f", long = "freq", default_value = "4200000")]
     freq: u64,
     /// Sampling rate for cpu frequency controller
-    #[structopt(short = "s", long = "sample", default_value = "4000")]
+    #[structopt(short = "s", long = "sample", default_value = "4200")]
     sample: u64,
     /// Delay unit for cpu frequency controller
-    #[structopt(short = "u", long = "delayunit", default_value = "10")]
+    #[structopt(short = "u", long = "delayunit", default_value = "50")]
     delay_unit: u64,
     /// Don't adjust cpu frequency
     #[structopt(short = "n", long = "native")]
