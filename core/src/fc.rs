@@ -1,29 +1,30 @@
 use crate::hardware::HardwareHandle;
+use crate::system::Config;
 use log::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub struct FreqControl {
     hw: HardwareHandle,
     last: u64,
-    cycles: usize,
+    cycles: u64,
     barrier: AtomicUsize,
-    sample: usize,
-    delay: usize,
-    delay_unit: usize,
-    target_freq: usize,
+    sample: u64,
+    delay: u64,
+    delay_unit: u64,
+    target_freq: u64,
 }
 
 impl FreqControl {
-    pub fn new(hw: HardwareHandle, target_freq: usize, sample: usize, delay_unit: usize) -> Self {
+    pub fn new(hw: HardwareHandle, cfg: &Config) -> Self {
         Self {
             hw,
             last: 0,
             cycles: 0,
             barrier: AtomicUsize::new(0),
             delay: 0,
-            sample,
-            delay_unit,
-            target_freq,
+            sample: cfg.sample,
+            delay_unit: cfg.delay_unit,
+            target_freq: cfg.freq,
         }
     }
 
@@ -32,7 +33,7 @@ impl FreqControl {
     }
 
     pub fn adjust(&mut self, time: usize) {
-        self.cycles += time;
+        self.cycles += time as u64;
 
         for _ in 0..self.delay {
             self.barrier.fetch_add(1, Ordering::Relaxed);
@@ -49,7 +50,7 @@ impl FreqControl {
                 return;
             }
             // get cycles per second
-            let freq = self.sample * 1000_000 / diff as usize;
+            let freq = self.sample * 1000_000 / diff;
 
             debug!("Frequency: {}", freq);
 

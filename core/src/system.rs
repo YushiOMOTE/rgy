@@ -1,5 +1,5 @@
 use crate::cpu::Cpu;
-use crate::debug::{Debugger, Perf};
+use crate::debug::Debugger;
 use crate::device::Device;
 use crate::fc::FreqControl;
 use crate::gpu::Gpu;
@@ -11,21 +11,77 @@ use crate::mmu::Mmu;
 use crate::serial::Serial;
 use crate::sound::Sound;
 use crate::timer::Timer;
-use crate::Opt;
 use log::*;
 
-pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
+pub struct Config {
+    /// CPU frequency
+    pub(crate) freq: u64,
+    /// Cycle sampling count in CPU frequency controller
+    pub(crate) sample: u64,
+    /// Delay unit in CPU frequency controller
+    pub(crate) delay_unit: u64,
+    /// Don't adjust CPU frequency
+    pub(crate) native_speed: bool,
+}
+
+impl Config {
+    pub fn new() -> Self {
+        let freq = 4194300; // 4.1943 MHz
+        Self {
+            freq,
+            sample: freq / 1000,
+            delay_unit: 10,
+            native_speed: false,
+        }
+    }
+
+    pub fn freq(mut self, freq: u64) -> Self {
+        self.freq = freq;
+        self
+    }
+
+    pub fn sample(mut self, sample: u64) -> Self {
+        self.sample = sample;
+        self
+    }
+
+    pub fn delay_unit(mut self, delay: u64) -> Self {
+        self.delay_unit = delay;
+        self
+    }
+
+    pub fn native_speed(mut self, native: bool) -> Self {
+        self.native_speed = native;
+        self
+    }
+}
+
+pub fn run<T: Hardware + 'static>(cfg: Config, rom: Vec<u8>, hw: T) {
+    run_inner(cfg, rom, hw, Debugger::empty())
+}
+
+pub fn debug_run<T: Hardware + 'static, D: Debugger + 'static>(
+    cfg: Config,
+    rom: Vec<u8>,
+    hw: T,
+    dbg: D,
+) {
+    run_inner(cfg, rom, hw, dbg)
+}
+
+fn run_inner<T: Hardware + 'static, D: Debugger + 'static>(
+    cfg: Config,
+    rom: Vec<u8>,
+    hw: T,
+    dbg: D,
+) {
     info!("Initializing...");
 
     let hw = HardwareHandle::new(hw);
 
-    let mut fc = FreqControl::new(hw.clone(), opt.freq, opt.sample, opt.delay_unit);
+    let mut fc = FreqControl::new(hw.clone(), &cfg);
 
-    let dbg = if opt.debug {
-        Some(Device::new(Debugger::new()))
-    } else {
-        None
-    };
+    let dbg = Device::new(dbg);
     let mut cpu = Cpu::new();
     let mut mmu = Mmu::new();
     let sound = Device::new(Sound::new(hw.clone()));
@@ -37,10 +93,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
     let serial = Device::new(Serial::new(hw.clone(), irq.clone()));
     let mbc = Device::new(Mbc::new(rom));
 
-    if let Some(dbg) = dbg.as_ref() {
-        mmu.add_handler((0x0000, 0xffff), dbg.handler());
-    }
-
+    mmu.add_handler((0x0000, 0xffff), dbg.handler());
     mmu.add_handler((0x0000, 0x7fff), mbc.handler());
     mmu.add_handler((0xff50, 0xff50), mbc.handler());
     mmu.add_handler((0xa000, 0xbfff), mbc.handler());
@@ -51,18 +104,14 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
     mmu.add_handler((0xff04, 0xff07), timer.handler());
     mmu.add_handler((0xff01, 0xff02), serial.handler());
 
-    if let Some(dbg) = dbg.as_ref() {
-        dbg.borrow_mut().init(&mmu);
-    }
-
-    let mut perf = Perf::new();
+    dbg.borrow_mut().init(&mmu);
 
     info!("Starting...");
 
     fc.reset();
 
     while hw.get().borrow_mut().sched() {
-        if let Some(dbg) = dbg.as_ref() {
+        {
             let mut dbg = dbg.borrow_mut();
             dbg.check_signal();
             dbg.take_cpu_snapshot(cpu.clone());
@@ -78,9 +127,7 @@ pub fn run<T: Hardware + 'static>(opt: Opt, rom: Vec<u8>, hw: T) {
         serial.borrow_mut().step(time);
         joypad.borrow_mut().poll();
 
-        perf.count();
-
-        if !opt.native_speed {
+        if !cfg.native_speed {
             fc.adjust(time);
         }
     }
