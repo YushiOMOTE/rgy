@@ -1,6 +1,7 @@
-mod unix;
+mod debug;
+mod hardware;
 
-use crate::{unix::debug::Debugger, unix::hardware::Hardware};
+use crate::{debug::Debugger, hardware::Hardware};
 
 use std::fs::File;
 use std::io::prelude::*;

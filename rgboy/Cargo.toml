@@ -1,0 +1,16 @@
+[package]
+name = "rgboy"
+version = "0.1.0"
+authors = ["Yushi OMOTE <yushiomote@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+lazy_static = "1.2"
+log = "0.4"
+env_logger = "0.6"
+rustyline = "4.1"
+minifb = "0.11"
+structopt = "0.2"
+cpal = "0.8"
+signal-hook = "0.1"
+librgboy = { path = "../librgboy" }
