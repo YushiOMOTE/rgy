@@ -4,7 +4,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 use log::*;
 
 use crate::device::IoHandler;
-use crate::hardware::{HardwareHandle, SoundId};
+use crate::hardware::{HardwareHandle, Stream, StreamId};
 use crate::mmu::{MemRead, MemWrite, Mmu};
 
 #[derive(Debug, Clone, Copy)]
@@ -84,6 +84,7 @@ const AMP_UNIT: usize = u16::max_value() as usize / 15;
 
 struct ToneStream {
     tone: Tone,
+    sweep: bool,
 
     stop_clock: usize,
     env_clock: usize,
@@ -95,12 +96,13 @@ struct ToneStream {
 }
 
 impl ToneStream {
-    fn new(tone: Tone) -> Self {
+    fn new(tone: Tone, sweep: bool) -> Self {
         let freq = tone.freq;
         let amp = tone.env_init * AMP_UNIT;
 
         Self {
             tone,
+            sweep,
             stop_clock: 0,
             env_clock: 0,
             sweep_clock: 0,
@@ -109,18 +111,20 @@ impl ToneStream {
             wave_clock: 0,
         }
     }
+}
 
-    fn next(&mut self, rate: u32, sweep: bool) -> Option<u16> {
+impl Stream for ToneStream {
+    fn next(&mut self, rate: u32) -> u16 {
         let rate = rate as usize;
 
         if self.amp == 0 {
-            return None;
+            return 0;
         }
 
         // Stop/continuous
         if self.tone.counter {
             if self.stop_clock >= rate * (64 - self.tone.sound_len) / 256 {
-                return None;
+                return 0;
             } else {
                 self.stop_clock += 1;
             }
@@ -138,7 +142,7 @@ impl ToneStream {
         }
 
         // Sweep
-        if sweep && self.tone.sweep_time != 0 {
+        if self.sweep && self.tone.sweep_time != 0 {
             self.sweep_clock += 1;
             if self.sweep_clock >= rate * self.tone.sweep_time / 128 {
                 self.sweep_clock = 0;
@@ -158,9 +162,9 @@ impl ToneStream {
         self.wave_clock = (self.wave_clock + 1) % cycle;
 
         if self.wave_clock <= usize::from(self.tone.wave_duty) * cycle / 1000 {
-            Some(self.amp as u16)
+            self.amp as u16
         } else {
-            Some(0)
+            0
         }
     }
 }
@@ -180,14 +184,16 @@ impl WaveStream {
             wave_clock: 0,
         }
     }
+}
 
-    fn next(&mut self, rate: u32) -> Option<u16> {
+impl Stream for WaveStream {
+    fn next(&mut self, rate: u32) -> u16 {
         let rate = rate as usize;
 
         // Stop/continuous
         if self.wave.counter {
             if self.stop_clock >= rate * (256 - self.wave.sound_len) / 256 {
-                return None;
+                return 0;
             } else {
                 self.stop_clock += 1;
             }
@@ -208,7 +214,7 @@ impl WaveStream {
         };
         let amp = amp as usize * self.wave.volume.load(Ordering::SeqCst) / 100;
 
-        Some((amp * AMP_UNIT) as u16)
+        (amp * AMP_UNIT) as u16
     }
 }
 
@@ -252,13 +258,10 @@ impl Sound {
         }
     }
 
-    fn play_tone(&mut self, id: SoundId, tone: Tone, sweep: bool) {
-        let mut stream = ToneStream::new(tone);
+    fn play_tone(&mut self, id: StreamId, tone: Tone, sweep: bool) {
+        let stream = ToneStream::new(tone, sweep);
 
-        self.hw
-            .get()
-            .borrow_mut()
-            .sound_play(id, Box::new(move |rate| stream.next(rate, sweep)));
+        self.hw.get().borrow_mut().sound_play(id, Box::new(stream));
     }
 
     fn play_wave(&mut self, wave: Wave) {
@@ -266,15 +269,15 @@ impl Sound {
             return;
         }
 
-        let mut stream = WaveStream::new(wave);
+        let stream = WaveStream::new(wave);
         self.hw
             .get()
             .borrow_mut()
-            .sound_play(SoundId::Wave, Box::new(move |rate| stream.next(rate)));
+            .sound_play(StreamId::Wave, Box::new(stream));
     }
 
     fn stop_wave(&self) {
-        self.hw.get().borrow_mut().sound_stop(SoundId::Wave);
+        self.hw.get().borrow_mut().sound_stop(StreamId::Wave);
     }
 }
 
@@ -301,7 +304,7 @@ impl IoHandler for Sound {
             self.tone1.counter = value & 0x40 != 0;
             self.tone1.freq = (self.tone1.freq & !0x700) | (((value & 0x7) as usize) << 8);
             if value & 0x80 != 0 {
-                self.play_tone(SoundId::Tone1, self.tone1.clone(), true);
+                self.play_tone(StreamId::Tone1, self.tone1.clone(), true);
             }
         } else if addr == 0xff16 {
             self.tone2.wave_duty = (value >> 6).into();
@@ -316,7 +319,7 @@ impl IoHandler for Sound {
             self.tone2.counter = value & 0x40 != 0;
             self.tone2.freq = (self.tone2.freq & !0x700) | (((value & 0x7) as usize) << 8);
             if value & 0x80 != 0 {
-                self.play_tone(SoundId::Tone2, self.tone2.clone(), false);
+                self.play_tone(StreamId::Tone2, self.tone2.clone(), false);
             }
         } else if addr == 0xff1a {
             debug!("Wave enable: {:02x}", value);

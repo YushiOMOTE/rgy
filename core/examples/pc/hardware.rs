@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rgy::hardware::{self, Key, SoundId, Stream, VRAM_HEIGHT, VRAM_WIDTH};
+use rgy::hardware::{self, Key, Stream, StreamId, VRAM_HEIGHT, VRAM_WIDTH};
 
 pub struct Hardware {
     vram: Vec<u32>,
@@ -90,21 +90,21 @@ impl hardware::Hardware for Hardware {
             .expect("Logic error in keystate map")
     }
 
-    fn sound_play(&mut self, id: SoundId, stream: Box<Stream>) {
+    fn sound_play(&mut self, id: StreamId, stream: Box<dyn Stream>) {
         match id {
-            SoundId::Tone1 => self.pcms[0].play(stream),
-            SoundId::Tone2 => self.pcms[1].play(stream),
-            SoundId::Wave => self.pcms[2].play(stream),
-            SoundId::Noise => self.pcms[3].play(stream),
+            StreamId::Tone1 => self.pcms[0].play(stream),
+            StreamId::Tone2 => self.pcms[1].play(stream),
+            StreamId::Wave => self.pcms[2].play(stream),
+            StreamId::Noise => self.pcms[3].play(stream),
         }
     }
 
-    fn sound_stop(&mut self, id: SoundId) {
+    fn sound_stop(&mut self, id: StreamId) {
         match id {
-            SoundId::Tone1 => self.pcms[0].stop(),
-            SoundId::Tone2 => self.pcms[1].stop(),
-            SoundId::Wave => self.pcms[2].stop(),
-            SoundId::Noise => self.pcms[3].stop(),
+            StreamId::Tone1 => self.pcms[0].stop(),
+            StreamId::Tone2 => self.pcms[1].stop(),
+            StreamId::Wave => self.pcms[2].stop(),
+            StreamId::Noise => self.pcms[3].stop(),
         }
     }
 
@@ -223,10 +223,7 @@ impl Pcm {
                 } => {
                     for sample in buffer.chunks_mut(format.channels as usize) {
                         let value = match &mut stream {
-                            Some(s) => match s(sample_rate) {
-                                Some(ss) => ss,
-                                None => u16::max_value() / 2,
-                            },
+                            Some(s) => s.next(sample_rate),
                             None => u16::max_value() / 2,
                         };
 
@@ -240,10 +237,9 @@ impl Pcm {
                 } => {
                     for sample in buffer.chunks_mut(format.channels as usize) {
                         let value = match &mut stream {
-                            Some(s) => match s(sample_rate) {
-                                Some(ss) => ((ss as i32 * 2) - u16::max_value() as i32) as i16,
-                                None => 0,
-                            },
+                            Some(s) => {
+                                ((s.next(sample_rate) as i32 * 2) - u16::max_value() as i32) as i16
+                            }
                             None => 0,
                         };
 
@@ -257,10 +253,9 @@ impl Pcm {
                 } => {
                     for sample in buffer.chunks_mut(format.channels as usize) {
                         let value = match &mut stream {
-                            Some(s) => match s(sample_rate) {
-                                Some(ss) => (ss as f32 / u16::max_value() as f32) * 2.0 - 1.0,
-                                None => 0.0,
-                            },
+                            Some(s) => {
+                                (s.next(sample_rate) as f32 / u16::max_value() as f32) * 2.0 - 1.0
+                            }
                             None => 0.0,
                         };
 
@@ -276,7 +271,7 @@ impl Pcm {
 }
 
 enum SpeakerCmd {
-    Play(Box<Stream>),
+    Play(Box<dyn Stream>),
     Stop,
 }
 
@@ -286,7 +281,7 @@ pub struct SpeakerHandle {
 }
 
 impl SpeakerHandle {
-    fn play(&self, stream: Box<Stream>) {
+    fn play(&self, stream: Box<dyn Stream>) {
         let _ = self.tx.send(SpeakerCmd::Play(stream));
     }
 

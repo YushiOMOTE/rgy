@@ -18,17 +18,19 @@ pub enum Key {
 }
 
 #[derive(Clone, Debug)]
-pub enum SoundId {
+pub enum StreamId {
     Tone1,
     Tone2,
     Wave,
     Noise,
 }
 
+pub trait Stream: Send + 'static {
+    fn next(&mut self, rate: u32) -> u16;
+}
+
 #[derive(Clone)]
 pub struct HardwareHandle(Rc<RefCell<dyn Hardware>>);
-
-pub type Stream = dyn FnMut(u32) -> Option<u16> + Send + 'static;
 
 impl HardwareHandle {
     pub fn new<T: Hardware + 'static>(inner: T) -> Self {
@@ -45,9 +47,9 @@ pub trait Hardware {
 
     fn joypad_pressed(&mut self, key: Key) -> bool;
 
-    fn sound_play(&mut self, id: SoundId, stream: Box<Stream>);
+    fn sound_play(&mut self, id: StreamId, stream: Box<dyn Stream>);
 
-    fn sound_stop(&mut self, id: SoundId);
+    fn sound_stop(&mut self, id: StreamId);
 
     /// Epoch in microseconds
     fn clock(&mut self) -> u64;
