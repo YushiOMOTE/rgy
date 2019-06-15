@@ -1,5 +1,5 @@
-use std::cell::{Ref, RefCell, RefMut};
-use std::rc::Rc;
+use core::cell::{Ref, RefCell, RefMut};
+use alloc::rc::Rc;
 
 use crate::mmu::{MemHandler, MemRead, MemWrite, Mmu};
 

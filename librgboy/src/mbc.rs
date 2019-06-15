@@ -1,5 +1,11 @@
 use crate::device::IoHandler;
+use crate::hardware::HardwareHandle;
 use crate::mmu::{MemRead, MemWrite, Mmu};
+use alloc::{
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 use log::*;
 
 const BOOT_ROM: &[u8] = include_bytes!("boot.bin");
@@ -202,6 +208,7 @@ impl Mbc2 {
 }
 
 struct Mbc3 {
+    hw: HardwareHandle,
     rom: Vec<u8>,
     ram: Vec<u8>,
     rom_bank: usize,
@@ -216,16 +223,10 @@ struct Mbc3 {
     prelatch: bool,
 }
 
-fn epoch() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-        .expect("Cannot get epoch")
-        .as_secs() as u64
-}
-
 impl Mbc3 {
-    fn new(rom: Vec<u8>) -> Self {
-        Self {
+    fn new(hw: HardwareHandle, rom: Vec<u8>) -> Self {
+        let mut s = Self {
+            hw,
             rom,
             ram: vec![0; 0x8000], // 32KiB
             rom_bank: 0,
@@ -236,9 +237,15 @@ impl Mbc3 {
             rtc_hours: 0,
             rtc_day_low: 0,
             rtc_day_high: 0,
-            epoch: epoch(),
+            epoch: 0,
             prelatch: false,
-        }
+        };
+        s.update_epoch();
+        s
+    }
+
+    fn epoch(&self) -> u64 {
+        self.hw.get().borrow_mut().clock() / 1000_000
     }
 
     fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
@@ -339,7 +346,7 @@ impl Mbc3 {
     }
 
     fn update_epoch(&mut self) {
-        self.epoch = epoch();
+        self.epoch = self.epoch();
     }
 
     fn day(&self) -> u64 {
@@ -368,7 +375,7 @@ impl Mbc3 {
 
     fn latch(&mut self) {
         let new_epoch = if self.rtc_day_high & 0x40 == 0 {
-            epoch()
+            self.epoch()
         } else {
             // Halt
             self.epoch
@@ -443,14 +450,14 @@ enum MbcType {
 }
 
 impl MbcType {
-    fn new(code: u8, rom: Vec<u8>) -> Self {
+    fn new(hw: HardwareHandle, code: u8, rom: Vec<u8>) -> Self {
         match code {
             0x00 => MbcType::None(MbcNone::new(rom)),
             0x01 | 0x02 | 0x03 => MbcType::Mbc1(Mbc1::new(rom)),
             0x05 | 0x06 => MbcType::Mbc2(Mbc2::new(rom)),
             0x08 | 0x09 => unimplemented!("ROM+RAM: {:02x}", code),
             0x0b | 0x0c | 0x0d => unimplemented!("MMM01: {:02x}", code),
-            0x0f | 0x10 | 0x11 | 0x12 | 0x13 => MbcType::Mbc3(Mbc3::new(rom)),
+            0x0f | 0x10 | 0x11 | 0x12 | 0x13 => MbcType::Mbc3(Mbc3::new(hw, rom)),
             0x15 | 0x16 | 0x17 => unimplemented!("Mbc4: {:02x}", code),
             0x19 | 0x1a | 0x1b | 0x1c | 0x1d | 0x1e => MbcType::Mbc5(Mbc5::new(rom)),
             0xfc => unimplemented!("POCKET CAMERA"),
@@ -484,8 +491,8 @@ impl MbcType {
     }
 }
 
-impl std::fmt::Display for MbcType {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl alloc::fmt::Display for MbcType {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter) -> alloc::fmt::Result {
         let name = match self {
             MbcType::None(_) => "None",
             MbcType::Mbc1(_) => "Mbc1",
@@ -543,7 +550,7 @@ fn verify(rom: &[u8], checksum: u16) {
 }
 
 impl Cartridge {
-    fn new(rom: Vec<u8>) -> Self {
+    fn new(hw: HardwareHandle, rom: Vec<u8>) -> Self {
         let checksum = (rom[0x14e] as u16) << 8 | (rom[0x14f] as u16);
 
         verify(&rom, checksum);
@@ -555,7 +562,7 @@ impl Cartridge {
             license_new: parse_str(&rom[0x144..0x146]),
             license_old: rom[0x14b],
             sgb: rom[0x146] == 0x03,
-            mbc: MbcType::new(rom[0x147], rom.clone()),
+            mbc: MbcType::new(hw, rom[0x147], rom.clone()),
             rom_size: rom[0x148],
             ram_size: rom[0x149],
             dstcode: rom[0x14a],
@@ -622,8 +629,8 @@ pub struct Mbc {
 }
 
 impl Mbc {
-    pub fn new(rom: Vec<u8>) -> Self {
-        let cartridge = Cartridge::new(rom);
+    pub fn new(hw: HardwareHandle, rom: Vec<u8>) -> Self {
+        let cartridge = Cartridge::new(hw, rom);
 
         cartridge.show_info();
 

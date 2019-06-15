@@ -1,6 +1,7 @@
+use alloc::rc::Rc;
+use alloc::{vec, vec::Vec};
+use hashmap_core::HashMap;
 use log::*;
-use std::collections::HashMap;
-use std::rc::Rc;
 
 pub enum MemRead {
     Replace(u8),

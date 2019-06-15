@@ -1,7 +1,7 @@
 use crate::hardware::HardwareHandle;
 use crate::system::Config;
 use log::*;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 pub struct FreqControl {
     hw: HardwareHandle,

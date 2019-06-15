@@ -4,7 +4,7 @@ use crate::inst::decode;
 use crate::mmu::Mmu;
 use log::*;
 
-use std::fmt;
+use alloc::fmt;
 
 #[derive(Clone)]
 pub struct Cpu {

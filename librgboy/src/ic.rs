@@ -1,8 +1,8 @@
 use crate::device::IoHandler;
 use crate::mmu::{MemRead, MemWrite, Mmu};
 use log::*;
-use std::cell::RefCell;
-use std::rc::Rc;
+use core::cell::RefCell;
+use alloc::rc::Rc;
 
 #[derive(Clone)]
 pub struct Irq {

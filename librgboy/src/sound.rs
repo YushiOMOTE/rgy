@@ -1,6 +1,7 @@
+use alloc::boxed::Box;
+use alloc::sync::Arc;
+use core::sync::atomic::{AtomicUsize, Ordering};
 use log::*;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 
 use crate::device::IoHandler;
 use crate::hardware::{HardwareHandle, SoundId};

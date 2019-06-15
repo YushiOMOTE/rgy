@@ -3,7 +3,7 @@ use crate::cpu::Cpu;
 use crate::mmu::Mmu;
 use lazy_static::lazy_static;
 use log::*;
-use std::collections::HashMap;
+use hashmap_core::HashMap;
 
 lazy_static! {
     static ref MNEMONICS: HashMap<u16, &'static str> = {

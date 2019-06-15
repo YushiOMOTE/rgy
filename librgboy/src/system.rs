@@ -11,6 +11,7 @@ use crate::mmu::Mmu;
 use crate::serial::Serial;
 use crate::sound::Sound;
 use crate::timer::Timer;
+use alloc::vec::Vec;
 use log::*;
 
 pub struct Config {
@@ -91,7 +92,7 @@ fn run_inner<T: Hardware + 'static, D: Debugger + 'static>(
     let joypad = Device::new(Joypad::new(hw.clone(), irq.clone()));
     let timer = Device::new(Timer::new(irq.clone()));
     let serial = Device::new(Serial::new(hw.clone(), irq.clone()));
-    let mbc = Device::new(Mbc::new(rom));
+    let mbc = Device::new(Mbc::new(hw.clone(), rom));
 
     mmu.add_handler((0x0000, 0xffff), dbg.handler());
     mmu.add_handler((0x0000, 0x7fff), mbc.handler());

@@ -2,6 +2,7 @@ use crate::device::IoHandler;
 use crate::hardware::{HardwareHandle, VRAM_HEIGHT, VRAM_WIDTH};
 use crate::ic::Irq;
 use crate::mmu::{MemRead, MemWrite, Mmu};
+use alloc::{vec, vec::Vec};
 use log::*;
 
 #[derive(Debug, Clone)]

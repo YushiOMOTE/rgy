@@ -1,3 +1,7 @@
+#![no_std]
+
+extern crate alloc;
+
 mod alu;
 pub mod cpu;
 pub mod debug;

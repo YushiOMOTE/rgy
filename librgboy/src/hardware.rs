@@ -1,5 +1,6 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+use alloc::boxed::Box;
+use alloc::rc::Rc;
+use core::cell::RefCell;
 
 pub const VRAM_WIDTH: usize = 160;
 pub const VRAM_HEIGHT: usize = 144;
