@@ -1,7 +1,7 @@
-use core::cpu::Cpu;
-use core::device::IoHandler;
-use core::inst::mnem;
-use core::mmu::{MemRead, MemWrite, Mmu};
+use librgboy::cpu::Cpu;
+use librgboy::device::IoHandler;
+use librgboy::inst::mnem;
+use librgboy::mmu::{MemRead, MemWrite, Mmu};
 
 use std::collections::{HashSet, VecDeque};
 use std::fmt;
@@ -163,7 +163,7 @@ impl Debugger {
     }
 }
 
-impl core::debug::Debugger for Debugger {
+impl librgboy::debug::Debugger for Debugger {
     fn init(&mut self, mmu: &Mmu) {
         println!("Entering debug shell...");
 
