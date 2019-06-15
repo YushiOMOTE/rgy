@@ -53,7 +53,7 @@ fn main() {
     let rom = load_rom(&opt.rom);
 
     if opt.debug {
-        librgboy::debug_run(to_cfg(opt), rom, hw, Debugger::new());
+        librgboy::run_debug(to_cfg(opt), rom, hw, Debugger::new());
     } else {
         librgboy::run(to_cfg(opt), rom, hw);
     }

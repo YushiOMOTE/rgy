@@ -60,7 +60,7 @@ pub fn run<T: Hardware + 'static>(cfg: Config, rom: Vec<u8>, hw: T) {
     run_inner(cfg, rom, hw, Debugger::empty())
 }
 
-pub fn debug_run<T: Hardware + 'static, D: Debugger + 'static>(
+pub fn run_debug<T: Hardware + 'static, D: Debugger + 'static>(
     cfg: Config,
     rom: Vec<u8>,
     hw: T,
