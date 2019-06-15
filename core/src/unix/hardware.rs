@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::hardware::{self, Key, SoundId, Stream, VRAM_HEIGHT, VRAM_WIDTH};
+use core::hardware::{self, Key, SoundId, Stream, VRAM_HEIGHT, VRAM_WIDTH};
 
 pub struct Hardware {
     vram: Vec<u32>,

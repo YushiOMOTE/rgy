@@ -1,22 +1,7 @@
-mod alu;
-mod cpu;
-mod debug;
-mod device;
-mod fc;
-mod gpu;
-mod hardware;
-mod ic;
-mod inst;
-mod joypad;
-mod mbc;
-mod mmu;
-mod serial;
-mod sound;
-mod system;
-mod timer;
 mod unix;
 
-use crate::{system::Config, unix::debug::Debugger, unix::hardware::Hardware};
+use crate::{unix::debug::Debugger, unix::hardware::Hardware};
+
 use std::fs::File;
 use std::io::prelude::*;
 use structopt::StructOpt;
@@ -51,8 +36,8 @@ fn load_rom(name: &str) -> Vec<u8> {
     buf
 }
 
-fn to_cfg(opt: Opt) -> Config {
-    Config::new()
+fn to_cfg(opt: Opt) -> core::Config {
+    core::Config::new()
         .freq(opt.freq)
         .sample(opt.sample)
         .delay_unit(opt.delay_unit)
@@ -68,8 +53,8 @@ fn main() {
     let rom = load_rom(&opt.rom);
 
     if opt.debug {
-        system::debug_run(to_cfg(opt), rom, hw, Debugger::new());
+        core::debug_run(to_cfg(opt), rom, hw, Debugger::new());
     } else {
-        system::run(to_cfg(opt), rom, hw);
+        core::run(to_cfg(opt), rom, hw);
     }
 }
