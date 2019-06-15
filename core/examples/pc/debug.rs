@@ -1,7 +1,7 @@
-use librgboy::cpu::Cpu;
-use librgboy::device::IoHandler;
-use librgboy::inst::mnem;
-use librgboy::mmu::{MemRead, MemWrite, Mmu};
+use rgy::cpu::Cpu;
+use rgy::device::IoHandler;
+use rgy::inst::mnem;
+use rgy::mmu::{MemRead, MemWrite, Mmu};
 
 use std::collections::{HashSet, VecDeque};
 use std::fmt;
@@ -113,7 +113,7 @@ impl Debugger {
 
         let mut rl = Editor::<()>::new();
 
-        if rl.load_history("history.txt").is_err() {
+        if rl.load_history(".gy.txt").is_err() {
             println!("No previous history");
         }
 
@@ -163,7 +163,7 @@ impl Debugger {
     }
 }
 
-impl librgboy::debug::Debugger for Debugger {
+impl rgy::debug::Debugger for Debugger {
     fn init(&mut self, mmu: &Mmu) {
         println!("Entering debug shell...");
 

@@ -37,8 +37,8 @@ fn load_rom(name: &str) -> Vec<u8> {
     buf
 }
 
-fn to_cfg(opt: Opt) -> librgboy::Config {
-    librgboy::Config::new()
+fn to_cfg(opt: Opt) -> rgy::Config {
+    rgy::Config::new()
         .freq(opt.freq)
         .sample(opt.sample)
         .delay_unit(opt.delay_unit)
@@ -54,8 +54,8 @@ fn main() {
     let rom = load_rom(&opt.rom);
 
     if opt.debug {
-        librgboy::run_debug(to_cfg(opt), rom, hw, Debugger::new());
+        rgy::run_debug(to_cfg(opt), rom, hw, Debugger::new());
     } else {
-        librgboy::run(to_cfg(opt), rom, hw);
+        rgy::run(to_cfg(opt), rom, hw);
     }
 }

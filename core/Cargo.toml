@@ -1,5 +1,5 @@
 [package]
-name = "librgboy"
+name = "rgy"
 version = "0.1.0"
 authors = ["Yushi Omote <yushiomote@gmail.com>"]
 edition = "2018"
@@ -8,3 +8,11 @@ edition = "2018"
 lazy_static = { version = "1.2", features = ["spin_no_std"] }
 log = "0.4"
 hashmap_core = "0.1"
+
+[dev-dependencies]
+env_logger = "0.6"
+rustyline = "4.1"
+minifb = "0.11"
+structopt = "0.2"
+cpal = "0.8"
+signal-hook = "0.1"
