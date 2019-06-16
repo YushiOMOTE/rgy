@@ -229,7 +229,7 @@ impl Pcm {
                 } => {
                     for sample in buffer.chunks_mut(format.channels as usize) {
                         let value = match &mut stream {
-                            Some(s) => (s.next(sample_rate) as f32 / 15.0),
+                            Some(s) => (s.next(sample_rate) as f32 / 210.0),
                             None => 0.0,
                         };
 

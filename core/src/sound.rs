@@ -1,11 +1,57 @@
 use alloc::boxed::Box;
 use alloc::sync::Arc;
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use log::*;
 
 use crate::device::IoHandler;
 use crate::hardware::{HardwareHandle, Stream, StreamId};
 use crate::mmu::{MemRead, MemWrite, Mmu};
+
+trait AtomicHelper {
+    type Item;
+
+    fn get(&self) -> Self::Item;
+    fn set(&self, v: Self::Item);
+}
+
+impl AtomicHelper for AtomicUsize {
+    type Item = usize;
+
+    fn get(&self) -> Self::Item {
+        self.load(Ordering::SeqCst)
+    }
+
+    fn set(&self, v: Self::Item) {
+        self.store(v, Ordering::SeqCst)
+    }
+}
+
+impl AtomicHelper for AtomicBool {
+    type Item = bool;
+
+    fn get(&self) -> Self::Item {
+        self.load(Ordering::SeqCst)
+    }
+
+    fn set(&self, v: Self::Item) {
+        self.store(v, Ordering::SeqCst)
+    }
+}
+
+#[derive(Clone, Debug)]
+struct Control {
+    volume: Arc<AtomicUsize>,
+    enable: Arc<AtomicBool>,
+}
+
+impl Control {
+    fn new() -> Self {
+        Self {
+            volume: Arc::new(AtomicUsize::new(0)),
+            enable: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
 
 struct Sweep {
     enable: bool,
@@ -265,6 +311,7 @@ struct Tone {
     env_count: usize,
     counter: bool,
     freq: usize,
+    ctrl: Control,
 }
 
 impl Tone {
@@ -280,6 +327,7 @@ impl Tone {
             env_count: 0,
             counter: false,
             freq: 0,
+            ctrl: Control::new(),
         }
     }
 }
@@ -317,6 +365,10 @@ impl ToneStream {
 
 impl Stream for ToneStream {
     fn next(&mut self, rate: u32) -> u16 {
+        if !self.tone.ctrl.enable.get() {
+            return 0;
+        }
+
         let rate = rate as usize;
 
         // Stop counter
@@ -335,7 +387,7 @@ impl Stream for ToneStream {
         if index < self.tone.wave_duty.into() {
             0
         } else {
-            amp as u16
+            (amp * self.tone.ctrl.volume.get()) as u16
         }
     }
 }
@@ -360,6 +412,10 @@ impl WaveStream {
 
 impl Stream for WaveStream {
     fn next(&mut self, rate: u32) -> u16 {
+        if !self.wave.ctrl.enable.get() {
+            return 0;
+        }
+
         let rate = rate as usize;
 
         // Stop counter
@@ -368,7 +424,7 @@ impl Stream for WaveStream {
         }
 
         let samples = self.wave.wavebuf.len() * 2;
-        let freq = 65536 / (2048 - self.wave.freq.load(Ordering::SeqCst) as usize);
+        let freq = 65536 / (2048 - self.wave.freq.get());
         let index_freq = freq * samples;
         let index = self.index.index(rate, index_freq, samples);
 
@@ -378,13 +434,15 @@ impl Stream for WaveStream {
             self.wave.wavebuf[index / 2] & 0xf
         };
 
-        match self.wave.volume.load(Ordering::SeqCst) {
+        let amp = match self.wave.amp_shift.get() {
             0 => 0,
-            1 => amp as u16,
-            2 => (amp >> 1) as u16,
-            3 => (amp >> 2) as u16,
+            1 => amp,
+            2 => (amp >> 1),
+            3 => (amp >> 2),
             _ => unreachable!(),
-        }
+        };
+
+        (self.wave.ctrl.volume.get() * amp as usize) as u16
     }
 }
 
@@ -392,10 +450,11 @@ impl Stream for WaveStream {
 struct Wave {
     enable: bool,
     sound_len: usize,
-    volume: Arc<AtomicUsize>,
+    amp_shift: Arc<AtomicUsize>,
     counter: bool,
     freq: Arc<AtomicUsize>,
     wavebuf: [u8; 16],
+    ctrl: Control,
 }
 
 impl Wave {
@@ -403,10 +462,11 @@ impl Wave {
         Self {
             enable: false,
             sound_len: 0,
-            volume: Arc::new(AtomicUsize::new(0)),
+            amp_shift: Arc::new(AtomicUsize::new(0)),
             counter: false,
             freq: Arc::new(AtomicUsize::new(0)),
             wavebuf: [0; 16],
+            ctrl: Control::new(),
         }
     }
 }
@@ -425,6 +485,8 @@ struct Noise {
 
     counter: bool,
     freq: usize,
+
+    ctrl: Control,
 }
 
 impl Noise {
@@ -442,6 +504,8 @@ impl Noise {
 
             counter: false,
             freq: 0,
+
+            ctrl: Control::new(),
         }
     }
 }
@@ -470,6 +534,10 @@ impl NoiseStream {
 
 impl Stream for NoiseStream {
     fn next(&mut self, rate: u32) -> u16 {
+        if !self.noise.ctrl.enable.get() {
+            return 0;
+        }
+
         let rate = rate as usize;
 
         // Stop counter
@@ -491,7 +559,7 @@ impl Stream for NoiseStream {
         };
 
         if self.wave.high(rate, freq) {
-            amp as u16
+            (amp * self.noise.ctrl.volume.get()) as u16
         } else {
             0
         }
@@ -504,6 +572,10 @@ pub struct Sound {
     tone2: Tone,
     wave: Wave,
     noise: Noise,
+    enable: bool,
+    so1_volume: usize,
+    so2_volume: usize,
+    so_mask: u8,
 }
 
 impl Sound {
@@ -514,6 +586,10 @@ impl Sound {
             tone2: Tone::new(),
             wave: Wave::new(),
             noise: Noise::new(),
+            enable: false,
+            so1_volume: 0,
+            so2_volume: 0,
+            so_mask: 0,
         }
     }
 
@@ -546,6 +622,33 @@ impl Sound {
             .get()
             .borrow_mut()
             .sound_play(StreamId::Noise, Box::new(stream));
+    }
+
+    fn update_volume(&mut self) {
+        self.tone1.ctrl.enable.set(self.enable);
+        self.tone2.ctrl.enable.set(self.enable);
+        self.wave.ctrl.enable.set(self.enable);
+        self.noise.ctrl.enable.set(self.enable);
+
+        self.tone1.ctrl.volume.set(self.get_volume(1));
+        self.tone2.ctrl.volume.set(self.get_volume(2));
+        self.wave.ctrl.volume.set(self.get_volume(3));
+        self.noise.ctrl.volume.set(self.get_volume(4));
+    }
+
+    fn get_volume(&self, id: u8) -> usize {
+        let mask = 1 << id;
+        let v1 = if self.so_mask & mask != 0 {
+            self.so1_volume
+        } else {
+            0
+        };
+        let v2 = if self.so_mask & (mask << 4) != 0 {
+            self.so2_volume
+        } else {
+            0
+        };
+        v1 + v2
     }
 }
 
@@ -601,23 +704,19 @@ impl IoHandler for Sound {
             debug!("Wave len: {:02x}", value);
             self.wave.sound_len = value as usize;
         } else if addr == 0xff1c {
-            debug!("Wave volume: {:02x}", value);
-            self.wave
-                .volume
-                .store((value as usize >> 5) & 0x3, Ordering::SeqCst);
+            debug!("Wave amp shift: {:02x}", value);
+            self.wave.amp_shift.set((value as usize >> 5) & 0x3);
         } else if addr == 0xff1d {
             debug!("Wave freq1: {:02x}", value);
-            self.wave.freq.store(
-                (self.wave.freq.load(Ordering::SeqCst) & !0xff) | value as usize,
-                Ordering::SeqCst,
-            );
+            self.wave
+                .freq
+                .set((self.wave.freq.get() & !0xff) | value as usize);
         } else if addr == 0xff1e {
             debug!("Wave freq2: {:02x}", value);
             self.wave.counter = value & 0x40 != 0;
-            self.wave.freq.store(
-                (self.wave.freq.load(Ordering::SeqCst) & !0x700) | (((value & 0x7) as usize) << 8),
-                Ordering::SeqCst,
-            );
+            self.wave
+                .freq
+                .set((self.wave.freq.get() & !0x700) | (((value & 0x7) as usize) << 8));
             if value & 0x80 != 0 {
                 self.play_wave(self.wave.clone());
             }
@@ -638,6 +737,21 @@ impl IoHandler for Sound {
             if value & 0x80 != 0 {
                 self.play_noise(self.noise.clone());
             }
+        } else if addr == 0xff24 {
+            self.so1_volume = (value as usize & 0x70) >> 4;
+            self.so2_volume = value as usize & 0x07;
+            self.update_volume();
+        } else if addr == 0xff25 {
+            self.so_mask = value;
+            self.update_volume();
+        } else if addr == 0xff26 {
+            self.enable = value & 0x80 != 0;
+            if self.enable {
+                info!("Sound master enabled");
+            } else {
+                info!("Sound master disabled");
+            }
+            self.update_volume();
         } else {
             info!("Write sound: {:04x} {:02x}", addr, value);
         }
