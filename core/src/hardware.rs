@@ -26,6 +26,8 @@ pub enum StreamId {
 }
 
 pub trait Stream: Send + 'static {
+    fn max(&self) -> u16;
+
     // Return value is in range 0 - 16
     fn next(&mut self, rate: u32) -> u16;
 }
