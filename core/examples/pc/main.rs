@@ -25,6 +25,10 @@ pub struct Opt {
     /// Enable debug mode
     #[structopt(short = "d", long = "debug")]
     debug: bool,
+    /// RAM file name
+    #[structopt(short = "r", long = "ram")]
+    ram: Option<String>,
+    /// ROM file name
     #[structopt(name = "ROM")]
     rom: String,
 }
@@ -64,7 +68,7 @@ fn main() {
 
     env_logger::init();
 
-    let hw = Hardware::new(Some(".ram".into()));
+    let hw = Hardware::new(opt.ram.clone());
     let rom = load_rom(&opt.rom);
 
     set_affinity();
