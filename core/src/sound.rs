@@ -80,8 +80,6 @@ impl Tone {
     }
 }
 
-const AMP_UNIT: usize = u16::max_value() as usize / 15;
-
 struct ToneStream {
     tone: Tone,
     sweep: bool,
@@ -98,7 +96,9 @@ struct ToneStream {
 impl ToneStream {
     fn new(tone: Tone, sweep: bool) -> Self {
         let freq = tone.freq;
-        let amp = tone.env_init * AMP_UNIT;
+        let amp = tone.env_init;
+
+        assert!(amp <= 15);
 
         Self {
             tone,
@@ -135,14 +135,14 @@ impl Stream for ToneStream {
         if self.env_clock >= rate * self.tone.env_count / 64 {
             self.env_clock = 0;
             self.amp = if self.tone.env_inc {
-                self.amp.saturating_add(AMP_UNIT)
+                self.amp.saturating_add(1).min(15)
             } else {
-                self.amp.saturating_sub(AMP_UNIT)
+                self.amp.saturating_sub(1)
             };
         }
 
         // Sweep
-        if self.sweep && self.tone.sweep_time != 0 {
+        if self.sweep && self.tone.sweep_time != 0 && self.tone.sweep_shift != 0 {
             self.sweep_clock += 1;
             if self.sweep_clock >= rate * self.tone.sweep_time / 128 {
                 self.sweep_clock = 0;
@@ -162,10 +162,12 @@ impl Stream for ToneStream {
             self.wave_clock -= rate;
         }
 
+        assert!(self.amp <= 15, "amp = {}", self.amp);
+
         if self.wave_clock <= usize::from(self.tone.wave_duty) * rate / 1000 {
-            self.amp as u16
-        } else {
             0
+        } else {
+            self.amp as u16
         }
     }
 }
@@ -217,9 +219,14 @@ impl Stream for WaveStream {
         } else {
             self.wave.wavebuf[self.wave_index / 2] & 0xf
         };
-        let amp = amp as usize * self.wave.volume.load(Ordering::SeqCst) / 100;
 
-        (amp * AMP_UNIT) as u16
+        match self.wave.volume.load(Ordering::SeqCst) {
+            0 => 0,
+            100 => amp as u16,
+            50 => (amp >> 1) as u16,
+            25 => (amp >> 2) as u16,
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -298,7 +305,7 @@ impl IoHandler for Sound {
             self.tone1.sweep_shift = (value & 0x07) as usize;
         } else if addr == 0xff11 {
             self.tone1.wave_duty = (value >> 6).into();
-            self.tone1.sound_len = (value & 0x3f) as usize;
+            self.tone1.sound_len = (value & 0x1f) as usize;
         } else if addr == 0xff12 {
             self.tone1.env_init = (value >> 4) as usize;
             self.tone1.env_inc = value & 0x08 != 0;
@@ -313,7 +320,7 @@ impl IoHandler for Sound {
             }
         } else if addr == 0xff16 {
             self.tone2.wave_duty = (value >> 6).into();
-            self.tone2.sound_len = (value & 0x3f) as usize;
+            self.tone2.sound_len = (value & 0x1f) as usize;
         } else if addr == 0xff17 {
             self.tone2.env_init = (value >> 4) as usize;
             self.tone2.env_inc = value & 0x08 != 0;

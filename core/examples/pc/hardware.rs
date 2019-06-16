@@ -220,42 +220,16 @@ impl Pcm {
             match data {
                 cpal::StreamData::Output {
                     buffer: cpal::UnknownTypeOutputBuffer::U16(mut buffer),
-                } => {
-                    for sample in buffer.chunks_mut(format.channels as usize) {
-                        let value = match &mut stream {
-                            Some(s) => s.next(sample_rate),
-                            None => u16::max_value() / 2,
-                        };
-
-                        for out in sample.iter_mut() {
-                            *out = value;
-                        }
-                    }
-                }
+                } => unimplemented!(),
                 cpal::StreamData::Output {
                     buffer: cpal::UnknownTypeOutputBuffer::I16(mut buffer),
-                } => {
-                    for sample in buffer.chunks_mut(format.channels as usize) {
-                        let value = match &mut stream {
-                            Some(s) => {
-                                ((s.next(sample_rate) as i32 * 2) - u16::max_value() as i32) as i16
-                            }
-                            None => 0,
-                        };
-
-                        for out in sample.iter_mut() {
-                            *out = value;
-                        }
-                    }
-                }
+                } => unimplemented!(),
                 cpal::StreamData::Output {
                     buffer: cpal::UnknownTypeOutputBuffer::F32(mut buffer),
                 } => {
                     for sample in buffer.chunks_mut(format.channels as usize) {
                         let value = match &mut stream {
-                            Some(s) => {
-                                (s.next(sample_rate) as f32 / u16::max_value() as f32) * 2.0 - 1.0
-                            }
+                            Some(s) => (s.next(sample_rate) as f32 / 15.0),
                             None => 0.0,
                         };
 
