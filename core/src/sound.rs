@@ -157,11 +157,12 @@ impl Stream for ToneStream {
         }
 
         // Square wave generation
-        let cycle = rate as usize / self.freq;
+        self.wave_clock += self.freq;
+        if self.wave_clock >= rate {
+            self.wave_clock -= rate;
+        }
 
-        self.wave_clock = (self.wave_clock + 1) % cycle;
-
-        if self.wave_clock <= usize::from(self.tone.wave_duty) * cycle / 1000 {
+        if self.wave_clock <= usize::from(self.tone.wave_duty) * rate / 1000 {
             self.amp as u16
         } else {
             0
@@ -174,6 +175,7 @@ struct WaveStream {
 
     stop_clock: usize,
     wave_clock: usize,
+    wave_index: usize,
 }
 
 impl WaveStream {
@@ -182,6 +184,7 @@ impl WaveStream {
             wave,
             stop_clock: 0,
             wave_clock: 0,
+            wave_index: 0,
         }
     }
 }
@@ -199,18 +202,20 @@ impl Stream for WaveStream {
             }
         }
 
+        let samples = self.wave.wavebuf.len() * 2;
         let freq = 65536 / (2048 - self.wave.freq.load(Ordering::SeqCst) as usize);
-        let cycle = rate / freq;
+        let index_freq = freq * samples;
 
-        self.wave_clock = (self.wave_clock + 1) % cycle;
+        self.wave_clock += index_freq;
+        if self.wave_clock >= rate {
+            self.wave_clock -= rate;
+            self.wave_index = (self.wave_index + 1) % samples;
+        }
 
-        let slots = self.wave.wavebuf.len() * 2;
-        let index = (self.wave_clock * slots / cycle) % slots;
-
-        let amp = if index % 2 == 0 {
-            self.wave.wavebuf[index / 2] >> 4
+        let amp = if self.wave_index % 2 == 0 {
+            self.wave.wavebuf[self.wave_index / 2] >> 4
         } else {
-            self.wave.wavebuf[index / 2] & 0xf
+            self.wave.wavebuf[self.wave_index / 2] & 0xf
         };
         let amp = amp as usize * self.wave.volume.load(Ordering::SeqCst) / 100;
 
