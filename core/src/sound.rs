@@ -253,11 +253,117 @@ impl Wave {
     }
 }
 
+#[derive(Debug, Clone)]
+struct Noise {
+    sound_len: usize,
+
+    env_init: usize,
+    env_inc: bool,
+    env_count: usize,
+
+    shift_freq: usize,
+    step: bool,
+    div_freq: usize,
+
+    counter: bool,
+    freq: usize,
+}
+
+impl Noise {
+    fn new() -> Self {
+        Self {
+            sound_len: 0,
+
+            env_init: 0,
+            env_inc: false,
+            env_count: 0,
+
+            shift_freq: 0,
+            step: false,
+            div_freq: 0,
+
+            counter: false,
+            freq: 0,
+        }
+    }
+}
+
+struct NoiseStream {
+    noise: Noise,
+    stop_clock: usize,
+    env_clock: usize,
+    wave_clock: usize,
+    amp: usize,
+}
+
+impl NoiseStream {
+    fn new(noise: Noise) -> Self {
+        let amp = noise.env_init;
+
+        Self {
+            noise,
+            stop_clock: 0,
+            env_clock: 0,
+            wave_clock: 0,
+            amp,
+        }
+    }
+}
+
+impl Stream for NoiseStream {
+    fn next(&mut self, rate: u32) -> u16 {
+        let rate = rate as usize;
+
+        if self.amp == 0 {
+            return 0;
+        }
+
+        // Stop/continuous
+        if self.noise.counter {
+            if self.stop_clock >= rate * (64 - self.noise.sound_len) / 256 {
+                return 0;
+            } else {
+                self.stop_clock += 1;
+            }
+        }
+
+        // Envelop
+        self.env_clock += 1;
+        if self.env_clock >= rate * self.noise.env_count / 64 {
+            self.env_clock = 0;
+            self.amp = if self.noise.env_inc {
+                self.amp.saturating_add(1).min(15)
+            } else {
+                self.amp.saturating_sub(1)
+            };
+        }
+
+        // Noise: 524288 Hz / r / 2^(s+1) ;For r=0 assume r=0.5 instead
+
+        let freq = 524288
+            / (self.noise.div_freq * 10).max(5)
+            / 2usize.pow(self.noise.shift_freq as u32 + 1)
+            / 10;
+
+        self.wave_clock += freq;
+        if self.wave_clock >= rate {
+            self.wave_clock -= rate;
+        }
+
+        if self.wave_clock <= rate / (self.wave_clock % 991).max(10) {
+            0
+        } else {
+            self.amp as u16
+        }
+    }
+}
+
 pub struct Sound {
     hw: HardwareHandle,
     tone1: Tone,
     tone2: Tone,
     wave: Wave,
+    noise: Noise,
 }
 
 impl Sound {
@@ -267,6 +373,7 @@ impl Sound {
             tone1: Tone::new(),
             tone2: Tone::new(),
             wave: Wave::new(),
+            noise: Noise::new(),
         }
     }
 
@@ -290,6 +397,15 @@ impl Sound {
 
     fn stop_wave(&self) {
         self.hw.get().borrow_mut().sound_stop(StreamId::Wave);
+    }
+
+    fn play_noise(&mut self, noise: Noise) {
+        let stream = NoiseStream::new(noise);
+
+        self.hw
+            .get()
+            .borrow_mut()
+            .sound_play(StreamId::Noise, Box::new(stream));
     }
 }
 
@@ -373,8 +489,22 @@ impl IoHandler for Sound {
                 self.play_wave(self.wave.clone());
             }
         } else if addr >= 0xff30 && addr <= 0xff3f {
-            debug!("Sound buffer: {:02x}", value);
             self.wave.wavebuf[(addr - 0xff30) as usize] = value;
+        } else if addr == 0xff20 {
+            self.noise.sound_len = (value & 0x1f) as usize;
+        } else if addr == 0xff21 {
+            self.noise.env_init = (value >> 4) as usize;
+            self.noise.env_inc = value & 0x08 != 0;
+            self.noise.env_count = (value & 0x7) as usize;
+        } else if addr == 0xff22 {
+            self.noise.shift_freq = (value >> 4) as usize;
+            self.noise.step = value & 0x08 != 0;
+            self.noise.div_freq = (value & 0x7) as usize;
+        } else if addr == 0xff23 {
+            self.noise.counter = value & 0x40 != 0;
+            if value & 0x80 != 0 {
+                self.play_noise(self.noise.clone());
+            }
         }
 
         MemWrite::Block
