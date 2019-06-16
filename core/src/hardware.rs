@@ -1,5 +1,6 @@
 use alloc::boxed::Box;
 use alloc::rc::Rc;
+use alloc::vec::Vec;
 use core::cell::RefCell;
 
 pub const VRAM_WIDTH: usize = 160;
@@ -64,4 +65,8 @@ pub trait Hardware {
     fn sched(&mut self) -> bool {
         true
     }
+
+    fn load_ram(&mut self, size: usize) -> Vec<u8>;
+
+    fn save_ram(&mut self, ram: &[u8]);
 }

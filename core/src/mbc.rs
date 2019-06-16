@@ -3,7 +3,6 @@ use crate::hardware::HardwareHandle;
 use crate::mmu::{MemRead, MemWrite, Mmu};
 use alloc::{
     string::{String, ToString},
-    vec,
     vec::Vec,
 };
 use log::*;
@@ -39,6 +38,7 @@ impl MbcNone {
 }
 
 struct Mbc1 {
+    hw: HardwareHandle,
     rom: Vec<u8>,
     ram: Vec<u8>,
     rom_bank: usize,
@@ -48,10 +48,13 @@ struct Mbc1 {
 }
 
 impl Mbc1 {
-    fn new(rom: Vec<u8>) -> Self {
+    fn new(hw: HardwareHandle, rom: Vec<u8>) -> Self {
+        let ram = hw.get().borrow_mut().load_ram(0x8000);
+
         Self {
+            hw,
             rom,
-            ram: vec![0; 0x8000],
+            ram,
             rom_bank: 0,
             ram_bank: 0,
             ram_enable: false,
@@ -98,6 +101,7 @@ impl Mbc1 {
             } else {
                 info!("External RAM disabled");
                 self.ram_enable = false;
+                self.hw.get().borrow_mut().save_ram(&self.ram);
             }
             MemWrite::Block
         } else if addr >= 0x2000 && addr <= 0x3fff {
@@ -137,6 +141,7 @@ impl Mbc1 {
 }
 
 struct Mbc2 {
+    hw: HardwareHandle,
     rom: Vec<u8>,
     ram: Vec<u8>,
     rom_bank: usize,
@@ -144,10 +149,13 @@ struct Mbc2 {
 }
 
 impl Mbc2 {
-    fn new(rom: Vec<u8>) -> Self {
+    fn new(hw: HardwareHandle, rom: Vec<u8>) -> Self {
+        let ram = hw.get().borrow_mut().load_ram(0x200);
+
         Self {
+            hw,
             rom,
-            ram: vec![0; 0x200],
+            ram,
             rom_bank: 1,
             ram_enable: false,
         }
@@ -184,6 +192,9 @@ impl Mbc2 {
                         "disabled"
                     }
                 );
+                if !self.ram_enable {
+                    self.hw.get().borrow_mut().save_ram(&self.ram);
+                }
             } else {
                 self.rom_bank = (value as usize & 0xf).max(1);
                 debug!("Switch ROM bank to {:02x}", self.rom_bank);
@@ -223,12 +234,20 @@ struct Mbc3 {
     prelatch: bool,
 }
 
+impl Drop for Mbc3 {
+    fn drop(&mut self) {
+        self.save();
+    }
+}
+
 impl Mbc3 {
     fn new(hw: HardwareHandle, rom: Vec<u8>) -> Self {
+        let ram = hw.get().borrow_mut().load_ram(0x8000);
+
         let mut s = Self {
             hw,
             rom,
-            ram: vec![0; 0x8000], // 32KiB
+            ram,
             rom_bank: 0,
             enable: false,
             select: 0,
@@ -242,6 +261,10 @@ impl Mbc3 {
         };
         s.update_epoch();
         s
+    }
+
+    fn save(&mut self) {
+        self.hw.get().borrow_mut().save_ram(&self.ram);
     }
 
     fn epoch(&self) -> u64 {
@@ -291,6 +314,7 @@ impl Mbc3 {
             MemWrite::Block
         } else if addr >= 0x4000 && addr <= 0x5fff {
             self.select = value;
+            self.save();
             debug!("Select RAM bank/RTC: {:02x}", self.select);
             MemWrite::Block
         } else if addr >= 0x6000 && addr <= 0x7fff {
@@ -453,8 +477,8 @@ impl MbcType {
     fn new(hw: HardwareHandle, code: u8, rom: Vec<u8>) -> Self {
         match code {
             0x00 => MbcType::None(MbcNone::new(rom)),
-            0x01 | 0x02 | 0x03 => MbcType::Mbc1(Mbc1::new(rom)),
-            0x05 | 0x06 => MbcType::Mbc2(Mbc2::new(rom)),
+            0x01 | 0x02 | 0x03 => MbcType::Mbc1(Mbc1::new(hw, rom)),
+            0x05 | 0x06 => MbcType::Mbc2(Mbc2::new(hw, rom)),
             0x08 | 0x09 => unimplemented!("ROM+RAM: {:02x}", code),
             0x0b | 0x0c | 0x0d => unimplemented!("MMM01: {:02x}", code),
             0x0f | 0x10 | 0x11 | 0x12 | 0x13 => MbcType::Mbc3(Mbc3::new(hw, rom)),

@@ -64,7 +64,7 @@ fn main() {
 
     env_logger::init();
 
-    let hw = Hardware::new();
+    let hw = Hardware::new(Some(".ram".into()));
     let rom = load_rom(&opt.rom);
 
     set_affinity();

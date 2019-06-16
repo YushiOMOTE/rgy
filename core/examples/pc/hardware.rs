@@ -2,12 +2,15 @@ use cpal;
 use log::*;
 use minifb::{Scale, Window, WindowOptions};
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::prelude::*;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rgy::hardware::{self, Key, Stream, StreamId, VRAM_HEIGHT, VRAM_WIDTH};
 
 pub struct Hardware {
+    rampath: Option<String>,
     vram: Vec<u32>,
     window: Window,
     pcms: Vec<SpeakerHandle>,
@@ -17,7 +20,7 @@ pub struct Hardware {
 }
 
 impl Hardware {
-    pub fn new() -> Self {
+    pub fn new(rampath: Option<String>) -> Self {
         let vram = vec![0; VRAM_WIDTH * VRAM_HEIGHT];
 
         let mut window = match Window::new(
@@ -59,6 +62,7 @@ impl Hardware {
         keystate.insert(Key::Start, false);
 
         Self {
+            rampath,
             vram,
             window,
             pcms,
@@ -121,6 +125,34 @@ impl hardware::Hardware for Hardware {
             .duration_since(UNIX_EPOCH)
             .expect("Couldn't get epoch");
         epoch.as_micros() as u64
+    }
+
+    fn load_ram(&mut self, size: usize) -> Vec<u8> {
+        let mut ram = vec![0; size];
+
+        match &self.rampath {
+            Some(path) => match File::open(path) {
+                Ok(mut fs) => {
+                    fs.read_exact(&mut ram).expect("Couldn't read file");
+                    ram
+                }
+                Err(e) => {
+                    warn!("Couldn't open RAM file `{}`: {}", path, e);
+                    ram
+                }
+            },
+            None => ram,
+        }
+    }
+
+    fn save_ram(&mut self, ram: &[u8]) {
+        match &self.rampath {
+            Some(path) => {
+                let mut fs = File::create(path).expect("Couldn't open file");
+                fs.write_all(ram).expect("Couldn't write file");
+            }
+            None => {}
+        }
     }
 
     fn sched(&mut self) -> bool {
