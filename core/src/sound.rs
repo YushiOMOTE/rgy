@@ -261,55 +261,13 @@ impl RandomWave {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum WaveDuty {
-    P125,
-    P250,
-    P500,
-    P750,
-}
-
-impl From<WaveDuty> for u8 {
-    fn from(s: WaveDuty) -> u8 {
-        match s {
-            WaveDuty::P125 => 0,
-            WaveDuty::P250 => 1,
-            WaveDuty::P500 => 2,
-            WaveDuty::P750 => 3,
-        }
-    }
-}
-
-impl From<u8> for WaveDuty {
-    fn from(s: u8) -> WaveDuty {
-        match s {
-            0 => WaveDuty::P125,
-            1 => WaveDuty::P250,
-            2 => WaveDuty::P500,
-            3 => WaveDuty::P750,
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl From<WaveDuty> for usize {
-    fn from(s: WaveDuty) -> usize {
-        match s {
-            WaveDuty::P125 => 1,
-            WaveDuty::P250 => 2,
-            WaveDuty::P500 => 4,
-            WaveDuty::P750 => 8,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 struct Tone {
     sweep_time: usize,
     sweep_sub: bool,
     sweep_shift: usize,
     sound_len: usize,
-    wave_duty: WaveDuty,
+    wave_duty: usize,
     env_init: usize,
     env_inc: bool,
     env_count: usize,
@@ -325,7 +283,7 @@ impl Tone {
             sweep_sub: false,
             sweep_shift: 0,
             sound_len: 0,
-            wave_duty: WaveDuty::P125,
+            wave_duty: 0,
             env_init: 0,
             env_inc: false,
             env_count: 0,
@@ -391,8 +349,16 @@ impl Stream for ToneStream {
         let freq = self.sweep.freq(rate);
 
         // Square wave generation
+        let duty = match self.tone.wave_duty {
+            0 => 0,
+            1 => 1,
+            2 => 3,
+            3 => 5,
+            _ => unreachable!(),
+        };
+
         let index = self.index.index(rate, freq * 8, 8);
-        if index < self.tone.wave_duty.into() {
+        if index <= duty {
             0
         } else {
             (amp * self.tone.ctrl.volume.get()) as u16
