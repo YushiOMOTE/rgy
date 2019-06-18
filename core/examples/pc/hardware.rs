@@ -13,6 +13,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rgy::hardware::{self, Key, Stream, StreamId, VRAM_HEIGHT, VRAM_WIDTH};
 
+#[derive(Clone)]
 pub struct Hardware {
     rampath: Option<String>,
     vram: Arc<Mutex<Vec<u32>>>,
@@ -21,14 +22,14 @@ pub struct Hardware {
     escape: Arc<AtomicBool>,
 }
 
-struct Background {
+struct Gui {
     window: Window,
     vram: Arc<Mutex<Vec<u32>>>,
     keystate: Arc<Mutex<HashMap<Key, bool>>>,
     escape: Arc<AtomicBool>,
 }
 
-impl Background {
+impl Gui {
     fn new(
         vram: Arc<Mutex<Vec<u32>>>,
         keystate: Arc<Mutex<HashMap<Key, bool>>>,
@@ -135,15 +136,6 @@ impl Hardware {
 
         let escape = Arc::new(AtomicBool::new(false));
 
-        let vram1 = vram.clone();
-        let keystate1 = keystate.clone();
-        let escape1 = escape.clone();
-
-        std::thread::spawn(move || {
-            let bg = Background::new(vram1, keystate1, escape1);
-            bg.run();
-        });
-
         Self {
             rampath,
             vram,
@@ -151,6 +143,15 @@ impl Hardware {
             keystate,
             escape,
         }
+    }
+
+    pub fn run(self) {
+        let bg = Gui::new(
+            self.vram.clone(),
+            self.keystate.clone(),
+            self.escape.clone(),
+        );
+        bg.run();
     }
 }
 

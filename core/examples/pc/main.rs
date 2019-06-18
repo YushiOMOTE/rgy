@@ -71,11 +71,17 @@ fn main() {
     let hw = Hardware::new(opt.ram.clone());
     let rom = load_rom(&opt.rom);
 
-    set_affinity();
+    let hw1 = hw.clone();
 
-    if opt.debug {
-        rgy::run_debug(to_cfg(opt), rom, hw, Debugger::new());
-    } else {
-        rgy::run(to_cfg(opt), rom, hw);
-    }
+    std::thread::spawn(move || {
+        set_affinity();
+
+        if opt.debug {
+            rgy::run_debug(to_cfg(opt), rom, hw1, Debugger::new());
+        } else {
+            rgy::run(to_cfg(opt), rom, hw1);
+        }
+    });
+
+    hw.run();
 }
