@@ -630,7 +630,9 @@ impl Sound {
         } else {
             0
         };
-        v1 + v2
+        // TODO: Find proper voluem control method
+        // v1 + v2
+        14
     }
 }
 
