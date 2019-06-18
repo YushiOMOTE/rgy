@@ -203,7 +203,7 @@ impl Gpu {
                 if clocks >= 204 {
                     self.ly += 1;
 
-                    if self.ly == 143 {
+                    if self.ly >= 143 {
                         self.irq.vblank(true);
 
                         if self.vblank_interrupt {
