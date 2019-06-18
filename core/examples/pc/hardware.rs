@@ -5,25 +5,36 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rgy::hardware::{self, Key, Stream, StreamId, VRAM_HEIGHT, VRAM_WIDTH};
 
 pub struct Hardware {
     rampath: Option<String>,
-    vram: Vec<u32>,
-    window: Window,
+    vram: Arc<Mutex<Vec<u32>>>,
     pcms: Vec<SpeakerHandle>,
-    vramupdated: u64,
-    keypolled: u64,
-    keystate: HashMap<Key, bool>,
+    keystate: Arc<Mutex<HashMap<Key, bool>>>,
+    escape: Arc<AtomicBool>,
 }
 
-impl Hardware {
-    pub fn new(rampath: Option<String>) -> Self {
-        let vram = vec![0; VRAM_WIDTH * VRAM_HEIGHT];
+struct Background {
+    window: Window,
+    vram: Arc<Mutex<Vec<u32>>>,
+    keystate: Arc<Mutex<HashMap<Key, bool>>>,
+    escape: Arc<AtomicBool>,
+}
 
-        let mut window = match Window::new(
+impl Background {
+    fn new(
+        vram: Arc<Mutex<Vec<u32>>>,
+        keystate: Arc<Mutex<HashMap<Key, bool>>>,
+        escape: Arc<AtomicBool>,
+    ) -> Self {
+        let window = match Window::new(
             "Gay Boy",
             VRAM_WIDTH,
             VRAM_HEIGHT,
@@ -38,7 +49,67 @@ impl Hardware {
                 panic!("Unable to create window {}", err);
             }
         };
-        window.update_with_buffer(&vram).unwrap();
+
+        Self {
+            window,
+            vram,
+            keystate,
+            escape,
+        }
+    }
+
+    fn run(mut self) {
+        loop {
+            std::thread::sleep(Duration::from_millis(10));
+            self.vramupdate();
+            self.keyupdate();
+        }
+    }
+
+    fn vramupdate(&mut self) {
+        let vram = self.vram.lock().unwrap().clone();
+        self.window.update_with_buffer(&vram).unwrap();
+    }
+
+    fn keyupdate(&mut self) {
+        if !self.window.is_open() {
+            self.escape.store(true, Ordering::Relaxed);
+        }
+
+        for (_, v) in self.keystate.lock().unwrap().iter_mut() {
+            *v = false;
+        }
+
+        if let Some(keys) = self.window.get_keys() {
+            for k in keys {
+                let gbk = match k {
+                    minifb::Key::Right => Key::Right,
+                    minifb::Key::Left => Key::Left,
+                    minifb::Key::Up => Key::Up,
+                    minifb::Key::Down => Key::Down,
+                    minifb::Key::Z => Key::A,
+                    minifb::Key::X => Key::B,
+                    minifb::Key::Space => Key::Select,
+                    minifb::Key::Enter => Key::Start,
+                    minifb::Key::Escape => {
+                        self.escape.store(true, Ordering::Relaxed);
+                        return;
+                    }
+                    _ => continue,
+                };
+
+                match self.keystate.lock().unwrap().get_mut(&gbk) {
+                    Some(v) => *v = true,
+                    None => unreachable!(),
+                }
+            }
+        }
+    }
+}
+
+impl Hardware {
+    pub fn new(rampath: Option<String>) -> Self {
+        let vram = Arc::new(Mutex::new(vec![0; VRAM_WIDTH * VRAM_HEIGHT]));
 
         let pcms = (0..4)
             .map(|_| {
@@ -60,36 +131,43 @@ impl Hardware {
         keystate.insert(Key::B, false);
         keystate.insert(Key::Select, false);
         keystate.insert(Key::Start, false);
+        let keystate = Arc::new(Mutex::new(keystate));
+
+        let escape = Arc::new(AtomicBool::new(false));
+
+        let vram1 = vram.clone();
+        let keystate1 = keystate.clone();
+        let escape1 = escape.clone();
+
+        std::thread::spawn(move || {
+            let bg = Background::new(vram1, keystate1, escape1);
+            bg.run();
+        });
 
         Self {
             rampath,
             vram,
-            window,
             pcms,
-            vramupdated: 0,
-            keypolled: 0,
             keystate,
+            escape,
         }
     }
 }
 
 impl hardware::Hardware for Hardware {
     fn vram_update(&mut self, line: usize, buf: &[u32]) {
+        let mut vram = self.vram.lock().unwrap();
         for i in 0..buf.len() {
             let base = line * VRAM_WIDTH;
-            self.vram[base + i] = buf[i];
-        }
-
-        let now = self.clock();
-        if self.vramupdated == 0 || now.wrapping_sub(self.vramupdated) >= 10_000 {
-            self.vramupdated = now;
-            self.window.update_with_buffer(&self.vram).unwrap();
+            vram[base + i] = buf[i];
         }
     }
 
     fn joypad_pressed(&mut self, key: Key) -> bool {
         *self
             .keystate
+            .lock()
+            .unwrap()
             .get(&key)
             .expect("Logic error in keystate map")
     }
@@ -156,49 +234,7 @@ impl hardware::Hardware for Hardware {
     }
 
     fn sched(&mut self) -> bool {
-        let now = self.clock();
-
-        if !self.window.is_open() {
-            return false;
-        }
-
-        if self.keypolled == 0 || now.wrapping_sub(self.keypolled) >= 20_000 {
-            self.keypolled = now;
-
-            match self.window.get_keys() {
-                Some(keys) => {
-                    for (_, v) in self.keystate.iter_mut() {
-                        *v = false;
-                    }
-                    for k in keys {
-                        let gbk = match k {
-                            minifb::Key::Right => Key::Right,
-                            minifb::Key::Left => Key::Left,
-                            minifb::Key::Up => Key::Up,
-                            minifb::Key::Down => Key::Down,
-                            minifb::Key::Z => Key::A,
-                            minifb::Key::X => Key::B,
-                            minifb::Key::Space => Key::Select,
-                            minifb::Key::Enter => Key::Start,
-                            minifb::Key::Escape => return false,
-                            _ => continue,
-                        };
-
-                        match self.keystate.get_mut(&gbk) {
-                            Some(v) => *v = true,
-                            None => unreachable!(),
-                        }
-                    }
-                }
-                None => {
-                    for (_, v) in self.keystate.iter_mut() {
-                        *v = false;
-                    }
-                }
-            }
-        }
-
-        true
+        !self.escape.load(Ordering::Relaxed)
     }
 }
 
