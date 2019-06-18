@@ -125,6 +125,10 @@ impl Envelop {
             return 0;
         }
 
+        if self.count == 0 {
+            return self.amp;
+        }
+
         let interval = rate * self.count / 64;
 
         self.clock += 1;
