@@ -365,7 +365,7 @@ impl ToneStream {
 
 impl Stream for ToneStream {
     fn max(&self) -> u16 {
-        210
+        2100
     }
 
     fn next(&mut self, rate: u32) -> u16 {
@@ -416,7 +416,7 @@ impl WaveStream {
 
 impl Stream for WaveStream {
     fn max(&self) -> u16 {
-        210
+        2100
     }
 
     fn next(&mut self, rate: u32) -> u16 {
@@ -542,7 +542,7 @@ impl NoiseStream {
 
 impl Stream for NoiseStream {
     fn max(&self) -> u16 {
-        210
+        2100
     }
 
     fn next(&mut self, rate: u32) -> u16 {
