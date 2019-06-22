@@ -70,6 +70,9 @@ pub struct Gpu {
     bg_palette: Vec<Color>,
     obj_palette0: Vec<Color>,
     obj_palette1: Vec<Color>,
+
+    vram: Vec<Vec<u8>>,
+    vram_select: usize,
 }
 
 fn to_palette(p: u8) -> Vec<Color> {
@@ -172,6 +175,8 @@ impl Gpu {
                 Color::DarkGray,
                 Color::Black,
             ],
+            vram: vec![vec![0; 0x2000]; 2],
+            vram_select: 0,
         }
     }
 
@@ -496,11 +501,10 @@ impl Gpu {
 
 impl IoHandler for Gpu {
     fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
-        if addr != 0xff44 {
-            trace!("Read GPU register: {:04x}", addr);
-        }
-
-        if addr == 0xff40 {
+        if addr >= 0x8000 && addr <= 0x9fff {
+            let off = addr as usize - 0x8000;
+            MemRead::Replace(self.vram[self.vram_select][off])
+        } else if addr == 0xff40 {
             MemRead::Replace(self.on_read_ctrl())
         } else if addr == 0xff41 {
             MemRead::Replace(self.on_read_status())
@@ -529,7 +533,7 @@ impl IoHandler for Gpu {
         } else if addr == 0xff4b {
             MemRead::Replace(self.wx)
         } else if addr == 0xff4f {
-            unimplemented!("read ff4f (vram bank)")
+            MemRead::Replace(self.vram_select as u8)
         } else if addr == 0xff68 || addr == 0xff69 || addr == 0xff6a || addr == 0xff6b {
             unimplemented!("read color")
         } else {
@@ -540,8 +544,10 @@ impl IoHandler for Gpu {
 
     fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         trace!("Write GPU register: {:04x} {:02x}", addr, value);
-
-        if addr == 0xff40 {
+        if addr >= 0x8000 && addr <= 0x9fff {
+            let off = addr as usize - 0x8000;
+            self.vram[self.vram_select][off] = value;
+        } else if addr == 0xff40 {
             self.on_write_ctrl(value);
         } else if addr == 0xff41 {
             self.on_write_status(value);
@@ -572,7 +578,7 @@ impl IoHandler for Gpu {
             info!("Window X: {}", value);
             self.wx = value;
         } else if addr == 0xff4f {
-            unimplemented!("write ff4f (vram bank)")
+            self.vram_select = value as usize & 1;
         } else if addr == 0xff68 || addr == 0xff69 || addr == 0xff6a || addr == 0xff6b {
             unimplemented!("write color")
         } else {
