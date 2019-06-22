@@ -344,7 +344,7 @@ impl ToneStream {
 
 impl Stream for ToneStream {
     fn max(&self) -> u16 {
-        2100
+        unreachable!()
     }
 
     fn next(&mut self, rate: u32) -> u16 {
@@ -459,7 +459,7 @@ impl WaveStream {
 
 impl Stream for WaveStream {
     fn max(&self) -> u16 {
-        2100
+        unreachable!()
     }
 
     fn next(&mut self, rate: u32) -> u16 {
@@ -581,7 +581,7 @@ impl NoiseStream {
 
 impl Stream for NoiseStream {
     fn max(&self) -> u16 {
-        2100
+        unreachable!()
     }
 
     fn next(&mut self, rate: u32) -> u16 {
@@ -776,6 +776,10 @@ impl MixerStream {
             enable: Arc::new(AtomicBool::new(false)),
         }
     }
+
+    fn volume(&self, amp: u16, vol: u16) -> u16 {
+        amp * vol
+    }
 }
 
 impl Stream for MixerStream {
@@ -783,7 +787,8 @@ impl Stream for MixerStream {
         // volume max = 7 * 2 = 14
         // amplitude max = 15
         // total volume max = 14 * 15 * 4 = 840
-        840 * 5
+        // * 3 to soften the sound
+        840 * 3
     }
 
     fn next(&mut self, rate: u32) -> u16 {
@@ -791,13 +796,13 @@ impl Stream for MixerStream {
             let mut vol = 0;
 
             let (t, v) = self.tone1.next(rate);
-            vol += t * v;
+            vol += self.volume(t, v);
             let (t, v) = self.tone2.next(rate);
-            vol += t * v;
+            vol += self.volume(t, v);
             let (t, v) = self.wave.next(rate);
-            vol += t * v;
+            vol += self.volume(t, v);
             let (t, v) = self.noise.next(rate);
-            vol += t * v;
+            vol += self.volume(t, v) / 2; // Soften the noise
 
             assert!(vol <= 840, "vol = {}", vol);
 
