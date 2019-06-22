@@ -122,15 +122,6 @@ impl Mmu {
             }
         }
 
-        if addr == 0xff46 {
-            debug!("MMU: Trigger DMA transfer: {:02x}", v);
-
-            let src = (v as u16) << 8;
-            for i in 0..0xa0 {
-                self.set8(0xfe00 + i, self.get8(src + i));
-            }
-        }
-
         if addr >= 0xe000 && addr <= 0xfdff {
             // echo ram
             self.ram[addr as usize - 0x2000] = v
