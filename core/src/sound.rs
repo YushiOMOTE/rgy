@@ -292,6 +292,39 @@ impl Tone {
             ctrl: Control::new(),
         }
     }
+
+    fn on_read(&mut self, base: u16, addr: u16) -> MemRead {
+        if addr == base + 3 {
+            MemRead::Replace(0xff)
+        } else {
+            MemRead::PassThrough
+        }
+    }
+
+    fn on_write(&mut self, base: u16, addr: u16, value: u8) -> bool {
+        if addr == base + 0 {
+            self.sweep_time = ((value >> 4) & 0x7) as usize;
+            self.sweep_sub = value & 0x08 != 0;
+            self.sweep_shift = (value & 0x07) as usize;
+        } else if addr == base + 1 {
+            self.wave_duty = (value >> 6).into();
+            self.sound_len = (value & 0x1f) as usize;
+        } else if addr == base + 2 {
+            self.env_init = (value >> 4) as usize;
+            self.env_inc = value & 0x08 != 0;
+            self.env_count = (value & 0x7) as usize;
+        } else if addr == base + 3 {
+            self.freq = (self.freq & !0xff) | value as usize;
+        } else if addr == base + 4 {
+            self.counter = value & 0x40 != 0;
+            self.freq = (self.freq & !0x700) | (((value & 0x7) as usize) << 8);
+            return value & 0x80 != 0;
+        } else {
+            unreachable!()
+        }
+
+        false
+    }
 }
 
 struct ToneStream {
@@ -447,6 +480,43 @@ impl Wave {
             ctrl: Control::new(),
         }
     }
+
+    fn on_read(&mut self, addr: u16) -> MemRead {
+        if addr == 0xff1d {
+            MemRead::Replace(0xff)
+        } else {
+            MemRead::PassThrough
+        }
+    }
+
+    fn on_write(&mut self, addr: u16, value: u8) -> Option<bool> {
+        if addr == 0xff1a {
+            debug!("Wave enable: {:02x}", value);
+            self.enable = value & 0x80 != 0;
+            return Some(self.enable);
+        } else if addr == 0xff1b {
+            debug!("Wave len: {:02x}", value);
+            self.sound_len = value as usize;
+        } else if addr == 0xff1c {
+            debug!("Wave amp shift: {:02x}", value);
+            self.amp_shift.set((value as usize >> 5) & 0x3);
+        } else if addr == 0xff1d {
+            debug!("Wave freq1: {:02x}", value);
+            self.freq.set((self.freq.get() & !0xff) | value as usize);
+        } else if addr == 0xff1e {
+            debug!("Wave freq2: {:02x}", value);
+            self.counter = value & 0x40 != 0;
+            self.freq
+                .set((self.freq.get() & !0x700) | (((value & 0x7) as usize) << 8));
+            return if value & 0x80 != 0 { Some(true) } else { None };
+        } else if addr >= 0xff30 && addr <= 0xff3f {
+            self.wavebuf[(addr - 0xff30) as usize] = value;
+        } else {
+            unreachable!()
+        }
+
+        None
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -485,6 +555,31 @@ impl Noise {
 
             ctrl: Control::new(),
         }
+    }
+
+    fn on_read(&mut self, _addr: u16) -> MemRead {
+        MemRead::PassThrough
+    }
+
+    fn on_write(&mut self, addr: u16, value: u8) -> bool {
+        if addr == 0xff20 {
+            self.sound_len = (value & 0x1f) as usize;
+        } else if addr == 0xff21 {
+            self.env_init = (value >> 4) as usize;
+            self.env_inc = value & 0x08 != 0;
+            self.env_count = (value & 0x7) as usize;
+        } else if addr == 0xff22 {
+            self.shift_freq = (value >> 4) as usize;
+            self.step = value & 0x08 != 0;
+            self.div_freq = (value & 0x7) as usize;
+        } else if addr == 0xff23 {
+            self.counter = value & 0x40 != 0;
+            return value & 0x80 != 0;
+        } else {
+            unreachable!()
+        }
+
+        false
     }
 }
 
@@ -631,94 +726,48 @@ impl Sound {
             0
         };
         // TODO: Find proper voluem control method
-        // v1 + v2
-        14
+        v1 + v2
+        // 14
     }
 }
 
 impl IoHandler for Sound {
-    fn on_read(&mut self, _mmu: &Mmu, _addr: u16) -> MemRead {
-        MemRead::PassThrough
+    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
+        if addr >= 0xff10 && addr <= 0xff14 {
+            self.tone1.on_read(0xff10, addr)
+        } else if addr >= 0xff15 && addr <= 0xff19 {
+            self.tone2.on_read(0xff10, addr)
+        } else if addr >= 0xff1a && addr <= 0xff1e {
+            self.wave.on_read(addr)
+        } else if addr >= 0xff20 && addr <= 0xff23 {
+            self.noise.on_read(addr)
+        } else if addr == 0xff25 {
+            MemRead::Replace(self.so_mask)
+        } else {
+            MemRead::PassThrough
+        }
     }
 
     fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        if addr == 0xff10 {
-            self.tone1.sweep_time = ((value >> 4) & 0x7) as usize;
-            self.tone1.sweep_sub = value & 0x08 != 0;
-            self.tone1.sweep_shift = (value & 0x07) as usize;
-        } else if addr == 0xff11 {
-            self.tone1.wave_duty = (value >> 6).into();
-            self.tone1.sound_len = (value & 0x1f) as usize;
-        } else if addr == 0xff12 {
-            self.tone1.env_init = (value >> 4) as usize;
-            self.tone1.env_inc = value & 0x08 != 0;
-            self.tone1.env_count = (value & 0x7) as usize;
-        } else if addr == 0xff13 {
-            self.tone1.freq = (self.tone1.freq & !0xff) | value as usize;
-        } else if addr == 0xff14 {
-            self.tone1.counter = value & 0x40 != 0;
-            self.tone1.freq = (self.tone1.freq & !0x700) | (((value & 0x7) as usize) << 8);
-            if value & 0x80 != 0 {
+        if addr >= 0xff10 && addr <= 0xff14 {
+            if self.tone1.on_write(0xff10, addr, value) {
                 self.play_tone(StreamId::Tone1, self.tone1.clone(), true);
             }
-        } else if addr == 0xff16 {
-            self.tone2.wave_duty = (value >> 6).into();
-            self.tone2.sound_len = (value & 0x1f) as usize;
-        } else if addr == 0xff17 {
-            self.tone2.env_init = (value >> 4) as usize;
-            self.tone2.env_inc = value & 0x08 != 0;
-            self.tone2.env_count = (value & 0x7) as usize;
-        } else if addr == 0xff18 {
-            self.tone2.freq = (self.tone2.freq & !0xff) | value as usize;
-        } else if addr == 0xff19 {
-            self.tone2.counter = value & 0x40 != 0;
-            self.tone2.freq = (self.tone2.freq & !0x700) | (((value & 0x7) as usize) << 8);
-            if value & 0x80 != 0 {
-                self.play_tone(StreamId::Tone2, self.tone2.clone(), false);
+        } else if addr >= 0xff15 && addr <= 0xff19 {
+            if self.tone2.on_write(0xff15, addr, value) {
+                self.play_tone(StreamId::Tone2, self.tone2.clone(), true);
             }
-        } else if addr == 0xff1a {
+        } else if addr >= 0xff1a && addr <= 0xff1e {
             debug!("Wave enable: {:02x}", value);
-            self.wave.enable = value & 0x80 != 0;
-            if self.wave.enable {
-                self.play_wave(self.wave.clone());
-            } else {
-                self.stop_wave();
-            }
-        } else if addr == 0xff1b {
-            debug!("Wave len: {:02x}", value);
-            self.wave.sound_len = value as usize;
-        } else if addr == 0xff1c {
-            debug!("Wave amp shift: {:02x}", value);
-            self.wave.amp_shift.set((value as usize >> 5) & 0x3);
-        } else if addr == 0xff1d {
-            debug!("Wave freq1: {:02x}", value);
-            self.wave
-                .freq
-                .set((self.wave.freq.get() & !0xff) | value as usize);
-        } else if addr == 0xff1e {
-            debug!("Wave freq2: {:02x}", value);
-            self.wave.counter = value & 0x40 != 0;
-            self.wave
-                .freq
-                .set((self.wave.freq.get() & !0x700) | (((value & 0x7) as usize) << 8));
-            if value & 0x80 != 0 {
-                self.play_wave(self.wave.clone());
+            match self.wave.on_write(addr, value) {
+                Some(true) => self.play_wave(self.wave.clone()),
+                Some(false) => self.stop_wave(),
+                None => {}
             }
         } else if addr >= 0xff30 && addr <= 0xff3f {
-            self.wave.wavebuf[(addr - 0xff30) as usize] = value;
-        } else if addr == 0xff20 {
-            self.noise.sound_len = (value & 0x1f) as usize;
-        } else if addr == 0xff21 {
-            self.noise.env_init = (value >> 4) as usize;
-            self.noise.env_inc = value & 0x08 != 0;
-            self.noise.env_count = (value & 0x7) as usize;
-        } else if addr == 0xff22 {
-            self.noise.shift_freq = (value >> 4) as usize;
-            self.noise.step = value & 0x08 != 0;
-            self.noise.div_freq = (value & 0x7) as usize;
-        } else if addr == 0xff23 {
-            self.noise.counter = value & 0x40 != 0;
-            if value & 0x80 != 0 {
+            let _ = self.wave.on_write(addr, value);
+        } else if addr >= 0xff20 && addr <= 0xff23 {
+            if self.noise.on_write(addr, value) {
                 self.play_noise(self.noise.clone());
             }
         } else if addr == 0xff24 {
@@ -740,6 +789,6 @@ impl IoHandler for Sound {
             info!("Write sound: {:04x} {:02x}", addr, value);
         }
 
-        MemWrite::Block
+        MemWrite::PassThrough
     }
 }
