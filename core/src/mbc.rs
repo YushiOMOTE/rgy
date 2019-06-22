@@ -672,11 +672,23 @@ impl Mbc {
             use_boot_rom: true,
         }
     }
+
+    fn in_boot_rom(&self, addr: u16) -> bool {
+        if cfg!(feature = "color") {
+            assert_eq!(0x900, BOOT_ROM.len());
+
+            (addr < 0x100 || (addr >= 0x200 && addr < 0x900))
+        } else {
+            assert_eq!(0x100, BOOT_ROM.len());
+
+            addr < 0x100
+        }
+    }
 }
 
 impl IoHandler for Mbc {
     fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
-        if self.use_boot_rom && addr < BOOT_ROM.len() as u16 {
+        if self.use_boot_rom && self.in_boot_rom(addr) {
             MemRead::Replace(BOOT_ROM[addr as usize])
         } else {
             self.cartridge.on_read(mmu, addr)
