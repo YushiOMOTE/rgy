@@ -2,9 +2,10 @@ use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use log::*;
+use spin::Mutex;
 
 use crate::device::IoHandler;
-use crate::hardware::{HardwareHandle, Stream, StreamId};
+use crate::hardware::{HardwareHandle, Stream};
 use crate::mmu::{MemRead, MemWrite, Mmu};
 
 trait AtomicHelper {
@@ -35,21 +36,6 @@ impl AtomicHelper for AtomicBool {
 
     fn set(&self, v: Self::Item) {
         self.store(v, Ordering::SeqCst)
-    }
-}
-
-#[derive(Clone, Debug)]
-struct Control {
-    volume: Arc<AtomicUsize>,
-    enable: Arc<AtomicBool>,
-}
-
-impl Control {
-    fn new() -> Self {
-        Self {
-            volume: Arc::new(AtomicUsize::new(0)),
-            enable: Arc::new(AtomicBool::new(false)),
-        }
     }
 }
 
@@ -273,7 +259,6 @@ struct Tone {
     env_count: usize,
     counter: bool,
     freq: usize,
-    ctrl: Control,
 }
 
 impl Tone {
@@ -289,8 +274,40 @@ impl Tone {
             env_count: 0,
             counter: false,
             freq: 0,
-            ctrl: Control::new(),
         }
+    }
+
+    fn on_read(&mut self, base: u16, addr: u16) -> MemRead {
+        if addr == base + 3 {
+            MemRead::Replace(0xff)
+        } else {
+            MemRead::PassThrough
+        }
+    }
+
+    fn on_write(&mut self, base: u16, addr: u16, value: u8) -> bool {
+        if addr == base + 0 {
+            self.sweep_time = ((value >> 4) & 0x7) as usize;
+            self.sweep_sub = value & 0x08 != 0;
+            self.sweep_shift = (value & 0x07) as usize;
+        } else if addr == base + 1 {
+            self.wave_duty = (value >> 6).into();
+            self.sound_len = (value & 0x1f) as usize;
+        } else if addr == base + 2 {
+            self.env_init = (value >> 4) as usize;
+            self.env_inc = value & 0x08 != 0;
+            self.env_count = (value & 0x7) as usize;
+        } else if addr == base + 3 {
+            self.freq = (self.freq & !0xff) | value as usize;
+        } else if addr == base + 4 {
+            self.counter = value & 0x40 != 0;
+            self.freq = (self.freq & !0x700) | (((value & 0x7) as usize) << 8);
+            return value & 0x80 != 0;
+        } else {
+            unreachable!()
+        }
+
+        false
     }
 }
 
@@ -327,14 +344,10 @@ impl ToneStream {
 
 impl Stream for ToneStream {
     fn max(&self) -> u16 {
-        2100
+        unreachable!()
     }
 
     fn next(&mut self, rate: u32) -> u16 {
-        if !self.tone.ctrl.enable.get() {
-            return 0;
-        }
-
         let rate = rate as usize;
 
         // Stop counter
@@ -361,8 +374,68 @@ impl Stream for ToneStream {
         if index <= duty {
             0
         } else {
-            (amp * self.tone.ctrl.volume.get()) as u16
+            amp as u16
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Wave {
+    enable: bool,
+    sound_len: usize,
+    amp_shift: Arc<AtomicUsize>,
+    counter: bool,
+    freq: Arc<AtomicUsize>,
+    wavebuf: [u8; 16],
+}
+
+impl Wave {
+    fn new() -> Self {
+        Self {
+            enable: false,
+            sound_len: 0,
+            amp_shift: Arc::new(AtomicUsize::new(0)),
+            counter: false,
+            freq: Arc::new(AtomicUsize::new(0)),
+            wavebuf: [0; 16],
+        }
+    }
+
+    fn on_read(&mut self, addr: u16) -> MemRead {
+        if addr == 0xff1d {
+            MemRead::Replace(0xff)
+        } else {
+            MemRead::PassThrough
+        }
+    }
+
+    fn on_write(&mut self, addr: u16, value: u8) -> bool {
+        if addr == 0xff1a {
+            debug!("Wave enable: {:02x}", value);
+            self.enable = value & 0x80 != 0;
+            return true;
+        } else if addr == 0xff1b {
+            debug!("Wave len: {:02x}", value);
+            self.sound_len = value as usize;
+        } else if addr == 0xff1c {
+            debug!("Wave amp shift: {:02x}", value);
+            self.amp_shift.set((value as usize >> 5) & 0x3);
+        } else if addr == 0xff1d {
+            debug!("Wave freq1: {:02x}", value);
+            self.freq.set((self.freq.get() & !0xff) | value as usize);
+        } else if addr == 0xff1e {
+            debug!("Wave freq2: {:02x}", value);
+            self.counter = value & 0x40 != 0;
+            self.freq
+                .set((self.freq.get() & !0x700) | (((value & 0x7) as usize) << 8));
+            return value & 0x80 != 0;
+        } else if addr >= 0xff30 && addr <= 0xff3f {
+            self.wavebuf[(addr - 0xff30) as usize] = value;
+        } else {
+            unreachable!()
+        }
+
+        false
     }
 }
 
@@ -386,11 +459,11 @@ impl WaveStream {
 
 impl Stream for WaveStream {
     fn max(&self) -> u16 {
-        2100
+        unreachable!()
     }
 
     fn next(&mut self, rate: u32) -> u16 {
-        if !self.wave.ctrl.enable.get() {
+        if !self.wave.enable {
             return 0;
         }
 
@@ -420,32 +493,7 @@ impl Stream for WaveStream {
             _ => unreachable!(),
         };
 
-        (self.wave.ctrl.volume.get() * amp as usize) as u16
-    }
-}
-
-#[derive(Debug, Clone)]
-struct Wave {
-    enable: bool,
-    sound_len: usize,
-    amp_shift: Arc<AtomicUsize>,
-    counter: bool,
-    freq: Arc<AtomicUsize>,
-    wavebuf: [u8; 16],
-    ctrl: Control,
-}
-
-impl Wave {
-    fn new() -> Self {
-        Self {
-            enable: false,
-            sound_len: 0,
-            amp_shift: Arc::new(AtomicUsize::new(0)),
-            counter: false,
-            freq: Arc::new(AtomicUsize::new(0)),
-            wavebuf: [0; 16],
-            ctrl: Control::new(),
-        }
+        amp as u16
     }
 }
 
@@ -463,8 +511,6 @@ struct Noise {
 
     counter: bool,
     freq: usize,
-
-    ctrl: Control,
 }
 
 impl Noise {
@@ -482,9 +528,32 @@ impl Noise {
 
             counter: false,
             freq: 0,
-
-            ctrl: Control::new(),
         }
+    }
+
+    fn on_read(&mut self, _addr: u16) -> MemRead {
+        MemRead::PassThrough
+    }
+
+    fn on_write(&mut self, addr: u16, value: u8) -> bool {
+        if addr == 0xff20 {
+            self.sound_len = (value & 0x1f) as usize;
+        } else if addr == 0xff21 {
+            self.env_init = (value >> 4) as usize;
+            self.env_inc = value & 0x08 != 0;
+            self.env_count = (value & 0x7) as usize;
+        } else if addr == 0xff22 {
+            self.shift_freq = (value >> 4) as usize;
+            self.step = value & 0x08 != 0;
+            self.div_freq = (value & 0x7) as usize;
+        } else if addr == 0xff23 {
+            self.counter = value & 0x40 != 0;
+            return value & 0x80 != 0;
+        } else {
+            unreachable!()
+        }
+
+        false
     }
 }
 
@@ -512,14 +581,10 @@ impl NoiseStream {
 
 impl Stream for NoiseStream {
     fn max(&self) -> u16 {
-        2100
+        unreachable!()
     }
 
     fn next(&mut self, rate: u32) -> u16 {
-        if !self.noise.ctrl.enable.get() {
-            return 0;
-        }
-
         let rate = rate as usize;
 
         // Stop counter
@@ -541,81 +606,95 @@ impl Stream for NoiseStream {
         };
 
         if self.wave.high(rate, freq) {
-            (amp * self.noise.ctrl.volume.get()) as u16
+            amp as u16
         } else {
             0
         }
     }
 }
 
-pub struct Sound {
-    hw: HardwareHandle,
-    tone1: Tone,
-    tone2: Tone,
-    wave: Wave,
-    noise: Noise,
-    enable: bool,
+struct Mixer {
     so1_volume: usize,
     so2_volume: usize,
-    so_mask: u8,
+    so_mask: usize,
+    enable: bool,
+    stream: MixerStream,
 }
 
-impl Sound {
-    pub fn new(hw: HardwareHandle) -> Self {
+impl Mixer {
+    fn new() -> Self {
         Self {
-            hw,
-            tone1: Tone::new(),
-            tone2: Tone::new(),
-            wave: Wave::new(),
-            noise: Noise::new(),
-            enable: false,
             so1_volume: 0,
             so2_volume: 0,
             so_mask: 0,
+            enable: false,
+            stream: MixerStream::new(),
         }
     }
 
-    fn play_tone(&mut self, id: StreamId, tone: Tone, sweep: bool) {
-        let stream = ToneStream::new(tone, sweep);
-
-        self.hw.get().borrow_mut().sound_play(id, Box::new(stream));
+    fn setup_stream(&self, hw: &HardwareHandle) {
+        hw.get()
+            .borrow_mut()
+            .sound_play(Box::new(self.stream.clone()))
     }
 
-    fn play_wave(&mut self, wave: Wave) {
-        if !wave.enable {
-            return;
+    fn on_read(&mut self, addr: u16) -> MemRead {
+        if addr == 0xff26 {
+            let mut v = 0;
+            v |= if self.enable { 0x80 } else { 0x00 };
+            v |= if self.stream.tone1.on() { 0x08 } else { 0x00 };
+            v |= if self.stream.tone2.on() { 0x04 } else { 0x00 };
+            v |= if self.stream.wave.on() { 0x02 } else { 0x00 };
+            v |= if self.stream.noise.on() { 0x01 } else { 0x00 };
+            MemRead::Replace(v)
+        } else {
+            MemRead::PassThrough
         }
-
-        let stream = WaveStream::new(wave);
-        self.hw
-            .get()
-            .borrow_mut()
-            .sound_play(StreamId::Wave, Box::new(stream));
     }
 
-    fn stop_wave(&self) {
-        self.hw.get().borrow_mut().sound_stop(StreamId::Wave);
+    fn on_write(&mut self, addr: u16, value: u8) {
+        if addr == 0xff24 {
+            self.so1_volume = (value as usize & 0x70) >> 4;
+            self.so2_volume = value as usize & 0x07;
+            self.update_volume();
+        } else if addr == 0xff25 {
+            self.so_mask = value as usize;
+            self.update_volume();
+        } else if addr == 0xff26 {
+            self.enable = value & 0x80 != 0;
+            if self.enable {
+                info!("Sound master enabled");
+            } else {
+                info!("Sound master disabled");
+            }
+            self.update_volume();
+        } else {
+            unreachable!()
+        }
     }
 
-    fn play_noise(&mut self, noise: Noise) {
-        let stream = NoiseStream::new(noise);
-
-        self.hw
-            .get()
-            .borrow_mut()
-            .sound_play(StreamId::Noise, Box::new(stream));
+    fn restart_tone1(&self, t: Tone) {
+        self.stream.tone1.update(Some(ToneStream::new(t, true)));
     }
 
-    fn update_volume(&mut self) {
-        self.tone1.ctrl.enable.set(self.enable);
-        self.tone2.ctrl.enable.set(self.enable);
-        self.wave.ctrl.enable.set(self.enable);
-        self.noise.ctrl.enable.set(self.enable);
+    fn restart_tone2(&self, t: Tone) {
+        self.stream.tone2.update(Some(ToneStream::new(t, false)));
+    }
 
-        self.tone1.ctrl.volume.set(self.get_volume(1));
-        self.tone2.ctrl.volume.set(self.get_volume(2));
-        self.wave.ctrl.volume.set(self.get_volume(3));
-        self.noise.ctrl.volume.set(self.get_volume(4));
+    fn restart_wave(&self, w: Wave) {
+        self.stream.wave.update(Some(WaveStream::new(w)));
+    }
+
+    fn restart_noise(&self, n: Noise) {
+        self.stream.noise.update(Some(NoiseStream::new(n)));
+    }
+
+    fn update_volume(&self) {
+        self.stream.enable.set(self.enable);
+        self.stream.tone1.volume.set(self.get_volume(0));
+        self.stream.tone2.volume.set(self.get_volume(1));
+        self.stream.wave.volume.set(self.get_volume(2));
+        self.stream.noise.volume.set(self.get_volume(3));
     }
 
     fn get_volume(&self, id: u8) -> usize {
@@ -630,116 +709,176 @@ impl Sound {
         } else {
             0
         };
-        // TODO: Find proper voluem control method
-        // v1 + v2
-        14
+        v1 + v2
+    }
+}
+
+struct Unit<T> {
+    stream: Arc<Mutex<Option<T>>>,
+    volume: Arc<AtomicUsize>,
+}
+
+impl<T> Clone for Unit<T> {
+    fn clone(&self) -> Self {
+        Self {
+            stream: self.stream.clone(),
+            volume: self.volume.clone(),
+        }
+    }
+}
+
+impl<T> Unit<T> {
+    fn new() -> Self {
+        Self {
+            stream: Arc::new(Mutex::new(None)),
+            volume: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+}
+
+impl<T: Stream> Unit<T> {
+    fn on(&self) -> bool {
+        self.stream.lock().is_some()
+    }
+
+    fn update(&self, s: Option<T>) {
+        *self.stream.lock() = s;
+    }
+
+    fn next(&self, rate: u32) -> (u16, u16) {
+        (
+            self.stream
+                .lock()
+                .as_mut()
+                .map(|s| s.next(rate))
+                .unwrap_or(0),
+            self.volume.get() as u16,
+        )
+    }
+}
+
+#[derive(Clone)]
+struct MixerStream {
+    tone1: Unit<ToneStream>,
+    tone2: Unit<ToneStream>,
+    wave: Unit<WaveStream>,
+    noise: Unit<NoiseStream>,
+    enable: Arc<AtomicBool>,
+}
+
+impl MixerStream {
+    fn new() -> Self {
+        Self {
+            tone1: Unit::new(),
+            tone2: Unit::new(),
+            wave: Unit::new(),
+            noise: Unit::new(),
+            enable: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    fn volume(&self, amp: u16, vol: u16) -> u16 {
+        amp * vol
+    }
+}
+
+impl Stream for MixerStream {
+    fn max(&self) -> u16 {
+        // volume max = 7 * 2 = 14
+        // amplitude max = 15
+        // total volume max = 14 * 15 * 4 = 840
+        // * 3 to soften the sound
+        840 * 3
+    }
+
+    fn next(&mut self, rate: u32) -> u16 {
+        if self.enable.get() {
+            let mut vol = 0;
+
+            let (t, v) = self.tone1.next(rate);
+            vol += self.volume(t, v);
+            let (t, v) = self.tone2.next(rate);
+            vol += self.volume(t, v);
+            let (t, v) = self.wave.next(rate);
+            vol += self.volume(t, v);
+            let (t, v) = self.noise.next(rate);
+            vol += self.volume(t, v) / 2; // Soften the noise
+
+            assert!(vol <= 840, "vol = {}", vol);
+
+            vol
+        } else {
+            0
+        }
+    }
+}
+
+pub struct Sound {
+    tone1: Tone,
+    tone2: Tone,
+    wave: Wave,
+    noise: Noise,
+    mixer: Mixer,
+}
+
+impl Sound {
+    pub fn new(hw: HardwareHandle) -> Self {
+        let mixer = Mixer::new();
+
+        mixer.setup_stream(&hw);
+
+        Self {
+            tone1: Tone::new(),
+            tone2: Tone::new(),
+            wave: Wave::new(),
+            noise: Noise::new(),
+            mixer,
+        }
     }
 }
 
 impl IoHandler for Sound {
-    fn on_read(&mut self, _mmu: &Mmu, _addr: u16) -> MemRead {
-        MemRead::PassThrough
+    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
+        if addr >= 0xff10 && addr <= 0xff14 {
+            self.tone1.on_read(0xff10, addr)
+        } else if addr >= 0xff15 && addr <= 0xff19 {
+            self.tone2.on_read(0xff15, addr)
+        } else if addr >= 0xff1a && addr <= 0xff1e {
+            self.wave.on_read(addr)
+        } else if addr >= 0xff20 && addr <= 0xff23 {
+            self.noise.on_read(addr)
+        } else if addr >= 0xff24 && addr <= 0xff26 {
+            self.mixer.on_read(addr)
+        } else {
+            MemRead::PassThrough
+        }
     }
 
     fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        if addr == 0xff10 {
-            self.tone1.sweep_time = ((value >> 4) & 0x7) as usize;
-            self.tone1.sweep_sub = value & 0x08 != 0;
-            self.tone1.sweep_shift = (value & 0x07) as usize;
-        } else if addr == 0xff11 {
-            self.tone1.wave_duty = (value >> 6).into();
-            self.tone1.sound_len = (value & 0x1f) as usize;
-        } else if addr == 0xff12 {
-            self.tone1.env_init = (value >> 4) as usize;
-            self.tone1.env_inc = value & 0x08 != 0;
-            self.tone1.env_count = (value & 0x7) as usize;
-        } else if addr == 0xff13 {
-            self.tone1.freq = (self.tone1.freq & !0xff) | value as usize;
-        } else if addr == 0xff14 {
-            self.tone1.counter = value & 0x40 != 0;
-            self.tone1.freq = (self.tone1.freq & !0x700) | (((value & 0x7) as usize) << 8);
-            if value & 0x80 != 0 {
-                self.play_tone(StreamId::Tone1, self.tone1.clone(), true);
+        if addr >= 0xff10 && addr <= 0xff14 {
+            if self.tone1.on_write(0xff10, addr, value) {
+                self.mixer.restart_tone1(self.tone1.clone());
             }
-        } else if addr == 0xff16 {
-            self.tone2.wave_duty = (value >> 6).into();
-            self.tone2.sound_len = (value & 0x1f) as usize;
-        } else if addr == 0xff17 {
-            self.tone2.env_init = (value >> 4) as usize;
-            self.tone2.env_inc = value & 0x08 != 0;
-            self.tone2.env_count = (value & 0x7) as usize;
-        } else if addr == 0xff18 {
-            self.tone2.freq = (self.tone2.freq & !0xff) | value as usize;
-        } else if addr == 0xff19 {
-            self.tone2.counter = value & 0x40 != 0;
-            self.tone2.freq = (self.tone2.freq & !0x700) | (((value & 0x7) as usize) << 8);
-            if value & 0x80 != 0 {
-                self.play_tone(StreamId::Tone2, self.tone2.clone(), false);
+        } else if addr >= 0xff15 && addr <= 0xff19 {
+            if self.tone2.on_write(0xff15, addr, value) {
+                self.mixer.restart_tone2(self.tone2.clone());
             }
-        } else if addr == 0xff1a {
-            debug!("Wave enable: {:02x}", value);
-            self.wave.enable = value & 0x80 != 0;
-            if self.wave.enable {
-                self.play_wave(self.wave.clone());
-            } else {
-                self.stop_wave();
-            }
-        } else if addr == 0xff1b {
-            debug!("Wave len: {:02x}", value);
-            self.wave.sound_len = value as usize;
-        } else if addr == 0xff1c {
-            debug!("Wave amp shift: {:02x}", value);
-            self.wave.amp_shift.set((value as usize >> 5) & 0x3);
-        } else if addr == 0xff1d {
-            debug!("Wave freq1: {:02x}", value);
-            self.wave
-                .freq
-                .set((self.wave.freq.get() & !0xff) | value as usize);
-        } else if addr == 0xff1e {
-            debug!("Wave freq2: {:02x}", value);
-            self.wave.counter = value & 0x40 != 0;
-            self.wave
-                .freq
-                .set((self.wave.freq.get() & !0x700) | (((value & 0x7) as usize) << 8));
-            if value & 0x80 != 0 {
-                self.play_wave(self.wave.clone());
+        } else if addr >= 0xff1a && addr <= 0xff1e {
+            if self.wave.on_write(addr, value) {
+                self.mixer.restart_wave(self.wave.clone());
             }
         } else if addr >= 0xff30 && addr <= 0xff3f {
-            self.wave.wavebuf[(addr - 0xff30) as usize] = value;
-        } else if addr == 0xff20 {
-            self.noise.sound_len = (value & 0x1f) as usize;
-        } else if addr == 0xff21 {
-            self.noise.env_init = (value >> 4) as usize;
-            self.noise.env_inc = value & 0x08 != 0;
-            self.noise.env_count = (value & 0x7) as usize;
-        } else if addr == 0xff22 {
-            self.noise.shift_freq = (value >> 4) as usize;
-            self.noise.step = value & 0x08 != 0;
-            self.noise.div_freq = (value & 0x7) as usize;
-        } else if addr == 0xff23 {
-            self.noise.counter = value & 0x40 != 0;
-            if value & 0x80 != 0 {
-                self.play_noise(self.noise.clone());
+            let _ = self.wave.on_write(addr, value);
+        } else if addr >= 0xff20 && addr <= 0xff23 {
+            if self.noise.on_write(addr, value) {
+                self.mixer.restart_noise(self.noise.clone());
             }
-        } else if addr == 0xff24 {
-            self.so1_volume = (value as usize & 0x70) >> 4;
-            self.so2_volume = value as usize & 0x07;
-            self.update_volume();
-        } else if addr == 0xff25 {
-            self.so_mask = value;
-            self.update_volume();
-        } else if addr == 0xff26 {
-            self.enable = value & 0x80 != 0;
-            if self.enable {
-                info!("Sound master enabled");
-            } else {
-                info!("Sound master disabled");
-            }
-            self.update_volume();
+        } else if addr >= 0xff24 && addr <= 0xff26 {
+            self.mixer.on_write(addr, value);
         } else {
             info!("Write sound: {:04x} {:02x}", addr, value);
         }
 
-        MemWrite::Block
+        MemWrite::PassThrough
     }
 }

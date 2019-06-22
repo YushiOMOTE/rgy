@@ -18,14 +18,6 @@ pub enum Key {
     Start,
 }
 
-#[derive(Clone, Debug)]
-pub enum StreamId {
-    Tone1,
-    Tone2,
-    Wave,
-    Noise,
-}
-
 pub trait Stream: Send + 'static {
     fn max(&self) -> u16;
 
@@ -51,9 +43,7 @@ pub trait Hardware {
 
     fn joypad_pressed(&mut self, key: Key) -> bool;
 
-    fn sound_play(&mut self, id: StreamId, stream: Box<dyn Stream>);
-
-    fn sound_stop(&mut self, id: StreamId);
+    fn sound_play(&mut self, stream: Box<dyn Stream>);
 
     /// Epoch in microseconds
     fn clock(&mut self) -> u64;
