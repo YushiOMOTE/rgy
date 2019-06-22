@@ -288,10 +288,10 @@ impl Pcm {
 
             match data {
                 cpal::StreamData::Output {
-                    buffer: cpal::UnknownTypeOutputBuffer::U16(mut buffer),
+                    buffer: cpal::UnknownTypeOutputBuffer::U16(_buffer),
                 } => unimplemented!(),
                 cpal::StreamData::Output {
-                    buffer: cpal::UnknownTypeOutputBuffer::I16(mut buffer),
+                    buffer: cpal::UnknownTypeOutputBuffer::I16(_buffer),
                 } => unimplemented!(),
                 cpal::StreamData::Output {
                     buffer: cpal::UnknownTypeOutputBuffer::F32(mut buffer),

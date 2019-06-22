@@ -1160,6 +1160,7 @@ dependencies = [
  "minifb 0.11.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustyline 4.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "signal-hook 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spin 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "structopt 0.2.17 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
