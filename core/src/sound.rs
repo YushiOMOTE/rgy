@@ -5,7 +5,7 @@ use log::*;
 use spin::Mutex;
 
 use crate::device::IoHandler;
-use crate::hardware::{HardwareHandle, Stream, StreamId};
+use crate::hardware::{HardwareHandle, Stream};
 use crate::mmu::{MemRead, MemWrite, Mmu};
 
 trait AtomicHelper {
@@ -635,7 +635,7 @@ impl Mixer {
     fn setup_stream(&self, hw: &HardwareHandle) {
         hw.get()
             .borrow_mut()
-            .sound_play(StreamId::Tone1, Box::new(self.stream.clone()))
+            .sound_play(Box::new(self.stream.clone()))
     }
 
     fn on_read(&mut self, addr: u16) -> MemRead {

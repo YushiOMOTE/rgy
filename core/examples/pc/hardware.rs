@@ -11,13 +11,13 @@ use std::sync::{
 };
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use rgy::hardware::{self, Key, Stream, StreamId, VRAM_HEIGHT, VRAM_WIDTH};
+use rgy::hardware::{self, Key, Stream, VRAM_HEIGHT, VRAM_WIDTH};
 
 #[derive(Clone)]
 pub struct Hardware {
     rampath: Option<String>,
     vram: Arc<Mutex<Vec<u32>>>,
-    pcms: Vec<SpeakerHandle>,
+    pcm: SpeakerHandle,
     keystate: Arc<Mutex<HashMap<Key, bool>>>,
     escape: Arc<AtomicBool>,
 }
@@ -112,16 +112,9 @@ impl Hardware {
     pub fn new(rampath: Option<String>) -> Self {
         let vram = Arc::new(Mutex::new(vec![0; VRAM_WIDTH * VRAM_HEIGHT]));
 
-        let pcms = (0..4)
-            .map(|_| {
-                let pcm = Pcm::new();
-                let handle = pcm.handle();
-
-                pcm.run_forever();
-
-                handle
-            })
-            .collect();
+        let pcm = Pcm::new();
+        let handle = pcm.handle();
+        pcm.run_forever();
 
         let mut keystate = HashMap::new();
         keystate.insert(Key::Right, false);
@@ -139,7 +132,7 @@ impl Hardware {
         Self {
             rampath,
             vram,
-            pcms,
+            pcm: handle,
             keystate,
             escape,
         }
@@ -173,22 +166,8 @@ impl hardware::Hardware for Hardware {
             .expect("Logic error in keystate map")
     }
 
-    fn sound_play(&mut self, id: StreamId, stream: Box<dyn Stream>) {
-        match id {
-            StreamId::Tone1 => self.pcms[0].play(stream),
-            StreamId::Tone2 => self.pcms[1].play(stream),
-            StreamId::Wave => self.pcms[2].play(stream),
-            StreamId::Noise => self.pcms[3].play(stream),
-        }
-    }
-
-    fn sound_stop(&mut self, id: StreamId) {
-        match id {
-            StreamId::Tone1 => self.pcms[0].stop(),
-            StreamId::Tone2 => self.pcms[1].stop(),
-            StreamId::Wave => self.pcms[2].stop(),
-            StreamId::Noise => self.pcms[3].stop(),
-        }
+    fn sound_play(&mut self, stream: Box<dyn Stream>) {
+        self.pcm.play(stream)
     }
 
     fn send_byte(&mut self, b: u8) {
@@ -313,6 +292,7 @@ impl Pcm {
     }
 }
 
+#[allow(unused)]
 enum SpeakerCmd {
     Play(Box<dyn Stream>),
     Stop,
@@ -328,6 +308,7 @@ impl SpeakerHandle {
         let _ = self.tx.send(SpeakerCmd::Play(stream));
     }
 
+    #[allow(unused)]
     fn stop(&self) {
         let _ = self.tx.send(SpeakerCmd::Stop);
     }
