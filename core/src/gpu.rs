@@ -136,7 +136,7 @@ impl ColorPalette {
         }
 
         if self.auto_inc {
-            self.index = (self.index + 1) % 0x3f;
+            self.index = (self.index + 1) % 0x40;
         }
     }
 }
