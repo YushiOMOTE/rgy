@@ -70,7 +70,8 @@ pub struct Gpu {
     bg_palette: Vec<Color>,
     obj_palette0: Vec<Color>,
     obj_palette1: Vec<Color>,
-
+    bg_color_palette: ColorPalette,
+    obj_color_palette: ColorPalette,
     vram: Vec<Vec<u8>>,
     vram_select: usize,
 }
@@ -90,12 +91,102 @@ fn from_palette(p: Vec<Color>) -> u8 {
     u8::from(p[0]) | u8::from(p[1]) << 2 | u8::from(p[2]) << 4 | u8::from(p[3]) << 6
 }
 
+struct ColorPalette {
+    cols: Vec<Vec<Color>>,
+    index: usize,
+    auto_inc: bool,
+}
+
+impl ColorPalette {
+    fn new() -> Self {
+        Self {
+            cols: vec![vec![Color::rgb(); 4]; 8],
+            index: 0,
+            auto_inc: false,
+        }
+    }
+
+    fn select(&mut self, value: u8) {
+        self.auto_inc = value & 0x80 != 0;
+        self.index = value as usize & 0x3f;
+    }
+
+    fn read(&self) -> u8 {
+        let idx = self.index / 8;
+        let off = self.index % 8;
+
+        if off % 2 == 0 {
+            self.cols[idx][off / 2].get_low()
+        } else {
+            self.cols[idx][off / 2].get_high()
+        }
+    }
+
+    fn write(&mut self, value: u8) {
+        let idx = self.index / 8;
+        let off = self.index % 8;
+
+        if off % 2 == 0 {
+            self.cols[idx][off / 2].set_low(value)
+        } else {
+            self.cols[idx][off / 2].set_high(value)
+        }
+
+        if self.auto_inc {
+            self.index = (self.index + 1) % 0x3f;
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum Color {
     White,
     LightGray,
     DarkGray,
     Black,
+    Rgb(u8, u8, u8),
+}
+
+impl Color {
+    fn rgb() -> Self {
+        Color::Rgb(0, 0, 0)
+    }
+
+    fn set_low(&mut self, low: u8) {
+        match *self {
+            Color::Rgb(r, g, b) => {
+                let nr = low & 0x1f;
+                let ng = g & !0x7 | low >> 5;
+                *self = Color::Rgb(nr, ng, b);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn set_high(&mut self, high: u8) {
+        match *self {
+            Color::Rgb(r, g, b) => {
+                let ng = g & !0x18 | (high & 0x3) << 3;
+                let nb = high >> 2;
+                *self = Color::Rgb(r, ng, nb);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn get_low(&self) -> u8 {
+        match *self {
+            Color::Rgb(r, g, _) => (r & 0x1f) | (g & 0x7) << 5,
+            _ => unreachable!(),
+        }
+    }
+
+    fn get_high(&self) -> u8 {
+        match *self {
+            Color::Rgb(_, g, b) => ((g >> 3) & 0x3) | (b & 0x1f) << 2,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl From<Color> for u32 {
@@ -105,6 +196,13 @@ impl From<Color> for u32 {
             Color::LightGray => 0xaaaaaa,
             Color::DarkGray => 0x888888,
             Color::Black => 0x555555,
+            Color::Rgb(r, g, b) => {
+                let mut c = 0;
+                c |= (r as u32) << 16;
+                c |= (g as u32) << 8;
+                c |= b as u32;
+                c
+            }
         }
     }
 }
@@ -116,6 +214,7 @@ impl From<Color> for u8 {
             Color::LightGray => 1,
             Color::DarkGray => 2,
             Color::Black => 3,
+            _ => unreachable!(),
         }
     }
 }
@@ -175,6 +274,8 @@ impl Gpu {
                 Color::DarkGray,
                 Color::Black,
             ],
+            bg_color_palette: ColorPalette::new(),
+            obj_color_palette: ColorPalette::new(),
             vram: vec![vec![0; 0x2000]; 2],
             vram_select: 0,
         }
@@ -534,8 +635,14 @@ impl IoHandler for Gpu {
             MemRead::Replace(self.wx)
         } else if addr == 0xff4f {
             MemRead::Replace(self.vram_select as u8)
-        } else if addr == 0xff68 || addr == 0xff69 || addr == 0xff6a || addr == 0xff6b {
-            unimplemented!("read color")
+        } else if addr == 0xff68 {
+            MemRead::PassThrough
+        } else if addr == 0xff69 {
+            MemRead::Replace(self.bg_color_palette.read())
+        } else if addr == 0xff6a {
+            MemRead::PassThrough
+        } else if addr == 0xff6b {
+            MemRead::Replace(self.obj_color_palette.read())
         } else {
             warn!("Unsupported GPU register read: {:04x}", addr);
             MemRead::Replace(0)
@@ -579,8 +686,14 @@ impl IoHandler for Gpu {
             self.wx = value;
         } else if addr == 0xff4f {
             self.vram_select = value as usize & 1;
-        } else if addr == 0xff68 || addr == 0xff69 || addr == 0xff6a || addr == 0xff6b {
-            unimplemented!("write color")
+        } else if addr == 0xff68 {
+            self.bg_color_palette.select(value);
+        } else if addr == 0xff69 {
+            self.bg_color_palette.write(value);
+        } else if addr == 0xff6a {
+            self.obj_color_palette.select(value);
+        } else if addr == 0xff6b {
+            self.obj_color_palette.write(value);
         } else {
             warn!(
                 "Unsupported GPU register is written: {:04x} {:02x}",
