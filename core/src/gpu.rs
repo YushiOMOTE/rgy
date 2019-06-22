@@ -76,6 +76,7 @@ pub struct Gpu {
     vram_select: usize,
 
     dma: Dma,
+    hdma: Hdma,
 }
 
 fn to_palette(p: u8) -> Vec<Color> {
@@ -257,6 +258,76 @@ impl Dma {
     }
 }
 
+struct Hdma {
+    on: bool,
+    src_low: u8,
+    src_high: u8,
+    dst_low: u8,
+    dst_high: u8,
+    src_wip: u16,
+    dst_wip: u16,
+    len: u8,
+    hblank: bool,
+}
+
+impl Hdma {
+    fn new() -> Self {
+        Self {
+            on: false,
+            src_low: 0,
+            src_high: 0,
+            dst_low: 0,
+            dst_high: 0,
+            src_wip: 0,
+            dst_wip: 0,
+            len: 0,
+            hblank: false,
+        }
+    }
+
+    fn start(&mut self, value: u8) {
+        if self.on && self.hblank && value & 0x80 == 0 {
+            self.on = false;
+            self.hblank = false;
+
+            debug!("Cancel HDMA transfer");
+        } else {
+            self.hblank = value & 0x80 != 0;
+            self.len = value & 0x7f;
+            self.src_wip = ((self.src_high as u16) << 8 | self.src_low as u16) & !0x000f;
+            self.dst_wip = ((self.dst_high as u16) << 8 | self.dst_low as u16) & !0xe00f;
+            self.on = true;
+
+            debug!(
+                "Start HDMA transfer: {:04x} -> {:04x} ({})",
+                self.src_wip, self.dst_wip, self.len
+            );
+        }
+    }
+
+    fn run(&mut self, mmu: &mut Mmu) {
+        if self.on {
+            let size = (self.len as u16 + 1) * 0x10;
+            let size = if self.hblank { size.min(0x10) } else { size };
+
+            debug!(
+                "HDMA transfer: {:04x} -> {:04x} ({})",
+                self.src_wip, self.dst_wip, size
+            );
+
+            for i in 0..size {
+                mmu.set8(self.dst_wip + i, mmu.get8(self.src_wip + i));
+            }
+
+            self.src_wip += size;
+            self.dst_wip += size;
+            self.len = self.len.saturating_sub(1);
+
+            self.on = if self.hblank { self.len > 0 } else { false };
+        }
+    }
+}
+
 impl Gpu {
     pub fn new(hw: HardwareHandle, irq: Irq) -> Self {
         Self {
@@ -305,6 +376,7 @@ impl Gpu {
             vram: vec![vec![0; 0x2000]; 2],
             vram_select: 0,
             dma: Dma::new(),
+            hdma: Hdma::new(),
         }
     }
 
@@ -324,6 +396,7 @@ impl Gpu {
             Mode::VRAM => {
                 if clocks >= 172 {
                     self.draw(mmu);
+                    self.hdma.run(mmu);
 
                     if self.hblank_interrupt {
                         self.irq.lcd(true);
@@ -664,6 +737,19 @@ impl IoHandler for Gpu {
             MemRead::Replace(self.wx)
         } else if addr == 0xff4f {
             MemRead::Replace(self.vram_select as u8)
+        } else if addr == 0xff51 {
+            MemRead::Replace(self.hdma.src_high)
+        } else if addr == 0xff52 {
+            MemRead::Replace(self.hdma.src_low)
+        } else if addr == 0xff53 {
+            MemRead::Replace(self.hdma.dst_high)
+        } else if addr == 0xff54 {
+            MemRead::Replace(self.hdma.dst_low)
+        } else if addr == 0xff55 {
+            let mut v = 0;
+            v |= self.hdma.len & 0x7f;
+            v |= if self.hdma.hblank { 0x80 } else { 0x00 };
+            MemRead::Replace(v)
         } else if addr == 0xff68 {
             MemRead::PassThrough
         } else if addr == 0xff69 {
@@ -717,6 +803,16 @@ impl IoHandler for Gpu {
             self.wx = value;
         } else if addr == 0xff4f {
             self.vram_select = value as usize & 1;
+        } else if addr == 0xff51 {
+            self.hdma.src_high = value;
+        } else if addr == 0xff52 {
+            self.hdma.src_low = value;
+        } else if addr == 0xff53 {
+            self.hdma.dst_high = value;
+        } else if addr == 0xff54 {
+            self.hdma.dst_low = value;
+        } else if addr == 0xff55 {
+            self.hdma.start(value);
         } else if addr == 0xff68 {
             self.bg_color_palette.select(value);
         } else if addr == 0xff69 {
