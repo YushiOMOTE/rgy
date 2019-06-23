@@ -157,7 +157,7 @@ impl Color {
 
     fn set_low(&mut self, low: u8) {
         match *self {
-            Color::Rgb(r, g, b) => {
+            Color::Rgb(_, g, b) => {
                 let nr = low & 0x1f;
                 let ng = g & !0x7 | low >> 5;
                 *self = Color::Rgb(nr, ng, b);
@@ -168,9 +168,9 @@ impl Color {
 
     fn set_high(&mut self, high: u8) {
         match *self {
-            Color::Rgb(r, g, b) => {
+            Color::Rgb(r, g, _) => {
                 let ng = g & !0x18 | (high & 0x3) << 3;
-                let nb = high >> 2;
+                let nb = (high >> 2) & 0x1f;
                 *self = Color::Rgb(r, ng, nb);
             }
             _ => unreachable!(),
@@ -192,6 +192,16 @@ impl Color {
     }
 }
 
+fn color_adjust(v: u8) -> u32 {
+    let v = v as u32;
+
+    if v >= 0x10 {
+        0xff - (0x1f - v)
+    } else {
+        v
+    }
+}
+
 impl From<Color> for u32 {
     fn from(c: Color) -> u32 {
         match c {
@@ -201,9 +211,9 @@ impl From<Color> for u32 {
             Color::Black => 0x555555,
             Color::Rgb(r, g, b) => {
                 let mut c = 0;
-                c |= (r as u32) << 16;
-                c |= (g as u32) << 8;
-                c |= b as u32;
+                c |= color_adjust(r) << 16;
+                c |= color_adjust(g) << 8;
+                c |= color_adjust(b);
                 c
             }
         }
