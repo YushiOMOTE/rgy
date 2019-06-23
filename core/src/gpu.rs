@@ -94,6 +94,14 @@ fn from_palette(p: Vec<Color>) -> u8 {
     u8::from(p[0]) | u8::from(p[1]) << 2 | u8::from(p[2]) << 4 | u8::from(p[3]) << 6
 }
 
+struct MapAttribute<'a> {
+    palette: &'a [Color],
+    vram_bank: usize,
+    xflip: bool,
+    yflip: bool,
+    priority: bool,
+}
+
 struct ColorPalette {
     cols: Vec<Vec<Color>>,
     index: usize,
@@ -296,6 +304,8 @@ impl Hdma {
     }
 
     fn start(&mut self, value: u8) {
+        assert!(false);
+
         if self.on && self.hblank && value & 0x80 == 0 {
             self.on = false;
             self.hblank = false;
@@ -317,6 +327,8 @@ impl Hdma {
 
     fn run(&mut self, mmu: &mut Mmu) {
         if self.on {
+            assert!(false);
+
             let size = (self.len as u16 + 1) * 0x10;
             let size = if self.hblank { size.min(0x10) } else { size };
 
@@ -483,7 +495,6 @@ impl Gpu {
 
         if self.bgenable {
             let mapbase = self.bgmap;
-            let tiles = self.tiles;
 
             let yy = (self.ly as u16 + self.scy as u16) % 256;
             let ty = yy / 8;
@@ -494,25 +505,23 @@ impl Gpu {
                 let tx = xx / 8;
                 let txoff = xx % 8;
 
-                let ti = tx + ty * 32;
-                let tbase = if tiles == 0x8000 {
-                    tiles + mmu.get8(mapbase + ti) as u16 * 16
-                } else {
-                    tiles + (0x800 + mmu.get8(mapbase + ti) as i8 as i16 * 16) as u16
-                };
+                let tbase = self.get_tile_base(mapbase, tx, ty);
+                let tattr = self.get_tile_attr(mapbase, tx, ty);
 
-                let l = mmu.get8(tbase + tyoff * 2) as u16;
-                let h = mmu.get8(tbase + tyoff * 2 + 1) as u16;
+                assert_eq!(tattr.xflip, false);
+                assert_eq!(tattr.yflip, false);
+                assert_eq!(tattr.priority, false);
 
-                let l = (l >> (7 - txoff)) & 1;
-                let h = ((h >> (7 - txoff)) & 1) << 1;
-                let coli = (h | l) as usize;
-                let col = self.bg_palette[coli].into();
+                let coli = self.get_tile_byte(tbase, txoff, tyoff, tattr.vram_bank);
+                let col = tattr.palette[coli].into();
 
                 buf[x as usize] = col;
                 bgbuf[x as usize] = coli;
             }
         }
+
+        assert_eq!(self.winenable, false);
+        assert_eq!(self.spenable, false);
 
         if self.winenable {
             let mapbase = self.winmap;
@@ -710,13 +719,66 @@ impl Gpu {
         trace!("Read Status: {:02x}", v);
         v
     }
+
+    fn read_vram(&self, addr: u16, bank: usize) -> u8 {
+        let off = addr as usize - 0x8000;
+        self.vram[bank][off]
+    }
+
+    fn write_vram(&mut self, addr: u16, value: u8, bank: usize) {
+        let off = addr as usize - 0x8000;
+        self.vram[bank][off] = value;
+    }
+
+    fn get_tile_base(&self, mapbase: u16, tx: u16, ty: u16) -> u16 {
+        let ti = tx + ty * 32;
+        let num = self.read_vram(mapbase + ti, 0);
+
+        if self.tiles == 0x8000 {
+            self.tiles + num as u16 * 16
+        } else {
+            self.tiles + (0x800 + num as i8 as i16 * 16) as u16
+        }
+    }
+
+    fn get_tile_attr(&self, mapbase: u16, tx: u16, ty: u16) -> MapAttribute {
+        if cfg!(feature = "color") {
+            let ti = tx + ty * 32;
+            let attr = self.read_vram(mapbase + ti, 1) as usize;
+
+            MapAttribute {
+                palette: &self.bg_color_palette.cols[attr & 0x7][..],
+                vram_bank: (attr >> 3) & 1,
+                xflip: attr & 0x20 != 0,
+                yflip: attr & 0x40 != 0,
+                priority: attr & 0x80 != 0,
+            }
+        } else {
+            MapAttribute {
+                palette: &self.bg_palette,
+                vram_bank: 0,
+                xflip: false,
+                yflip: false,
+                priority: false,
+            }
+        }
+    }
+
+    fn get_tile_byte(&self, tilebase: u16, txoff: u16, tyoff: u16, bank: usize) -> usize {
+        let l = self.read_vram(tilebase + tyoff * 2, bank);
+        let h = self.read_vram(tilebase + tyoff * 2 + 1, bank);
+
+        let l = (l >> (7 - txoff)) & 1;
+        let h = ((h >> (7 - txoff)) & 1) << 1;
+
+        (h | l) as usize
+    }
 }
 
 impl IoHandler for Gpu {
     fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
         if addr >= 0x8000 && addr <= 0x9fff {
-            let off = addr as usize - 0x8000;
-            MemRead::Replace(self.vram[self.vram_select][off])
+            MemRead::Replace(self.read_vram(addr, self.vram_select))
         } else if addr == 0xff40 {
             MemRead::Replace(self.on_read_ctrl())
         } else if addr == 0xff41 {
@@ -777,8 +839,7 @@ impl IoHandler for Gpu {
     fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         trace!("Write GPU register: {:04x} {:02x}", addr, value);
         if addr >= 0x8000 && addr <= 0x9fff {
-            let off = addr as usize - 0x8000;
-            self.vram[self.vram_select][off] = value;
+            self.write_vram(addr, value, self.vram_select);
         } else if addr == 0xff40 {
             self.on_write_ctrl(value);
         } else if addr == 0xff41 {
