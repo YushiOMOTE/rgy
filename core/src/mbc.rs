@@ -438,20 +438,84 @@ impl Mbc3 {
 }
 
 struct Mbc5 {
+    hw: HardwareHandle,
     rom: Vec<u8>,
+    ram: Vec<u8>,
+    rom_bank: usize,
+    ram_bank: usize,
+    ram_enable: bool,
 }
 
 impl Mbc5 {
-    fn new(rom: Vec<u8>) -> Self {
-        Self { rom }
+    fn new(hw: HardwareHandle, rom: Vec<u8>) -> Self {
+        let ram = hw.get().borrow_mut().load_ram(0x20000);
+
+        Self {
+            hw,
+            rom,
+            ram,
+            rom_bank: 0,
+            ram_bank: 0,
+            ram_enable: false,
+        }
     }
 
-    fn on_read(&mut self, _mmu: &Mmu, _addr: u16) -> MemRead {
-        unimplemented!()
+    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
+        if addr <= 0x3fff {
+            MemRead::Replace(self.rom[addr as usize])
+        } else if addr >= 0x4000 && addr <= 0x7fff {
+            let base = self.rom_bank * 0x4000;
+            let offset = addr as usize - 0x4000;
+            MemRead::Replace(self.rom[base + offset])
+        } else if addr >= 0xa000 && addr <= 0xbfff {
+            if self.ram_enable {
+                let base = self.ram_bank * 0x2000;
+                let offset = addr as usize - 0xa000;
+                MemRead::Replace(self.ram[base + offset])
+            } else {
+                warn!("Read from disabled external RAM: {:04x}", addr);
+                MemRead::Replace(0)
+            }
+        } else {
+            MemRead::PassThrough
+        }
     }
 
-    fn on_write(&mut self, _mmu: &Mmu, _addr: u16, _value: u8) -> MemWrite {
-        unimplemented!()
+    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+        if addr <= 0x1fff {
+            if value & 0xf == 0x0a {
+                info!("External RAM enabled");
+                self.ram_enable = true;
+            } else {
+                info!("External RAM disabled");
+                self.ram_enable = false;
+                self.hw.get().borrow_mut().save_ram(&self.ram);
+            }
+            MemWrite::Block
+        } else if addr >= 0x2000 && addr <= 0x2fff {
+            self.rom_bank = (self.rom_bank & !0xff) | value as usize;
+            debug!("Switch ROM bank to {:02x}", self.rom_bank);
+            MemWrite::Block
+        } else if addr >= 0x3000 && addr <= 0x3fff {
+            self.rom_bank = (self.rom_bank & !0x100) | (value as usize & 1) << 8;
+            debug!("Switch ROM bank to {:02x}", self.rom_bank);
+            MemWrite::Block
+        } else if addr >= 0x4000 && addr <= 0x5fff {
+            self.ram_bank = value as usize & 0xf;
+            MemWrite::Block
+        } else if addr >= 0xa000 && addr <= 0xbfff {
+            if self.ram_enable {
+                let base = self.ram_bank * 0x2000;
+                let offset = addr as usize - 0xa000;
+                self.ram[base + offset] = value;
+                MemWrite::Block
+            } else {
+                warn!("Write to disabled external RAM: {:04x} {:02x}", addr, value);
+                MemWrite::Block
+            }
+        } else {
+            unimplemented!("write to rom {:04x} {:02x}", addr, value)
+        }
     }
 }
 
@@ -492,7 +556,7 @@ impl MbcType {
             0x0b | 0x0c | 0x0d => unimplemented!("MMM01: {:02x}", code),
             0x0f | 0x10 | 0x11 | 0x12 | 0x13 => MbcType::Mbc3(Mbc3::new(hw, rom)),
             0x15 | 0x16 | 0x17 => unimplemented!("Mbc4: {:02x}", code),
-            0x19 | 0x1a | 0x1b | 0x1c | 0x1d | 0x1e => MbcType::Mbc5(Mbc5::new(rom)),
+            0x19 | 0x1a | 0x1b | 0x1c | 0x1d | 0x1e => MbcType::Mbc5(Mbc5::new(hw, rom)),
             0xfc => unimplemented!("POCKET CAMERA"),
             0xfd => unimplemented!("BANDAI TAMAS"),
             0xfe => unimplemented!("HuC3"),
