@@ -822,7 +822,7 @@ impl IoHandler for Gpu {
         } else if addr == 0xff4b {
             MemRead::Replace(self.wx)
         } else if addr == 0xff4f {
-            MemRead::Replace(self.vram_select as u8)
+            MemRead::Replace(self.vram_select as u8 & 0xfe)
         } else if addr == 0xff51 {
             MemRead::Replace(self.hdma.src_high)
         } else if addr == 0xff52 {
