@@ -508,9 +508,12 @@ impl Gpu {
                 let tbase = self.get_tile_base(mapbase, tx, ty);
                 let tattr = self.get_tile_attr(mapbase, tx, ty);
 
-                assert_eq!(tattr.xflip, false);
-                assert_eq!(tattr.yflip, false);
-                assert_eq!(tattr.priority, false);
+                #[cfg(feature = "color")]
+                {
+                    assert_eq!(tattr.xflip, false);
+                    assert_eq!(tattr.yflip, false);
+                    assert_eq!(tattr.priority, false);
+                }
 
                 let coli = self.get_tile_byte(tbase, txoff, tyoff, tattr.vram_bank);
                 let col = tattr.palette[coli].into();
@@ -520,8 +523,11 @@ impl Gpu {
             }
         }
 
-        assert_eq!(self.winenable, false);
-        assert_eq!(self.spenable, false);
+        #[cfg(feature = "color")]
+        {
+            assert_eq!(self.winenable, false);
+            assert_eq!(self.spenable, false);
+        }
 
         if self.winenable {
             let mapbase = self.winmap;
