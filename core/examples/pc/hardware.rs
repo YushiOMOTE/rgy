@@ -35,8 +35,13 @@ impl Gui {
         keystate: Arc<Mutex<HashMap<Key, bool>>>,
         escape: Arc<AtomicBool>,
     ) -> Self {
+        let title = if cfg!(feature = "color") {
+            "Gay Boy Color"
+        } else {
+            "Gay Boy"
+        };
         let window = match Window::new(
-            "Gay Boy",
+            title,
             VRAM_WIDTH,
             VRAM_HEIGHT,
             WindowOptions {
