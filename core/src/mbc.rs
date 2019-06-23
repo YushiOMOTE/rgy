@@ -7,7 +7,16 @@ use alloc::{
 };
 use log::*;
 
-const BOOT_ROM: &[u8] = include_bytes!("boot.bin");
+const BOOT_ROM: &[u8] = {
+    #[cfg(feature = "color")]
+    {
+        include_bytes!("cgb.bin")
+    }
+    #[cfg(not(feature = "color"))]
+    {
+        include_bytes!("dmg.bin")
+    }
+};
 
 struct MbcNone {
     rom: Vec<u8>,
@@ -663,11 +672,23 @@ impl Mbc {
             use_boot_rom: true,
         }
     }
+
+    fn in_boot_rom(&self, addr: u16) -> bool {
+        if cfg!(feature = "color") {
+            assert_eq!(0x900, BOOT_ROM.len());
+
+            (addr < 0x100 || (addr >= 0x200 && addr < 0x900))
+        } else {
+            assert_eq!(0x100, BOOT_ROM.len());
+
+            addr < 0x100
+        }
+    }
 }
 
 impl IoHandler for Mbc {
     fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
-        if self.use_boot_rom && addr < 0x100 {
+        if self.use_boot_rom && self.in_boot_rom(addr) {
             MemRead::Replace(BOOT_ROM[addr as usize])
         } else {
             self.cartridge.on_read(mmu, addr)

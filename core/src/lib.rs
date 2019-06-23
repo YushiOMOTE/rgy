@@ -3,6 +3,7 @@
 extern crate alloc;
 
 mod alu;
+mod cgb;
 pub mod cpu;
 pub mod debug;
 pub mod device;

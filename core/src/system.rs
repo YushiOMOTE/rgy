@@ -1,3 +1,4 @@
+use crate::cgb::Cgb;
 use crate::cpu::Cpu;
 use crate::debug::Debugger;
 use crate::device::Device;
@@ -93,13 +94,24 @@ fn run_inner<T: Hardware + 'static, D: Debugger + 'static>(
     let timer = Device::new(Timer::new(irq.clone()));
     let serial = Device::new(Serial::new(hw.clone(), irq.clone()));
     let mbc = Device::new(Mbc::new(hw.clone(), rom));
+    let cgb = Device::new(Cgb::new());
 
     mmu.add_handler((0x0000, 0xffff), dbg.handler());
+
+    mmu.add_handler((0xc000, 0xdfff), cgb.handler());
+    mmu.add_handler((0xff4d, 0xff4d), cgb.handler());
+    mmu.add_handler((0xff56, 0xff56), cgb.handler());
+    mmu.add_handler((0xff70, 0xff70), cgb.handler());
+
     mmu.add_handler((0x0000, 0x7fff), mbc.handler());
     mmu.add_handler((0xff50, 0xff50), mbc.handler());
     mmu.add_handler((0xa000, 0xbfff), mbc.handler());
     mmu.add_handler((0xff10, 0xff3f), sound.handler());
+
+    mmu.add_handler((0x8000, 0x9fff), gpu.handler());
     mmu.add_handler((0xff40, 0xff4f), gpu.handler());
+    mmu.add_handler((0xff68, 0xff6b), gpu.handler());
+
     mmu.add_handler((0xff0f, 0xffff), ic.handler());
     mmu.add_handler((0xff00, 0xff00), joypad.handler());
     mmu.add_handler((0xff04, 0xff07), timer.handler());

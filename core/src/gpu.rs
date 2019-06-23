@@ -70,6 +70,13 @@ pub struct Gpu {
     bg_palette: Vec<Color>,
     obj_palette0: Vec<Color>,
     obj_palette1: Vec<Color>,
+    bg_color_palette: ColorPalette,
+    obj_color_palette: ColorPalette,
+    vram: Vec<Vec<u8>>,
+    vram_select: usize,
+
+    dma: Dma,
+    hdma: Hdma,
 }
 
 fn to_palette(p: u8) -> Vec<Color> {
@@ -87,12 +94,120 @@ fn from_palette(p: Vec<Color>) -> u8 {
     u8::from(p[0]) | u8::from(p[1]) << 2 | u8::from(p[2]) << 4 | u8::from(p[3]) << 6
 }
 
+struct MapAttribute<'a> {
+    palette: &'a [Color],
+    vram_bank: usize,
+    xflip: bool,
+    yflip: bool,
+    priority: bool,
+}
+
+struct ColorPalette {
+    cols: Vec<Vec<Color>>,
+    index: usize,
+    auto_inc: bool,
+}
+
+impl ColorPalette {
+    fn new() -> Self {
+        Self {
+            cols: vec![vec![Color::rgb(); 4]; 8],
+            index: 0,
+            auto_inc: false,
+        }
+    }
+
+    fn select(&mut self, value: u8) {
+        self.auto_inc = value & 0x80 != 0;
+        self.index = value as usize & 0x3f;
+    }
+
+    fn read(&self) -> u8 {
+        let idx = self.index / 8;
+        let off = self.index % 8;
+
+        if off % 2 == 0 {
+            self.cols[idx][off / 2].get_low()
+        } else {
+            self.cols[idx][off / 2].get_high()
+        }
+    }
+
+    fn write(&mut self, value: u8) {
+        let idx = self.index / 8;
+        let off = self.index % 8;
+
+        if off % 2 == 0 {
+            self.cols[idx][off / 2].set_low(value)
+        } else {
+            self.cols[idx][off / 2].set_high(value)
+        }
+
+        if self.auto_inc {
+            self.index = (self.index + 1) % 0x40;
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum Color {
     White,
     LightGray,
     DarkGray,
     Black,
+    Rgb(u8, u8, u8),
+}
+
+impl Color {
+    fn rgb() -> Self {
+        Color::Rgb(0, 0, 0)
+    }
+
+    fn set_low(&mut self, low: u8) {
+        match *self {
+            Color::Rgb(_, g, b) => {
+                let nr = low & 0x1f;
+                let ng = g & !0x7 | low >> 5;
+                *self = Color::Rgb(nr, ng, b);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn set_high(&mut self, high: u8) {
+        match *self {
+            Color::Rgb(r, g, _) => {
+                let ng = g & !0x18 | (high & 0x3) << 3;
+                let nb = (high >> 2) & 0x1f;
+                *self = Color::Rgb(r, ng, nb);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn get_low(&self) -> u8 {
+        match *self {
+            Color::Rgb(r, g, _) => (r & 0x1f) | (g & 0x7) << 5,
+            _ => unreachable!(),
+        }
+    }
+
+    fn get_high(&self) -> u8 {
+        match *self {
+            Color::Rgb(_, g, b) => ((g >> 3) & 0x3) | (b & 0x1f) << 2,
+            _ => unreachable!(),
+        }
+    }
+}
+
+fn color_adjust(v: u8) -> u32 {
+    let v = v as u32;
+
+    if v >= 0x10 {
+        0xff - (0x1f - v)
+    } else {
+        v
+    }
 }
 
 impl From<Color> for u32 {
@@ -102,6 +217,13 @@ impl From<Color> for u32 {
             Color::LightGray => 0xaaaaaa,
             Color::DarkGray => 0x888888,
             Color::Black => 0x555555,
+            Color::Rgb(r, g, b) => {
+                let mut c = 0;
+                c |= color_adjust(r) << 16;
+                c |= color_adjust(g) << 8;
+                c |= color_adjust(b);
+                c
+            }
         }
     }
 }
@@ -113,6 +235,7 @@ impl From<Color> for u8 {
             Color::LightGray => 1,
             Color::DarkGray => 2,
             Color::Black => 3,
+            _ => unreachable!(),
         }
     }
 }
@@ -125,6 +248,104 @@ impl From<u8> for Color {
             2 => Color::DarkGray,
             3 => Color::Black,
             _ => unreachable!(),
+        }
+    }
+}
+
+struct Dma {
+    on: bool,
+    src: u8,
+}
+
+impl Dma {
+    fn new() -> Self {
+        Self { on: false, src: 0 }
+    }
+
+    fn run(&mut self, mmu: &mut Mmu) {
+        if self.on {
+            debug!("Trigger DMA transfer: {:02x}", self.src);
+
+            let src = (self.src as u16) << 8;
+            for i in 0..0xa0 {
+                mmu.set8(0xfe00 + i, mmu.get8(src + i));
+            }
+
+            self.on = false;
+        }
+    }
+}
+
+struct Hdma {
+    on: bool,
+    src_low: u8,
+    src_high: u8,
+    dst_low: u8,
+    dst_high: u8,
+    src_wip: u16,
+    dst_wip: u16,
+    len: u8,
+    hblank: bool,
+}
+
+impl Hdma {
+    fn new() -> Self {
+        Self {
+            on: false,
+            src_low: 0,
+            src_high: 0,
+            dst_low: 0,
+            dst_high: 0,
+            src_wip: 0,
+            dst_wip: 0,
+            len: 0,
+            hblank: false,
+        }
+    }
+
+    fn start(&mut self, value: u8) {
+        assert!(false);
+
+        if self.on && self.hblank && value & 0x80 == 0 {
+            self.on = false;
+            self.hblank = false;
+
+            debug!("Cancel HDMA transfer");
+        } else {
+            self.hblank = value & 0x80 != 0;
+            self.len = value & 0x7f;
+            self.src_wip = ((self.src_high as u16) << 8 | self.src_low as u16) & !0x000f;
+            self.dst_wip = ((self.dst_high as u16) << 8 | self.dst_low as u16) & !0xe00f;
+            self.on = true;
+
+            debug!(
+                "Start HDMA transfer: {:04x} -> {:04x} ({})",
+                self.src_wip, self.dst_wip, self.len
+            );
+        }
+    }
+
+    fn run(&mut self, mmu: &mut Mmu) {
+        if self.on {
+            assert!(false);
+
+            let size = (self.len as u16 + 1) * 0x10;
+            let size = if self.hblank { size.min(0x10) } else { size };
+
+            debug!(
+                "HDMA transfer: {:04x} -> {:04x} ({})",
+                self.src_wip, self.dst_wip, size
+            );
+
+            for i in 0..size {
+                mmu.set8(self.dst_wip + i, mmu.get8(self.src_wip + i));
+            }
+
+            self.src_wip += size;
+            self.dst_wip += size;
+            self.len = self.len.saturating_sub(1);
+
+            self.on = if self.hblank { self.len > 0 } else { false };
         }
     }
 }
@@ -172,10 +393,18 @@ impl Gpu {
                 Color::DarkGray,
                 Color::Black,
             ],
+            bg_color_palette: ColorPalette::new(),
+            obj_color_palette: ColorPalette::new(),
+            vram: vec![vec![0; 0x2000]; 2],
+            vram_select: 0,
+            dma: Dma::new(),
+            hdma: Hdma::new(),
         }
     }
 
     pub fn step(&mut self, time: usize, mmu: &mut Mmu) {
+        self.dma.run(mmu);
+
         let clocks = self.clocks + time;
 
         let (clocks, mode) = match &self.mode {
@@ -189,6 +418,7 @@ impl Gpu {
             Mode::VRAM => {
                 if clocks >= 172 {
                     self.draw(mmu);
+                    self.hdma.run(mmu);
 
                     if self.hblank_interrupt {
                         self.irq.lcd(true);
@@ -265,7 +495,6 @@ impl Gpu {
 
         if self.bgenable {
             let mapbase = self.bgmap;
-            let tiles = self.tiles;
 
             let yy = (self.ly as u16 + self.scy as u16) % 256;
             let ty = yy / 8;
@@ -276,24 +505,28 @@ impl Gpu {
                 let tx = xx / 8;
                 let txoff = xx % 8;
 
-                let ti = tx + ty * 32;
-                let tbase = if tiles == 0x8000 {
-                    tiles + mmu.get8(mapbase + ti) as u16 * 16
-                } else {
-                    tiles + (0x800 + mmu.get8(mapbase + ti) as i8 as i16 * 16) as u16
-                };
+                let tbase = self.get_tile_base(mapbase, tx, ty);
+                let tattr = self.get_tile_attr(mapbase, tx, ty);
 
-                let l = mmu.get8(tbase + tyoff * 2) as u16;
-                let h = mmu.get8(tbase + tyoff * 2 + 1) as u16;
+                #[cfg(feature = "color")]
+                {
+                    assert_eq!(tattr.xflip, false);
+                    assert_eq!(tattr.yflip, false);
+                    assert_eq!(tattr.priority, false);
+                }
 
-                let l = (l >> (7 - txoff)) & 1;
-                let h = ((h >> (7 - txoff)) & 1) << 1;
-                let coli = (h | l) as usize;
-                let col = self.bg_palette[coli].into();
+                let coli = self.get_tile_byte(tbase, txoff, tyoff, tattr.vram_bank);
+                let col = tattr.palette[coli].into();
 
                 buf[x as usize] = col;
                 bgbuf[x as usize] = coli;
             }
+        }
+
+        #[cfg(feature = "color")]
+        {
+            assert_eq!(self.winenable, false);
+            assert_eq!(self.spenable, false);
         }
 
         if self.winenable {
@@ -492,15 +725,67 @@ impl Gpu {
         trace!("Read Status: {:02x}", v);
         v
     }
+
+    fn read_vram(&self, addr: u16, bank: usize) -> u8 {
+        let off = addr as usize - 0x8000;
+        self.vram[bank][off]
+    }
+
+    fn write_vram(&mut self, addr: u16, value: u8, bank: usize) {
+        let off = addr as usize - 0x8000;
+        self.vram[bank][off] = value;
+    }
+
+    fn get_tile_base(&self, mapbase: u16, tx: u16, ty: u16) -> u16 {
+        let ti = tx + ty * 32;
+        let num = self.read_vram(mapbase + ti, 0);
+
+        if self.tiles == 0x8000 {
+            self.tiles + num as u16 * 16
+        } else {
+            self.tiles + (0x800 + num as i8 as i16 * 16) as u16
+        }
+    }
+
+    fn get_tile_attr(&self, mapbase: u16, tx: u16, ty: u16) -> MapAttribute {
+        if cfg!(feature = "color") {
+            let ti = tx + ty * 32;
+            let attr = self.read_vram(mapbase + ti, 1) as usize;
+
+            MapAttribute {
+                palette: &self.bg_color_palette.cols[attr & 0x7][..],
+                vram_bank: (attr >> 3) & 1,
+                xflip: attr & 0x20 != 0,
+                yflip: attr & 0x40 != 0,
+                priority: attr & 0x80 != 0,
+            }
+        } else {
+            MapAttribute {
+                palette: &self.bg_palette,
+                vram_bank: 0,
+                xflip: false,
+                yflip: false,
+                priority: false,
+            }
+        }
+    }
+
+    fn get_tile_byte(&self, tilebase: u16, txoff: u16, tyoff: u16, bank: usize) -> usize {
+        let l = self.read_vram(tilebase + tyoff * 2, bank);
+        let h = self.read_vram(tilebase + tyoff * 2 + 1, bank);
+
+        let l = (l >> (7 - txoff)) & 1;
+        let h = ((h >> (7 - txoff)) & 1) << 1;
+
+        (h | l) as usize
+    }
 }
 
 impl IoHandler for Gpu {
     fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
-        if addr != 0xff44 {
-            trace!("Read GPU register: {:04x}", addr);
-        }
-
-        if addr == 0xff40 {
+        if addr >= 0x8000 && addr <= 0x9fff {
+            MemRead::Replace(self.read_vram(addr, self.vram_select))
+        } else if addr == 0xff40 {
             MemRead::Replace(self.on_read_ctrl())
         } else if addr == 0xff41 {
             MemRead::Replace(self.on_read_status())
@@ -529,9 +814,28 @@ impl IoHandler for Gpu {
         } else if addr == 0xff4b {
             MemRead::Replace(self.wx)
         } else if addr == 0xff4f {
-            unimplemented!("read ff4f (vram bank)")
-        } else if addr == 0xff68 || addr == 0xff69 || addr == 0xff6a || addr == 0xff6b {
-            unimplemented!("read color")
+            MemRead::Replace(self.vram_select as u8)
+        } else if addr == 0xff51 {
+            MemRead::Replace(self.hdma.src_high)
+        } else if addr == 0xff52 {
+            MemRead::Replace(self.hdma.src_low)
+        } else if addr == 0xff53 {
+            MemRead::Replace(self.hdma.dst_high)
+        } else if addr == 0xff54 {
+            MemRead::Replace(self.hdma.dst_low)
+        } else if addr == 0xff55 {
+            let mut v = 0;
+            v |= self.hdma.len & 0x7f;
+            v |= if self.hdma.hblank { 0x80 } else { 0x00 };
+            MemRead::Replace(v)
+        } else if addr == 0xff68 {
+            MemRead::PassThrough
+        } else if addr == 0xff69 {
+            MemRead::Replace(self.bg_color_palette.read())
+        } else if addr == 0xff6a {
+            MemRead::PassThrough
+        } else if addr == 0xff6b {
+            MemRead::Replace(self.obj_color_palette.read())
         } else {
             warn!("Unsupported GPU register read: {:04x}", addr);
             MemRead::Replace(0)
@@ -540,8 +844,9 @@ impl IoHandler for Gpu {
 
     fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
         trace!("Write GPU register: {:04x} {:02x}", addr, value);
-
-        if addr == 0xff40 {
+        if addr >= 0x8000 && addr <= 0x9fff {
+            self.write_vram(addr, value, self.vram_select);
+        } else if addr == 0xff40 {
             self.on_write_ctrl(value);
         } else if addr == 0xff41 {
             self.on_write_status(value);
@@ -555,7 +860,9 @@ impl IoHandler for Gpu {
         } else if addr == 0xff45 {
             self.lyc = value;
         } else if addr == 0xff46 {
-            trace!("DMA is handled by MMU: {:02x}", value);
+            debug!("Request DMA: {:02x}", value);
+            self.dma.on = true;
+            self.dma.src = value;
         } else if addr == 0xff47 {
             self.bg_palette = to_palette(value);
             debug!("Bg palette updated: {:?}", self.bg_palette);
@@ -572,9 +879,25 @@ impl IoHandler for Gpu {
             info!("Window X: {}", value);
             self.wx = value;
         } else if addr == 0xff4f {
-            unimplemented!("write ff4f (vram bank)")
-        } else if addr == 0xff68 || addr == 0xff69 || addr == 0xff6a || addr == 0xff6b {
-            unimplemented!("write color")
+            self.vram_select = value as usize & 1;
+        } else if addr == 0xff51 {
+            self.hdma.src_high = value;
+        } else if addr == 0xff52 {
+            self.hdma.src_low = value;
+        } else if addr == 0xff53 {
+            self.hdma.dst_high = value;
+        } else if addr == 0xff54 {
+            self.hdma.dst_low = value;
+        } else if addr == 0xff55 {
+            self.hdma.start(value);
+        } else if addr == 0xff68 {
+            self.bg_color_palette.select(value);
+        } else if addr == 0xff69 {
+            self.bg_color_palette.write(value);
+        } else if addr == 0xff6a {
+            self.obj_color_palette.select(value);
+        } else if addr == 0xff6b {
+            self.obj_color_palette.write(value);
         } else {
             warn!(
                 "Unsupported GPU register is written: {:04x} {:02x}",

@@ -1,7 +1,6 @@
 use alloc::rc::Rc;
 use alloc::{vec, vec::Vec};
 use hashmap_core::HashMap;
-use log::*;
 
 pub enum MemRead {
     Replace(u8),
@@ -119,15 +118,6 @@ impl Mmu {
                     MemWrite::PassThrough => {}
                     MemWrite::Block => return,
                 }
-            }
-        }
-
-        if addr == 0xff46 {
-            debug!("MMU: Trigger DMA transfer: {:02x}", v);
-
-            let src = (v as u16) << 8;
-            for i in 0..0xa0 {
-                self.set8(0xfe00 + i, self.get8(src + i));
             }
         }
 
