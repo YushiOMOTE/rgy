@@ -94,6 +94,13 @@ fn from_palette(p: Vec<Color>) -> u8 {
     u8::from(p[0]) | u8::from(p[1]) << 2 | u8::from(p[2]) << 4 | u8::from(p[3]) << 6
 }
 
+struct SpriteAttribute<'a> {
+    ypos: u16,
+    xpos: u16,
+    ti: u16,
+    attr: MapAttribute<'a>,
+}
+
 struct MapAttribute<'a> {
     palette: &'a [Color],
     vram_bank: usize,
@@ -508,10 +515,11 @@ impl Gpu {
                 let tbase = self.get_tile_base(mapbase, tx, ty);
                 let tattr = self.get_tile_attr(mapbase, tx, ty);
 
+                let tyoff = if tattr.yflip { 7 - tyoff } else { tyoff };
+                let txoff = if tattr.xflip { 7 - txoff } else { txoff };
+
                 #[cfg(feature = "color")]
                 {
-                    assert_eq!(tattr.xflip, false);
-                    assert_eq!(tattr.yflip, false);
                     assert_eq!(tattr.priority, false);
                 }
 
@@ -523,15 +531,8 @@ impl Gpu {
             }
         }
 
-        #[cfg(feature = "color")]
-        {
-            assert_eq!(self.winenable, false);
-            assert_eq!(self.spenable, false);
-        }
-
         if self.winenable {
             let mapbase = self.winmap;
-            let tiles = self.tiles;
 
             if self.ly >= self.wy {
                 let yy = (self.ly - self.wy) as u16;
@@ -546,19 +547,11 @@ impl Gpu {
                     let tx = xx / 8;
                     let txoff = xx % 8;
 
-                    let ti = tx + ty * 32;
-                    let tbase = if tiles == 0x8000 {
-                        tiles + mmu.get8(mapbase + ti) as u16 * 16
-                    } else {
-                        tiles + (0x800 + mmu.get8(mapbase + ti) as i8 as i16 * 16) as u16
-                    };
+                    let tbase = self.get_tile_base(mapbase, tx, ty);
+                    let tattr = self.get_tile_attr(mapbase, tx, ty);
 
-                    let l = mmu.get8(tbase + tyoff * 2) as u16;
-                    let h = mmu.get8(tbase + tyoff * 2 + 1) as u16;
-
-                    let l = (l >> (7 - txoff)) & 1;
-                    let h = ((h >> (7 - txoff)) & 1) << 1;
-                    let col = self.bg_palette[(h | l) as usize].into();
+                    let coli = self.get_tile_byte(tbase, txoff, tyoff, tattr.vram_bank);
+                    let col = tattr.palette[coli].into();
 
                     buf[x as usize] = col;
                 }
@@ -571,15 +564,7 @@ impl Gpu {
                 let ypos = mmu.get8(oam + 0) as u16;
                 let xpos = mmu.get8(oam + 1) as u16;
                 let ti = mmu.get8(oam + 2);
-                let attr = mmu.get8(oam + 3);
-                let behind_bg = attr & 0x80 != 0;
-                let yflip = attr & 0x40 != 0;
-                let xflip = attr & 0x20 != 0;
-                let palette = if attr & 0x10 == 0 {
-                    &self.obj_palette0
-                } else {
-                    &self.obj_palette1
-                };
+                let attr = self.get_sp_attr(mmu.get8(oam + 3));
 
                 let ly = self.ly as u16;
                 if ly + 16 < ypos {
@@ -591,7 +576,7 @@ impl Gpu {
                     // This sprite doesn't hit the current ly
                     continue;
                 }
-                let tyoff = if yflip {
+                let tyoff = if attr.yflip {
                     self.spsize - 1 - tyoff
                 } else {
                     tyoff
@@ -617,27 +602,22 @@ impl Gpu {
                     if txoff >= 8 {
                         continue;
                     }
-                    let txoff = if xflip { 7 - txoff } else { txoff };
+                    let txoff = if attr.xflip { 7 - txoff } else { txoff };
 
                     let tbase = tiles + ti as u16 * 16;
 
-                    let l = mmu.get8(tbase + tyoff * 2) as u16;
-                    let h = mmu.get8(tbase + tyoff * 2 + 1) as u16;
-
-                    let l = (l >> (7 - txoff)) & 1;
-                    let h = ((h >> (7 - txoff)) & 1) << 1;
-                    let coli = (h | l) as usize;
+                    let coli = self.get_tile_byte(tbase, txoff, tyoff, attr.vram_bank);
 
                     if coli == 0 {
                         // Color index 0 means transparent
                         continue;
                     }
 
-                    let col = palette[coli];
+                    let col = attr.palette[coli];
 
                     let bgcoli = bgbuf[x as usize];
 
-                    if behind_bg && bgcoli != 0 {
+                    if attr.priority && bgcoli != 0 {
                         // If priority is lower than bg color 1-3, don't draw
                         continue;
                     }
@@ -766,6 +746,34 @@ impl Gpu {
                 xflip: false,
                 yflip: false,
                 priority: false,
+            }
+        }
+    }
+
+    fn get_sp_attr(&self, attr: u8) -> MapAttribute {
+        if cfg!(feature = "color") {
+            let attr = attr as usize;
+
+            MapAttribute {
+                palette: &self.obj_color_palette.cols[attr & 0x7][..],
+                vram_bank: (attr >> 3) & 1,
+                xflip: attr & 0x20 != 0,
+                yflip: attr & 0x40 != 0,
+                priority: attr & 0x80 != 0,
+            }
+        } else {
+            let palette = if attr & 0x10 != 0 {
+                &self.obj_palette1
+            } else {
+                &self.obj_palette0
+            };
+
+            MapAttribute {
+                palette,
+                vram_bank: 0,
+                xflip: attr & 0x20 != 0,
+                yflip: attr & 0x40 != 0,
+                priority: attr & 0x80 != 0,
             }
         }
     }
