@@ -84,7 +84,7 @@ fn run_inner<T: Hardware + 'static, D: Debugger + 'static>(
 
     let mut fc = FreqControl::new(hw.clone(), &cfg);
 
-    let dbg = Device::new(dbg);
+    let dbg = Device::mediate(dbg);
     let mut cpu = Cpu::new();
     let mut mmu = Mmu::new();
     let sound = Device::new(Sound::new(hw.clone()));
