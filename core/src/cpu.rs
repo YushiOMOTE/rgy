@@ -108,7 +108,12 @@ impl Cpu {
             }
 
             0
-        } else if let Some(value) = ic.borrow_mut().poll() {
+        } else {
+            let value = match ic.borrow_mut().poll() {
+                Some(value) => value,
+                None => return 0,
+            };
+
             debug!("Interrupted: {:02x}", value);
 
             self.interrupted(mmu, value);
@@ -116,8 +121,6 @@ impl Cpu {
             self.halt = false;
 
             16
-        } else {
-            0
         }
     }
 
