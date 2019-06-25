@@ -3,6 +3,7 @@ use crate::{
     mmu::{MemRead, MemWrite, Mmu},
 };
 use alloc::{vec, vec::Vec};
+use log::*;
 
 pub struct Cgb {
     double_speed: bool,
@@ -47,7 +48,8 @@ impl IoHandler for Cgb {
             v |= if self.speed_switch { 0x01 } else { 0x00 };
             MemRead::Replace(v)
         } else if addr == 0xff56 {
-            unimplemented!("Infrared read")
+            warn!("Infrared read");
+            MemRead::PassThrough
         } else if addr == 0xff70 {
             MemRead::Replace(self.wram_select as u8)
         } else {
@@ -65,7 +67,7 @@ impl IoHandler for Cgb {
         } else if addr == 0xff4d {
             self.speed_switch = value & 0x01 != 0;
         } else if addr == 0xff56 {
-            unimplemented!("Infrared read")
+            warn!("Infrared read");
         } else if addr == 0xff70 {
             self.wram_select = (value as usize & 0xf).max(1);
         }
