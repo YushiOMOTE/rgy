@@ -2,6 +2,7 @@ use crate::cgb::Cgb;
 use crate::cpu::Cpu;
 use crate::debug::Debugger;
 use crate::device::Device;
+use crate::dma::Dma;
 use crate::fc::FreqControl;
 use crate::gpu::Gpu;
 use crate::hardware::{Hardware, HardwareHandle};
@@ -95,6 +96,7 @@ fn run_inner<T: Hardware + 'static, D: Debugger + 'static>(
     let serial = Device::new(Serial::new(hw.clone(), irq.clone()));
     let mbc = Device::new(Mbc::new(hw.clone(), rom));
     let cgb = Device::new(Cgb::new());
+    let dma = Device::new(Dma::new());
 
     mmu.add_handler((0x0000, 0xffff), dbg.handler());
 
@@ -107,6 +109,8 @@ fn run_inner<T: Hardware + 'static, D: Debugger + 'static>(
     mmu.add_handler((0xff50, 0xff50), mbc.handler());
     mmu.add_handler((0xa000, 0xbfff), mbc.handler());
     mmu.add_handler((0xff10, 0xff3f), sound.handler());
+
+    mmu.add_handler((0xff46, 0xff46), dma.handler());
 
     mmu.add_handler((0x8000, 0x9fff), gpu.handler());
     mmu.add_handler((0xff40, 0xff4f), gpu.handler());
@@ -135,6 +139,7 @@ fn run_inner<T: Hardware + 'static, D: Debugger + 'static>(
 
         time += cpu.check_interrupt(&mut mmu, &ic);
 
+        dma.borrow_mut().step(&mut mmu);
         gpu.borrow_mut().step(time, &mut mmu);
         timer.borrow_mut().step(time);
         serial.borrow_mut().step(time);

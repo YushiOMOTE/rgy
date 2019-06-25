@@ -75,7 +75,6 @@ pub struct Gpu {
     vram: Vec<Vec<u8>>,
     vram_select: usize,
 
-    dma: Dma,
     hdma: Hdma,
 }
 
@@ -259,30 +258,6 @@ impl From<u8> for Color {
     }
 }
 
-struct Dma {
-    on: bool,
-    src: u8,
-}
-
-impl Dma {
-    fn new() -> Self {
-        Self { on: false, src: 0 }
-    }
-
-    fn run(&mut self, mmu: &mut Mmu) {
-        if self.on {
-            debug!("Trigger DMA transfer: {:02x}", self.src);
-
-            let src = (self.src as u16) << 8;
-            for i in 0..0xa0 {
-                mmu.set8(0xfe00 + i, mmu.get8(src + i));
-            }
-
-            self.on = false;
-        }
-    }
-}
-
 struct Hdma {
     on: bool,
     src_low: u8,
@@ -404,14 +379,11 @@ impl Gpu {
             obj_color_palette: ColorPalette::new(),
             vram: vec![vec![0; 0x2000]; 2],
             vram_select: 0,
-            dma: Dma::new(),
             hdma: Hdma::new(),
         }
     }
 
     pub fn step(&mut self, time: usize, mmu: &mut Mmu) {
-        self.dma.run(mmu);
-
         let clocks = self.clocks + time;
 
         let (clocks, mode) = match &self.mode {
@@ -806,8 +778,7 @@ impl IoHandler for Gpu {
         } else if addr == 0xff45 {
             MemRead::Replace(self.lyc)
         } else if addr == 0xff46 {
-            warn!("Read DMA transfer");
-            MemRead::PassThrough
+            unreachable!("DMA request")
         } else if addr == 0xff47 {
             debug!("Read Bg palette");
             MemRead::Replace(from_palette(self.bg_palette.clone()))
@@ -868,9 +839,7 @@ impl IoHandler for Gpu {
         } else if addr == 0xff45 {
             self.lyc = value;
         } else if addr == 0xff46 {
-            debug!("Request DMA: {:02x}", value);
-            self.dma.on = true;
-            self.dma.src = value;
+            unreachable!("Request DMA: {:02x}", value);
         } else if addr == 0xff47 {
             self.bg_palette = to_palette(value);
             debug!("Bg palette updated: {:?}", self.bg_palette);

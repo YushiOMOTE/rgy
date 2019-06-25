@@ -7,6 +7,7 @@ mod cgb;
 pub mod cpu;
 pub mod debug;
 pub mod device;
+mod dma;
 mod fc;
 mod gpu;
 pub mod hardware;
