@@ -1,8 +1,8 @@
 use crate::device::IoHandler;
 use crate::mmu::{MemRead, MemWrite, Mmu};
-use log::*;
-use core::cell::RefCell;
 use alloc::rc::Rc;
+use core::cell::RefCell;
+use log::*;
 
 #[derive(Clone)]
 pub struct Irq {
@@ -139,6 +139,7 @@ impl IoHandler for Ic {
             self.request.borrow_mut().set(value);
             MemWrite::Block
         } else {
+            info!("Writing to IC register: {:04x}", addr);
             MemWrite::PassThrough
         }
     }

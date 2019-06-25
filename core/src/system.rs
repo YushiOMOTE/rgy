@@ -113,7 +113,7 @@ fn run_inner<T: Hardware + 'static, D: Debugger + 'static>(
     mmu.add_handler((0xff46, 0xff46), dma.handler());
 
     mmu.add_handler((0x8000, 0x9fff), gpu.handler());
-    mmu.add_handler((0xff40, 0xff4f), gpu.handler());
+    mmu.add_handler((0xff40, 0xff55), gpu.handler());
     mmu.add_handler((0xff68, 0xff6b), gpu.handler());
 
     mmu.add_handler((0xff0f, 0xff0f), ic.handler());

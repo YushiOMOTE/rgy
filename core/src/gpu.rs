@@ -286,8 +286,6 @@ impl Hdma {
     }
 
     fn start(&mut self, value: u8) {
-        assert!(false);
-
         if self.on && self.hblank && value & 0x80 == 0 {
             self.on = false;
             self.hblank = false;
@@ -297,37 +295,41 @@ impl Hdma {
             self.hblank = value & 0x80 != 0;
             self.len = value & 0x7f;
             self.src_wip = ((self.src_high as u16) << 8 | self.src_low as u16) & !0x000f;
-            self.dst_wip = ((self.dst_high as u16) << 8 | self.dst_low as u16) & !0xe00f;
+            self.dst_wip = ((self.dst_high as u16) << 8 | self.dst_low as u16) & !0xe00f | 0x8000;
             self.on = true;
 
-            debug!(
-                "Start HDMA transfer: {:04x} -> {:04x} ({})",
-                self.src_wip, self.dst_wip, self.len
+            info!(
+                "Start HDMA transfer: {:04x} -> {:04x} ({}) {}",
+                self.src_wip, self.dst_wip, self.len, self.hblank
             );
         }
     }
 
-    fn run(&mut self, mmu: &mut Mmu) {
+    fn run(&mut self) -> Option<(u16, u16, u16)> {
         if self.on {
-            assert!(false);
+            let size = if self.hblank {
+                0x10
+            } else {
+                (self.len as u16 + 1) * 0x10
+            };
 
-            let size = (self.len as u16 + 1) * 0x10;
-            let size = if self.hblank { size.min(0x10) } else { size };
-
-            debug!(
+            info!(
                 "HDMA transfer: {:04x} -> {:04x} ({})",
                 self.src_wip, self.dst_wip, size
             );
 
-            for i in 0..size {
-                mmu.set8(self.dst_wip + i, mmu.get8(self.src_wip + i));
-            }
+            let range = (self.dst_wip, self.src_wip, size);
 
             self.src_wip += size;
             self.dst_wip += size;
-            self.len = self.len.saturating_sub(1);
+            let (rem, of) = self.len.overflowing_sub(1);
 
-            self.on = if self.hblank { self.len > 0 } else { false };
+            self.len = if self.hblank { rem } else { 0xff };
+            self.on = if self.hblank { !of } else { false };
+
+            Some(range)
+        } else {
+            None
         }
     }
 }
@@ -383,6 +385,17 @@ impl Gpu {
         }
     }
 
+    fn hdma_run(&mut self, mmu: &Mmu) {
+        match self.hdma.run() {
+            Some((dst, src, size)) => {
+                for i in 0..size {
+                    self.write_vram(dst + i, mmu.get8(src + i), self.vram_select);
+                }
+            }
+            _ => {}
+        }
+    }
+
     pub fn step(&mut self, time: usize, mmu: &mut Mmu) {
         let clocks = self.clocks + time;
 
@@ -397,7 +410,7 @@ impl Gpu {
             Mode::VRAM => {
                 if clocks >= 172 {
                     self.draw(mmu);
-                    self.hdma.run(mmu);
+                    self.hdma_run(mmu);
 
                     if self.hblank_interrupt {
                         self.irq.lcd(true);
@@ -628,14 +641,14 @@ impl Gpu {
             self.irq.vblank(false);
         }
 
-        info!("Write ctrl: {:02x}", value);
-        info!("Window base: {:04x}", self.winmap);
-        info!("Window enable: {}", self.winenable);
-        info!("Bg/window base: {:04x}", self.tiles);
-        info!("Background base: {:04x}", self.bgmap);
-        info!("Sprite size: 8x{}", self.spsize);
-        info!("Sprite enable: {}", self.spenable);
-        info!("Background enable: {}", self.bgenable);
+        debug!("Write ctrl: {:02x}", value);
+        debug!("Window base: {:04x}", self.winmap);
+        debug!("Window enable: {}", self.winenable);
+        debug!("Bg/window base: {:04x}", self.tiles);
+        debug!("Background base: {:04x}", self.bgmap);
+        debug!("Sprite size: 8x{}", self.spsize);
+        debug!("Sprite enable: {}", self.spenable);
+        debug!("Background enable: {}", self.bgenable);
     }
 
     fn on_write_status(&mut self, value: u8) {
@@ -644,10 +657,10 @@ impl Gpu {
         self.vblank_interrupt = value & 0x10 != 0;
         self.hblank_interrupt = value & 0x08 != 0;
 
-        info!("LYC interrupt: {}", self.lyc_interrupt);
-        info!("OAM interrupt: {}", self.oam_interrupt);
-        info!("VBlank interrupt: {}", self.vblank_interrupt);
-        info!("HBlank interrupt: {}", self.hblank_interrupt);
+        debug!("LYC interrupt: {}", self.lyc_interrupt);
+        debug!("OAM interrupt: {}", self.oam_interrupt);
+        debug!("VBlank interrupt: {}", self.vblank_interrupt);
+        debug!("HBlank interrupt: {}", self.hblank_interrupt);
     }
 
     fn on_read_ctrl(&mut self) -> u8 {
@@ -805,7 +818,7 @@ impl IoHandler for Gpu {
         } else if addr == 0xff55 {
             let mut v = 0;
             v |= self.hdma.len & 0x7f;
-            v |= if self.hdma.hblank { 0x80 } else { 0x00 };
+            v |= if self.hdma.on { 0x00 } else { 0x80 };
             MemRead::Replace(v)
         } else if addr == 0xff68 {
             MemRead::PassThrough
@@ -832,7 +845,7 @@ impl IoHandler for Gpu {
         } else if addr == 0xff42 {
             self.scy = value;
         } else if addr == 0xff43 {
-            info!("Write SCX: {}", value);
+            debug!("Write SCX: {}", value);
             self.scx = value;
         } else if addr == 0xff44 {
             self.ly = 0;
@@ -850,10 +863,10 @@ impl IoHandler for Gpu {
             self.obj_palette1 = to_palette(value);
             debug!("Object palette 1 updated: {:?}", self.obj_palette1);
         } else if addr == 0xff4a {
-            info!("Window Y: {}", value);
+            debug!("Window Y: {}", value);
             self.wy = value;
         } else if addr == 0xff4b {
-            info!("Window X: {}", value);
+            debug!("Window X: {}", value);
             self.wx = value;
         } else if addr == 0xff4f {
             self.vram_select = value as usize & 1;
