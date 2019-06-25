@@ -116,7 +116,8 @@ fn run_inner<T: Hardware + 'static, D: Debugger + 'static>(
     mmu.add_handler((0xff40, 0xff4f), gpu.handler());
     mmu.add_handler((0xff68, 0xff6b), gpu.handler());
 
-    mmu.add_handler((0xff0f, 0xffff), ic.handler());
+    mmu.add_handler((0xff0f, 0xff0f), ic.handler());
+    mmu.add_handler((0xffff, 0xffff), ic.handler());
     mmu.add_handler((0xff00, 0xff00), joypad.handler());
     mmu.add_handler((0xff04, 0xff07), timer.handler());
     mmu.add_handler((0xff01, 0xff02), serial.handler());
