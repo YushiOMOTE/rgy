@@ -192,21 +192,25 @@ impl Mbc2 {
     }
 
     fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        if addr <= 0x3fff {
+        if addr <= 0x1fff {
             if addr & 0x100 == 0 {
                 self.ram_enable = (value & 0x0f) == 0x0a;
                 info!(
-                    "Cart RAM {}",
+                    "Cart RAM {} {:02x}",
                     if self.ram_enable {
                         "enabled"
                     } else {
                         "disabled"
-                    }
+                    },
+                    value
                 );
                 if !self.ram_enable {
                     self.hw.get().borrow_mut().save_ram(&self.ram);
                 }
-            } else {
+            }
+            MemWrite::Block
+        } else if addr >= 0x2000 && addr <= 0x3fff {
+            if addr & 0x100 != 0 {
                 self.rom_bank = (value as usize & 0xf).max(1);
                 debug!("Switch ROM bank to {:02x}", self.rom_bank);
             }
