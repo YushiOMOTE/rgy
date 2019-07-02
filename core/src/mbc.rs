@@ -87,12 +87,14 @@ impl Mbc1 {
 
             let base = rom_bank * 0x4000;
             let offset = addr as usize - 0x4000;
-            MemRead::Replace(self.rom[base + offset])
+            let addr = (base + offset) & (self.rom.len() - 1);
+            MemRead::Replace(self.rom[addr])
         } else if addr >= 0xa000 && addr <= 0xbfff {
             if self.ram_enable {
                 let base = self.ram_bank as usize * 0x2000;
                 let offset = addr as usize - 0xa000;
-                MemRead::Replace(self.ram[base + offset])
+                let addr = (base + offset) & (self.rom.len() - 1);
+                MemRead::Replace(self.ram[addr])
             } else {
                 warn!("Read from disabled external RAM: {:04x}", addr);
                 MemRead::Replace(0)
