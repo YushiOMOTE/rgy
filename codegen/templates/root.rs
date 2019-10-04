@@ -3,7 +3,7 @@
 use crate::cpu::Cpu;
 use crate::mmu::Mmu;
 use crate::alu;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use lazy_static::lazy_static;
 use log::*;
 

@@ -1,6 +1,6 @@
 use alloc::rc::Rc;
 use alloc::{vec, vec::Vec};
-use hashmap_core::HashMap;
+use hashbrown::HashMap;
 use log::*;
 
 pub enum MemRead {

@@ -1,9 +1,9 @@
 use crate::alu;
 use crate::cpu::Cpu;
 use crate::mmu::Mmu;
+use hashbrown::HashMap;
 use lazy_static::lazy_static;
 use log::*;
-use hashmap_core::HashMap;
 
 lazy_static! {
     static ref MNEMONICS: HashMap<u16, &'static str> = {
