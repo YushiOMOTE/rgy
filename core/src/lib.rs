@@ -21,4 +21,7 @@ mod sound;
 mod system;
 mod timer;
 
-pub use crate::system::{run, run_debug, Config};
+pub use crate::{
+    hardware::{Hardware, Key, Stream, VRAM_HEIGHT, VRAM_WIDTH},
+    system::{run, run_debug, Config},
+};
