@@ -20,6 +20,8 @@ use structopt::StructOpt;
 
 use lazy_static::lazy_static;
 
+const HISTORY_FILE: &'static str = ".gy.txt";
+
 #[derive(Debug)]
 struct CmdError(String);
 
@@ -113,7 +115,7 @@ impl Debugger {
 
         let mut rl = Editor::<()>::new();
 
-        if rl.load_history(".gy.txt").is_err() {
+        if rl.load_history(HISTORY_FILE).is_err() {
             println!("No previous history");
         }
 
@@ -153,7 +155,7 @@ impl Debugger {
             }
         };
 
-        let _ = rl.save_history("history.txt");
+        let _ = rl.save_history(HISTORY_FILE);
 
         if abort {
             std::process::exit(1);
