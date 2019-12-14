@@ -5,7 +5,7 @@
 #![no_std]
 #![cfg_attr(feature = "readme", feature(external_doc))]
 
-#[cfg_attr(feature = "readme", doc(include = "../README.md"))]
+#[cfg_attr(feature = "readme", doc(include = "../../README.md"))]
 type _Doctest = ();
 
 extern crate alloc;
