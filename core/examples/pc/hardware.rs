@@ -11,7 +11,7 @@ use std::sync::{
 };
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use rgy::hardware::{self, Key, Stream, VRAM_HEIGHT, VRAM_WIDTH};
+use rgy::{Key, Stream, VRAM_HEIGHT, VRAM_WIDTH};
 
 #[derive(Clone)]
 pub struct Hardware {
@@ -153,7 +153,7 @@ impl Hardware {
     }
 }
 
-impl hardware::Hardware for Hardware {
+impl rgy::Hardware for Hardware {
     fn vram_update(&mut self, line: usize, buf: &[u32]) {
         let mut vram = self.vram.lock().unwrap();
         for i in 0..buf.len() {

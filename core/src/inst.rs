@@ -6469,10 +6469,12 @@ fn op_cbff(arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     (8, 2)
 }
 
+/// Return the mnemonic string for the given opcode.
 pub fn mnem(code: u16) -> &'static str {
     MNEMONICS.get(&code).unwrap_or(&"(unknown opcode)")
 }
 
+/// Decodes the opecode and actually executes one instruction.
 pub fn decode(code: u16, arg: u16, cpu: &mut Cpu, mmu: &mut Mmu) -> (usize, usize) {
     trace!("{:04x}: {:04x}: {}", cpu.get_pc(), code, mnem(code));
 

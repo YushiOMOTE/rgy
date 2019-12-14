@@ -2,26 +2,42 @@ use alloc::rc::Rc;
 use alloc::{vec, vec::Vec};
 use hashbrown::HashMap;
 
+/// The variants to control memory read access from the CPU.
 pub enum MemRead {
+    /// Replaces the value passed from the memory to the CPU.
     Replace(u8),
+    /// Shows the actual value passed from the memory to the CPU.
     PassThrough,
 }
 
+/// The variants to control memory write access from the CPU.
 pub enum MemWrite {
+    /// Replaces the value to be written by the CPU to the memory.
     Replace(u8),
+    /// Allows to write the original value from the CPU to the memory.
     PassThrough,
+    /// Discard the write access from the CPU.
     Block,
 }
 
+/// The handler to intercept memory access from the CPU.
 pub trait MemHandler {
+    /// The function is called when the CPU attempts to read from the memory.
     fn on_read(&self, mmu: &Mmu, addr: u16) -> MemRead;
 
+    /// The function is called when the CPU attempts to write to the memory.
     fn on_write(&self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite;
 }
 
+/// The handle of a memory handler.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Handle(u64);
 
+/// The memory management unit (MMU)
+///
+/// This unit holds a memory byte array which represents address space of the memory.
+/// It provides the logic to intercept access from the CPU to the memory byte array,
+/// and to modify the memory access behaviour.
 pub struct Mmu {
     ram: Vec<u8>,
     handles: HashMap<Handle, (u16, u16)>,
@@ -30,6 +46,7 @@ pub struct Mmu {
 }
 
 impl Mmu {
+    /// Create a new MMU instance.
     pub fn new() -> Mmu {
         Mmu {
             ram: vec![0u8; 0x10000],
@@ -47,6 +64,7 @@ impl Mmu {
         Handle(handle)
     }
 
+    /// Add a new memory handler.
     pub fn add_handler<T>(&mut self, range: (u16, u16), handler: T) -> Handle
     where
         T: MemHandler + 'static,
@@ -71,6 +89,7 @@ impl Mmu {
         handle
     }
 
+    /// Remove a memory handler.
     #[allow(unused)]
     pub fn remove_handler<T>(&mut self, handle: &Handle)
     where
@@ -89,6 +108,7 @@ impl Mmu {
         }
     }
 
+    /// Reads one byte from the given address in the memory.
     pub fn get8(&self, addr: u16) -> u8 {
         if let Some(handlers) = self.handlers.get(&addr) {
             for (_, handler) in handlers {
@@ -107,6 +127,7 @@ impl Mmu {
         }
     }
 
+    /// Writes one byte at the given address in the memory.
     pub fn set8(&mut self, addr: u16, v: u8) {
         if let Some(handlers) = self.handlers.get(&addr) {
             for (_, handler) in handlers {
@@ -129,12 +150,14 @@ impl Mmu {
         }
     }
 
+    /// Reads two bytes from the given addresss in the memory.
     pub fn get16(&self, addr: u16) -> u16 {
         let l = self.get8(addr);
         let h = self.get8(addr + 1);
         (h as u16) << 8 | l as u16
     }
 
+    /// Writes two bytes at the given address in the memory.
     pub fn set16(&mut self, addr: u16, v: u16) {
         self.set8(addr, v as u8);
         self.set8(addr + 1, (v >> 8) as u8);
