@@ -104,11 +104,7 @@
 //! ```
 
 #![no_std]
-#![cfg_attr(feature = "readme", feature(external_doc))]
 #![warn(missing_docs)]
-
-#[cfg_attr(feature = "readme", doc(include = "../../README.md"))]
-type _Doctest = ();
 
 extern crate alloc;
 
