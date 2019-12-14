@@ -525,6 +525,7 @@ impl Mbc5 {
     }
 }
 
+#[allow(unused)]
 struct HuC1 {
     rom: Vec<u8>,
 }

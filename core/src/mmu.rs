@@ -1,7 +1,6 @@
 use alloc::rc::Rc;
 use alloc::{vec, vec::Vec};
 use hashbrown::HashMap;
-use log::*;
 
 pub enum MemRead {
     Replace(u8),

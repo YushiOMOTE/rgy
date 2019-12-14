@@ -1,4 +1,12 @@
+//!
+//! `rgy` is no-std cross-platform Rust GameBoy emulator library.
+//!
+
 #![no_std]
+#![cfg_attr(feature = "readme", feature(external_doc))]
+
+#[cfg_attr(feature = "readme", doc(include = "../README.md"))]
+type _Doctest = ();
 
 extern crate alloc;
 
@@ -23,5 +31,5 @@ mod timer;
 
 pub use crate::{
     hardware::{Hardware, Key, Stream, VRAM_HEIGHT, VRAM_WIDTH},
-    system::{run, run_debug, Config},
+    system::{run, run_debug, Config, System},
 };
