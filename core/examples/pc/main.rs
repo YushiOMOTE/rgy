@@ -77,9 +77,9 @@ fn main() {
         set_affinity();
 
         if opt.debug {
-            rgy::run_debug(to_cfg(opt), rom, hw1, Debugger::new());
+            rgy::run_debug(to_cfg(opt), &rom, hw1, Debugger::new());
         } else {
-            rgy::run(to_cfg(opt), rom, hw1);
+            rgy::run(to_cfg(opt), &rom, hw1);
         }
     });
 

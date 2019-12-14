@@ -12,6 +12,7 @@ pub struct Cgb {
     wram_bank: Vec<Vec<u8>>,
 }
 
+#[allow(unused)]
 impl Cgb {
     pub fn new() -> Self {
         Self {

@@ -93,6 +93,7 @@ fn from_palette(p: Vec<Color>) -> u8 {
     u8::from(p[0]) | u8::from(p[1]) << 2 | u8::from(p[2]) << 4 | u8::from(p[3]) << 6
 }
 
+#[allow(unused)]
 struct SpriteAttribute<'a> {
     ypos: u16,
     xpos: u16,

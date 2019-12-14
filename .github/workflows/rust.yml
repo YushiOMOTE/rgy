@@ -1,0 +1,34 @@
+name: Rust
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Prepare
+        run: sudo apt install libasound2-dev libxcursor-dev
+      - name: Build (stable)
+        run: cargo build --verbose
+      - name: Build examples (stable)
+        run: cargo build --verbose --examples
+      - name: Test (stable)
+        run: cargo test --verbose
+      - name: Install nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+      - name: Build (nightly)
+        run: |
+          cd core
+          cargo build --verbose --features readme
+      - name: Build examples (nightly)
+        run: |
+          cd core
+          cargo build --verbose --examples --features readme
+      - name: Test (nightly)
+        run: |
+          cd core
+          cargo test --verbose --features readme
