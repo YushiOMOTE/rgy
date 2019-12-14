@@ -319,6 +319,7 @@ impl Cpu {
 mod test {
     use super::*;
     use crate::inst::decode;
+    use alloc::{vec, vec::Vec};
 
     fn write(mmu: &mut Mmu, m: Vec<u8>) {
         for i in 0..m.len() {
