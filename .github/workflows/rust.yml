@@ -21,14 +21,8 @@ jobs:
           toolchain: nightly
           override: true
       - name: Build (nightly)
-        run: |
-          cd core
-          cargo build --verbose --features readme
+        run: cargo build --verbose
       - name: Build examples (nightly)
-        run: |
-          cd core
-          cargo build --verbose --examples --features readme
+        run: cargo build --verbose --examples
       - name: Test (nightly)
-        run: |
-          cd core
-          cargo test --verbose --features readme
+        run: cargo test --verbose

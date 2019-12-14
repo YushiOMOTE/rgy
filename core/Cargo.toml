@@ -9,7 +9,7 @@ homepage = "https://github.com/yushiomote/rgy"
 repository = "https://github.com/yushiomote/rgy"
 documentation = "https://docs.rs/rgy"
 license = "MIT"
-readme = "README.md"
+readme = "../README.md"
 
 [dependencies]
 lazy_static = { version = "1.2", features = ["spin_no_std"] }
@@ -29,4 +29,3 @@ core_affinity = "0.5"
 [features]
 default = []
 color = []
-readme = []
