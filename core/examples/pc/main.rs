@@ -1,11 +1,15 @@
 mod debug;
 mod hardware;
+mod loader;
 
-use crate::{debug::Debugger, hardware::Hardware};
+use crate::{
+    debug::Debugger,
+    hardware::Hardware,
+    loader::{load_rom, Loader},
+};
 
 use log::*;
-use std::fs::File;
-use std::io::prelude::*;
+use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -28,18 +32,9 @@ pub struct Opt {
     /// RAM file name
     #[structopt(short = "r", long = "ram")]
     ram: Option<String>,
-    /// ROM file name
+    /// ROM file name or directory
     #[structopt(name = "ROM")]
-    rom: String,
-}
-
-fn load_rom(name: &str) -> Vec<u8> {
-    let mut f = File::open(name).expect("Couldn't open file");
-    let mut buf = Vec::new();
-
-    f.read_to_end(&mut buf).expect("Couldn't read file");
-
-    buf
+    rom: PathBuf,
 }
 
 fn to_cfg(opt: Opt) -> rgy::Config {
@@ -69,11 +64,17 @@ fn main() {
     env_logger::init();
 
     let hw = Hardware::new(opt.ram.clone());
-    let rom = load_rom(&opt.rom);
-
     let hw1 = hw.clone();
 
     std::thread::spawn(move || {
+        let (rom, hw1) = if opt.rom.is_dir() {
+            let mut ldr = Loader::new(&opt.rom);
+
+            utils::select(&mut ldr, hw1)
+        } else {
+            (load_rom(&opt.rom), hw1)
+        };
+
         set_affinity();
 
         if opt.debug {

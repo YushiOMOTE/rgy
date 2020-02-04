@@ -1,0 +1,13 @@
+[package]
+name = "utils"
+version = "0.1.0"
+authors = ["Yushi Omote <yushiomote@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+font8x8 = { version = "0.2", default-features = false }
+lazy_static = { version = "1.2", features = ["spin_no_std"] }
+log = "0.4"
+hashbrown = "0.6"
+spin = "0.5"
+rgy = { path = "../core" }
