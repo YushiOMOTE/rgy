@@ -1,10 +1,14 @@
 use rgy::cpu::Cpu;
+use rgy::debug::DeviceHash;
 use rgy::device::IoHandler;
 use rgy::inst::mnem;
 use rgy::mmu::{MemRead, MemWrite, Mmu};
 
 use std::collections::{HashSet, VecDeque};
 use std::fmt;
+use std::fs::File;
+use std::io::Write;
+use std::path::PathBuf;
 use std::string::ToString;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -60,6 +64,9 @@ pub struct Debugger {
     cpu_state: Cpu,
     signal: Signal,
     exec_path: VecDeque<u16>,
+    cpu_state_hash: DeviceHash,
+    mem_state_hash: DeviceHash,
+    hash_dump_file: Option<File>,
 }
 
 impl Debugger {
@@ -73,6 +80,9 @@ impl Debugger {
             cpu_state: Cpu::new(),
             signal: Signal::new(),
             exec_path: VecDeque::new(),
+            cpu_state_hash: DeviceHash::new(),
+            mem_state_hash: DeviceHash::new(),
+            hash_dump_file: None,
         }
     }
 
@@ -173,11 +183,30 @@ impl rgy::debug::Debugger for Debugger {
     }
 
     fn take_cpu_snapshot(&mut self, cpu: Cpu) {
+        self.cpu_state_hash.update(&cpu);
         self.cpu_state = cpu;
     }
 
     fn on_decode(&mut self, mmu: &Mmu) {
         let pc = self.cpu_state.get_pc();
+
+        if let Some(file) = self.hash_dump_file.as_mut() {
+            let (code, _) = self.cpu_state.fetch(mmu);
+
+            file.write_all(
+                format!(
+                    "{:04x}: {:04x}: {:016x}{:016x}: {}\n",
+                    pc,
+                    code,
+                    self.cpu_state_hash.hash(),
+                    self.mem_state_hash.hash(),
+                    mnem(code),
+                )
+                .as_bytes(),
+            )
+            .unwrap();
+            file.flush().unwrap();
+        }
 
         self.add_exec_path(pc);
 
@@ -196,6 +225,8 @@ impl rgy::debug::Debugger for Debugger {
 
 impl IoHandler for Debugger {
     fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+        self.mem_state_hash.update(format!("read {}", addr));
+
         if self.rd_watches.contains(&addr) {
             self.do_break(&format!("Reading {:04x}", addr), mmu);
         }
@@ -204,6 +235,9 @@ impl IoHandler for Debugger {
     }
 
     fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+        self.mem_state_hash
+            .update(format!("write {} {}", addr, value));
+
         if self.wr_watches.contains(&addr) {
             self.do_break(&format!("Writing {:02x} to {:04x}", value, addr), mmu);
         }
@@ -277,6 +311,7 @@ lazy_static! {
             CmdHelp
         );
         cc!(m, "quit", None, "Quit this emulator.", CmdQuit);
+        cc!(m, "state", Some("s"), "Set dump hash file.", CmdDumpHash);
         cc!(m, "cont", Some("c"), "Continue execution.", CmdContinue);
         cc!(m, "step", Some("n"), "Step execution.", CmdStep);
         cc!(m, "dump", Some("d"), "Dump information.", CmdDump);
@@ -360,6 +395,24 @@ impl CmdHandler for CmdHelp {
                 }
             );
         }
+
+        Ok(false)
+    }
+}
+
+#[derive(StructOpt, Debug)]
+#[structopt(name = "dumphash", about = "Quit this emulator.")]
+struct CmdDumpHash {
+    /// Path to file to store device hash
+    #[structopt(name = "path")]
+    path: PathBuf,
+}
+
+impl CmdHandler for CmdDumpHash {
+    fn handle(&self, inner: &mut Debugger, _mmu: &Mmu) -> CmdResult<bool> {
+        // let path = std::env::current_dir().map(|p| p.join(&self.path))?;
+        println!("Set hash dump file path to {}", self.path.display());
+        inner.hash_dump_file = Some(std::fs::File::create(&self.path)?);
 
         Ok(false)
     }

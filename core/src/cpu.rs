@@ -7,7 +7,7 @@ use log::*;
 use alloc::fmt;
 
 /// Represents CPU state.
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct Cpu {
     a: u8,
     b: u8,

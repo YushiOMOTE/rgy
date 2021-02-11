@@ -1,6 +1,30 @@
 use crate::cpu::Cpu;
 use crate::device::IoHandler;
 use crate::mmu::{MemRead, MemWrite, Mmu};
+use core::hash::{Hash, Hasher};
+use siphasher::sip::SipHasher;
+
+#[derive(Default, Debug, Clone, Copy)]
+pub struct DeviceHash {
+    hash: u64,
+}
+
+impl DeviceHash {
+    pub fn new() -> Self {
+        Self { hash: 0 }
+    }
+
+    pub fn update<T: Hash>(&mut self, input: T) {
+        let mut hasher = SipHasher::new();
+        self.hash.hash(&mut hasher);
+        input.hash(&mut hasher);
+        self.hash = hasher.finish();
+    }
+
+    pub fn hash(&self) -> u64 {
+        self.hash
+    }
+}
 
 /// Debugger interface.
 ///
