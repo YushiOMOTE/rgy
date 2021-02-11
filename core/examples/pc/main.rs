@@ -29,6 +29,12 @@ pub struct Opt {
     /// Enable debug mode
     #[structopt(short = "d", long = "debug")]
     debug: bool,
+    /// Enable state dump file. Effective only in debug mode.
+    #[structopt(short = "p", long = "dump_path")]
+    dump_path: Option<PathBuf>,
+    /// Don't enter debug shell on start.
+    #[structopt(short = "D", long = "no_dbg_shell")]
+    no_dbg_shell: bool,
     /// RAM file name
     #[structopt(short = "r", long = "ram")]
     ram: Option<String>,
@@ -78,7 +84,12 @@ fn main() {
         set_affinity();
 
         if opt.debug {
-            rgy::run_debug(to_cfg(opt), &rom, hw1, Debugger::new());
+            let debugger = if let Some(path) = opt.dump_path.as_ref() {
+                Debugger::with_dump_file(!opt.no_dbg_shell, path)
+            } else {
+                Debugger::new(!opt.no_dbg_shell)
+            };
+            rgy::run_debug(to_cfg(opt), &rom, hw1, debugger);
         } else {
             rgy::run(to_cfg(opt), &rom, hw1);
         }

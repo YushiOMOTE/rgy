@@ -59,6 +59,7 @@ pub struct Debugger {
     breaks: HashSet<u16>,
     rd_watches: HashSet<u16>,
     wr_watches: HashSet<u16>,
+    init_shell: bool,
     prompt: bool,
     stepping: bool,
     cpu_state: Cpu,
@@ -70,11 +71,12 @@ pub struct Debugger {
 }
 
 impl Debugger {
-    pub fn new() -> Self {
+    pub fn new(init_shell: bool) -> Self {
         Self {
             breaks: HashSet::new(),
             rd_watches: HashSet::new(),
             wr_watches: HashSet::new(),
+            init_shell,
             prompt: false,
             stepping: false,
             cpu_state: Cpu::new(),
@@ -84,6 +86,12 @@ impl Debugger {
             mem_state_hash: DeviceHash::new(),
             hash_dump_file: None,
         }
+    }
+
+    pub fn with_dump_file(init_shell: bool, path: &PathBuf) -> Self {
+        let mut debugger = Self::new(init_shell);
+        debugger.hash_dump_file = Some(std::fs::File::create(path).unwrap());
+        debugger
     }
 
     fn add_exec_path(&mut self, pc: u16) {
@@ -177,9 +185,10 @@ impl Debugger {
 
 impl rgy::debug::Debugger for Debugger {
     fn init(&mut self, mmu: &Mmu) {
-        println!("Entering debug shell...");
-
-        self.prompt(mmu)
+        if self.init_shell {
+            println!("Entering debug shell...");
+            self.prompt(mmu)
+        }
     }
 
     fn take_cpu_snapshot(&mut self, cpu: Cpu) {
