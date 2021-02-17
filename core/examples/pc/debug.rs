@@ -68,6 +68,7 @@ pub struct Debugger {
     cpu_state_hash: DeviceHash,
     mem_state_hash: DeviceHash,
     hash_dump_file: Option<File>,
+    counter: usize,
 }
 
 impl Debugger {
@@ -85,6 +86,7 @@ impl Debugger {
             cpu_state_hash: DeviceHash::new(),
             mem_state_hash: DeviceHash::new(),
             hash_dump_file: None,
+            counter: 0,
         }
     }
 
@@ -197,6 +199,8 @@ impl rgy::debug::Debugger for Debugger {
     }
 
     fn on_decode(&mut self, mmu: &Mmu) {
+        self.counter += 1;
+
         let pc = self.cpu_state.get_pc();
 
         if let Some(file) = self.hash_dump_file.as_mut() {
