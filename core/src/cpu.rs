@@ -7,7 +7,7 @@ use log::*;
 use alloc::fmt;
 
 /// Represents CPU state.
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct Cpu {
     a: u8,
     b: u8,
@@ -75,7 +75,7 @@ impl Cpu {
     /// Switch the CPU state to halting.
     pub fn halt(&mut self) {
         debug!("Halted");
-        // TODO: self.halt = true;
+        self.halt = true;
     }
 
     /// Execute a single instruction.

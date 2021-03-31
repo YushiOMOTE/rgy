@@ -16,16 +16,18 @@ lazy_static = { version = "1.2", features = ["spin_no_std"] }
 log = "0.4"
 hashbrown = "0.6"
 spin = "0.5"
+siphasher = { version = "0.3", default-features = false }
 
 [dev-dependencies]
 env_logger = "0.6"
 rustyline = "4.1"
-minifb = "0.11"
+minifb = "0.19"
 structopt = "0.2"
 cpal = "0.8"
 signal-hook = "0.1"
 core_affinity = "0.5"
 utils = { path = "../utils" }
+simple-logging = "2.0"
 
 [features]
 default = []
