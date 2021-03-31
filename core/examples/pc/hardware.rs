@@ -93,12 +93,12 @@ impl Gui {
         if let Some(keys) = self.window.get_keys() {
             for k in keys {
                 let gbk = match k {
-                    minifb::Key::Right => Key::Right,
-                    minifb::Key::Left => Key::Left,
-                    minifb::Key::Up => Key::Up,
-                    minifb::Key::Down => Key::Down,
-                    minifb::Key::Z => Key::A,
-                    minifb::Key::X => Key::B,
+                    minifb::Key::Right | minifb::Key::D => Key::Right,
+                    minifb::Key::Left | minifb::Key::A => Key::Left,
+                    minifb::Key::Up | minifb::Key::W => Key::Up,
+                    minifb::Key::Down | minifb::Key::S => Key::Down,
+                    minifb::Key::Z | minifb::Key::J => Key::A,
+                    minifb::Key::X | minifb::Key::K => Key::B,
                     minifb::Key::Space => Key::Select,
                     minifb::Key::Enter => Key::Start,
                     minifb::Key::Escape => {
