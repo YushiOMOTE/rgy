@@ -38,6 +38,9 @@ pub struct Opt {
     /// RAM file name
     #[structopt(short = "r", long = "ram")]
     ram: Option<String>,
+    /// Log to file
+    #[structopt(short = "l", long = "log-file")]
+    log_file: Option<PathBuf>,
     /// ROM file name or directory
     #[structopt(name = "ROM")]
     rom: PathBuf,
@@ -67,7 +70,15 @@ fn set_affinity() {
 fn main() {
     let opt = Opt::from_args();
 
-    env_logger::init();
+    match opt.log_file.as_ref() {
+        Some(f) => {
+            simple_logging::log_to_file(f, LevelFilter::Info).unwrap();
+        }
+        None => {
+            env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+                .init();
+        }
+    }
 
     let hw = Hardware::new(opt.ram.clone());
     let hw1 = hw.clone();
