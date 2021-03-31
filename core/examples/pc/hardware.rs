@@ -40,7 +40,7 @@ impl Gui {
         } else {
             "Gay Boy"
         };
-        let window = match Window::new(
+        let mut window = match Window::new(
             title,
             VRAM_WIDTH,
             VRAM_HEIGHT,
@@ -55,6 +55,8 @@ impl Gui {
                 panic!("Unable to create window {}", err);
             }
         };
+
+        window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 
         Self {
             window,
@@ -74,7 +76,9 @@ impl Gui {
 
     fn vramupdate(&mut self) {
         let vram = self.vram.lock().unwrap().clone();
-        self.window.update_with_buffer(&vram).unwrap();
+        self.window
+            .update_with_buffer(&vram, VRAM_WIDTH, VRAM_HEIGHT)
+            .unwrap();
     }
 
     fn keyupdate(&mut self) {
