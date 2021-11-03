@@ -75,7 +75,7 @@ impl Cpu {
     /// Switch the CPU state to halting.
     pub fn halt(&mut self) {
         debug!("Halted");
-        // TODO: self.halt = true;
+        self.halt = true;
     }
 
     /// Execute a single instruction.
