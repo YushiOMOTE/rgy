@@ -109,11 +109,11 @@ impl Mmu {
     pub fn get8(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x7fff => self.mbc.on_read(addr),
-            0x8000..=0x9fff => self.gpu.on_read(addr),
+            0x8000..=0x9fff => self.gpu.read_vram(addr),
             0xa000..=0xbfff => self.mbc.on_read(addr),
             0xc000..=0xfdff => self.wram.get8(addr),
-            0xfe00..=0xfe9f => self.gpu.on_read_oam(addr),
-            0xfea0..=0xfeff => unreachable!("access to unusable memory"),
+            0xfe00..=0xfe9f => self.gpu.read_oam(addr),
+            0xfea0..=0xfeff => unimplemented!("unusable: addr={:04x}", addr),
             0xff00..=0xff7f => self.io_read(addr),
             0xff80..=0xfffe => self.hram.get8(addr),
             0xffff..=0xffff => self.ic.get_enabled(),
@@ -124,11 +124,11 @@ impl Mmu {
     pub fn set8(&mut self, addr: u16, v: u8) {
         match addr {
             0x0000..=0x7fff => self.mbc.on_write(addr, v),
-            0x8000..=0x9fff => self.gpu.on_write(addr, v),
+            0x8000..=0x9fff => self.gpu.write_vram(addr, v),
             0xa000..=0xbfff => self.mbc.on_write(addr, v),
             0xc000..=0xfdff => self.wram.set8(addr, v),
-            0xfe00..=0xfe9f => self.gpu.on_write_oam(addr, v),
-            0xfea0..=0xfeff => unreachable!("access to unusable memory"),
+            0xfe00..=0xfe9f => self.gpu.write_oam(addr, v),
+            0xfea0..=0xfeff => unimplemented!("unusable: addr={:04x}, value={:04x}", addr, v),
             0xff00..=0xff7f => self.io_write(addr, v),
             0xff80..=0xfffe => self.hram.set8(addr, v),
             0xffff..=0xffff => self.ic.set_enabled(v),
@@ -145,9 +145,28 @@ impl Mmu {
             0xff08..=0xff0e => todo!("i/o read: addr={:04x}", addr),
             0xff0f => self.ic.get_flags(),
             0xff10..=0xff3f => 0, // sound
-            0xff40..=0xff6b => self.gpu.on_read(addr),
-            0xff6c..=0xff7f => todo!("i/o read: addr={:04x}", addr),
-            _ => unreachable!("read attempt to i/o addr={:04x}", addr),
+            0xff40 => self.gpu.read_ctrl(),
+            0xff41 => self.gpu.read_status(),
+            0xff42 => self.gpu.read_scy(),
+            0xff43 => self.gpu.read_scx(),
+            0xff44 => self.gpu.read_ly(),
+            0xff45 => self.gpu.read_lyc(),
+            0xff46 => todo!("dma"),
+            0xff47 => self.gpu.read_bg_palette(),
+            0xff48 => self.gpu.read_obj_palette0(),
+            0xff49 => self.gpu.read_obj_palette1(),
+            0xff4a => self.gpu.read_wy(),
+            0xff4b => self.gpu.read_wx(),
+            0xff4d => 0, // cgb
+            0xff4f => self.gpu.read_vram_bank_select(),
+            0xff50..=0xff55 => todo!("hdma"),
+            0xff56 => todo!("ir"),
+            0xff68 => todo!("cgb bg palette index"),
+            0xff69 => self.gpu.read_bg_color_palette(),
+            0xff6a => todo!("cgb bg palette data"),
+            0xff6b => self.gpu.read_obj_color_palette(),
+            0x0000..=0xfeff | 0xff80..=0xffff => unreachable!("read non-i/o addr={:04x}", addr),
+            _ => unimplemented!("read unknown i/o addr={:04x}", addr),
         }
     }
 
@@ -161,11 +180,31 @@ impl Mmu {
             0xff08..=0xff0e => todo!("i/o write: addr={:04x}, v={:02x}", addr, v),
             0xff0f => self.ic.set_flags(v),
             0xff10..=0xff3f => {} // sound
-            0xff40..=0xff4f => self.gpu.on_write(addr, v),
+            0xff40 => self.gpu.write_ctrl(v),
+            0xff41 => self.gpu.write_status(v),
+            0xff42 => self.gpu.write_scy(v),
+            0xff43 => self.gpu.write_scx(v),
+            0xff44 => self.gpu.clear_ly(),
+            0xff45 => self.gpu.write_lyc(v),
+            0xff46 => todo!("dma"),
+            0xff47 => self.gpu.write_bg_palette(v),
+            0xff48 => self.gpu.write_obj_palette0(v),
+            0xff49 => self.gpu.write_obj_palette1(v),
+            0xff4a => self.gpu.write_wy(v),
+            0xff4b => self.gpu.write_wx(v),
+            0xff4d => {} // cgb
+            0xff4f => self.gpu.select_vram_bank(v),
             0xff50 => self.mbc.disable_boot_rom(v),
-            0xff51..=0xff6b => self.gpu.on_write(addr, v),
-            0xff6c..=0xff7f => todo!("i/o write: addr={:04x}, v={:02x}", addr, v),
-            _ => unreachable!("write attempt to i/o addr={:04x}, v={:04x}", addr, v),
+            0xff51..=0xff55 => todo!("hdma"),
+            0xff56 => todo!("ir"),
+            0xff68 => self.gpu.select_bg_color_palette(v),
+            0xff69 => self.gpu.write_bg_color_palette(v),
+            0xff6a => self.gpu.select_obj_color_palette(v),
+            0xff6b => self.gpu.write_obj_color_palette(v),
+            0x0000..=0xfeff | 0xff80..=0xffff => {
+                unreachable!("write non-i/o addr={:04x}, v={:02x}", addr, v)
+            }
+            _ => unimplemented!("write unknown i/o addr={:04x}, v={:02x}", addr, v),
         }
     }
 
@@ -182,6 +221,7 @@ impl Mmu {
         self.set8(addr + 1, (v >> 8) as u8);
     }
 
+    /// Updates the machine state by the given cycles
     pub fn step(&mut self, cycles: usize) {
         self.joypad.poll();
         self.gpu.step(cycles);

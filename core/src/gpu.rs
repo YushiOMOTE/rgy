@@ -388,7 +388,7 @@ impl Gpu {
     //     match self.hdma.run() {
     //         Some((dst, src, size)) => {
     //             for i in 0..size {
-    //                 self.write_vram(dst + i, mmu.get8(src + i), self.vram_select);
+    //                 self.write_vram_bank(dst + i, mmu.get8(src + i), self.vram_select);
     //             }
     //         }
     //         _ => {}
@@ -618,7 +618,8 @@ impl Gpu {
             .vram_update(self.ly as usize, &buf);
     }
 
-    fn on_write_ctrl(&mut self, value: u8) {
+    /// Write CTRL register (0xff40)
+    pub(crate) fn write_ctrl(&mut self, value: u8) {
         let old_enable = self.enable;
 
         self.enable = value & 0x80 != 0;
@@ -651,7 +652,8 @@ impl Gpu {
         debug!("Background enable: {}", self.bgenable);
     }
 
-    fn on_write_status(&mut self, value: u8) {
+    /// Write STAT register (0xff41)
+    pub(crate) fn write_status(&mut self, value: u8) {
         self.lyc_interrupt = value & 0x40 != 0;
         self.oam_interrupt = value & 0x20 != 0;
         self.vblank_interrupt = value & 0x10 != 0;
@@ -663,7 +665,8 @@ impl Gpu {
         debug!("HBlank interrupt: {}", self.hblank_interrupt);
     }
 
-    fn on_read_ctrl(&self) -> u8 {
+    // Read CTRL register (0xff40)
+    pub(crate) fn read_ctrl(&self) -> u8 {
         let mut v = 0;
         v |= if self.enable { 0x80 } else { 0x00 };
         v |= if self.winmap == 0x9c00 { 0x40 } else { 0x00 };
@@ -676,7 +679,8 @@ impl Gpu {
         v
     }
 
-    fn on_read_status(&self) -> u8 {
+    // Write STAT register (0xff41)
+    pub(crate) fn read_status(&self) -> u8 {
         let mut v = 0;
         v |= if self.lyc_interrupt { 0x40 } else { 0x00 };
         v |= if self.oam_interrupt { 0x20 } else { 0x00 };
@@ -691,19 +695,175 @@ impl Gpu {
         v
     }
 
-    fn read_vram(&self, addr: u16, bank: usize) -> u8 {
+    /// Read OAM region (0xfe00 - 0xfe9f)
+    pub(crate) fn read_oam(&self, addr: u16) -> u8 {
+        self.oam[addr as usize - 0xfe00]
+    }
+
+    /// Write OAM region (0xfe00 - 0xfe9f)
+    pub(crate) fn write_oam(&mut self, addr: u16, v: u8) {
+        self.oam[addr as usize - 0xfe00] = v;
+    }
+
+    /// Read VRAM region (0x8000 - 0x9fff)
+    pub(crate) fn read_vram(&self, addr: u16) -> u8 {
+        self.read_vram_bank(addr, self.vram_select)
+    }
+
+    /// Write VRAM region (0x8000 - 0x9fff)
+    pub(crate) fn write_vram(&mut self, addr: u16, v: u8) {
+        self.write_vram_bank(addr, v, self.vram_select)
+    }
+
+    /// Read SCY register (0xff42)
+    pub(crate) fn read_scy(&self) -> u8 {
+        self.scy
+    }
+
+    /// Write SCY register (0xff42)
+    pub(crate) fn write_scy(&mut self, v: u8) {
+        self.scy = v;
+    }
+
+    /// Read SCX register (0xff43)
+    pub(crate) fn read_scx(&self) -> u8 {
+        self.scx
+    }
+
+    /// Write SCX register (0xff43)
+    pub(crate) fn write_scx(&mut self, v: u8) {
+        self.scx = v;
+    }
+
+    /// Read LY register (0xff44)
+    pub(crate) fn read_ly(&self) -> u8 {
+        self.ly
+    }
+
+    /// Clear LY register (0xff44)
+    pub(crate) fn clear_ly(&mut self) {
+        self.ly = 0;
+    }
+
+    /// Read LYC register (0xff45)
+    pub(crate) fn read_lyc(&self) -> u8 {
+        self.lyc
+    }
+
+    /// Write LYC register (0xff45)
+    pub(crate) fn write_lyc(&mut self, v: u8) {
+        self.lyc = v;
+    }
+
+    /// Read BGP register (0xff47)
+    pub(crate) fn read_bg_palette(&self) -> u8 {
+        debug!("Read Bg palette");
+        from_palette(self.bg_palette.clone())
+    }
+
+    /// Write BGP register (0xff47)
+    pub(crate) fn write_bg_palette(&mut self, v: u8) {
+        self.bg_palette = to_palette(v);
+        debug!("Bg palette updated: {:?}", self.bg_palette);
+    }
+
+    /// Read OBP0 register (0xff48)
+    pub(crate) fn read_obj_palette0(&self) -> u8 {
+        debug!("Read Object palette 0");
+        from_palette(self.obj_palette0.clone())
+    }
+
+    /// Write OBP0 register (0xff48)
+    pub(crate) fn write_obj_palette0(&mut self, v: u8) {
+        self.obj_palette0 = to_palette(v);
+        debug!("Object palette 0 updated: {:?}", self.obj_palette0);
+    }
+
+    /// Read OBP1 register (0xff49)
+    pub(crate) fn read_obj_palette1(&self) -> u8 {
+        debug!("Read Object palette 1");
+        from_palette(self.obj_palette1.clone())
+    }
+
+    /// Write OBP1 register (0xff49)
+    pub(crate) fn write_obj_palette1(&mut self, v: u8) {
+        self.obj_palette1 = to_palette(v);
+        debug!("Object palette 1 updated: {:?}", self.obj_palette1);
+    }
+
+    /// Read WY register (0xff4a)
+    pub(crate) fn read_wy(&self) -> u8 {
+        self.wy
+    }
+
+    /// Write WY register (0xff4a)
+    pub(crate) fn write_wy(&mut self, v: u8) {
+        self.wy = v;
+    }
+
+    /// Read WX register (0xff4b)
+    pub(crate) fn read_wx(&self) -> u8 {
+        self.wx
+    }
+
+    /// Write WX register (0xff4b)
+    pub(crate) fn write_wx(&mut self, v: u8) {
+        self.wx = v;
+    }
+
+    /// Read VBK register (0xff4f)
+    pub(crate) fn read_vram_bank_select(&self) -> u8 {
+        self.vram_select as u8 & 0xfe
+    }
+
+    /// Write VBK register (0xff4f)
+    pub(crate) fn select_vram_bank(&mut self, v: u8) {
+        self.vram_select = v as usize & 1;
+    }
+
+    /// Write BCPS/BGPI register (0xff68)
+    pub(crate) fn select_bg_color_palette(&mut self, v: u8) {
+        self.bg_color_palette.select(v);
+    }
+
+    /// Read BCPD/BGPD register (0xff69)
+    pub(crate) fn read_bg_color_palette(&self) -> u8 {
+        self.bg_color_palette.read()
+    }
+
+    /// Write BCPD/BGPD register (0xff69)
+    pub(crate) fn write_bg_color_palette(&mut self, v: u8) {
+        self.bg_color_palette.write(v);
+    }
+
+    /// Write OCPS/OBPI register (0xff6a)
+    pub(crate) fn select_obj_color_palette(&mut self, v: u8) {
+        self.obj_color_palette.select(v);
+    }
+
+    /// Read OCPD/OBPD register (0xff6b)
+    pub(crate) fn read_obj_color_palette(&self) -> u8 {
+        self.obj_color_palette.read()
+    }
+
+    /// Write OCPD/OBPD register (0xff6b)
+    pub(crate) fn write_obj_color_palette(&mut self, v: u8) {
+        self.obj_color_palette.write(v);
+    }
+
+    fn read_vram_bank(&self, addr: u16, bank: usize) -> u8 {
         let off = addr as usize - 0x8000;
         self.vram[bank][off]
     }
 
-    fn write_vram(&mut self, addr: u16, value: u8, bank: usize) {
+    fn write_vram_bank(&mut self, addr: u16, value: u8, bank: usize) {
         let off = addr as usize - 0x8000;
         self.vram[bank][off] = value;
     }
 
     fn get_tile_base(&self, mapbase: u16, tx: u16, ty: u16) -> u16 {
         let ti = tx + ty * 32;
-        let num = self.read_vram(mapbase + ti, 0);
+        let num = self.read_vram_bank(mapbase + ti, 0);
 
         if self.tiles == 0x8000 {
             self.tiles + num as u16 * 16
@@ -715,7 +875,7 @@ impl Gpu {
     fn get_tile_attr(&self, mapbase: u16, tx: u16, ty: u16) -> MapAttribute {
         if cfg!(feature = "color") {
             let ti = tx + ty * 32;
-            let attr = self.read_vram(mapbase + ti, 1) as usize;
+            let attr = self.read_vram_bank(mapbase + ti, 1) as usize;
 
             MapAttribute {
                 palette: &self.bg_color_palette.cols[attr & 0x7][..],
@@ -764,142 +924,12 @@ impl Gpu {
     }
 
     fn get_tile_byte(&self, tilebase: u16, txoff: u16, tyoff: u16, bank: usize) -> usize {
-        let l = self.read_vram(tilebase + tyoff * 2, bank);
-        let h = self.read_vram(tilebase + tyoff * 2 + 1, bank);
+        let l = self.read_vram_bank(tilebase + tyoff * 2, bank);
+        let h = self.read_vram_bank(tilebase + tyoff * 2 + 1, bank);
 
         let l = (l >> (7 - txoff)) & 1;
         let h = ((h >> (7 - txoff)) & 1) << 1;
 
         (h | l) as usize
-    }
-
-    pub(crate) fn on_read_oam(&self, addr: u16) -> u8 {
-        self.oam[addr as usize - 0xfe00]
-    }
-
-    pub(crate) fn on_write_oam(&mut self, addr: u16, v: u8) {
-        self.oam[addr as usize - 0xfe00] = v;
-    }
-
-    pub(crate) fn on_read(&self, addr: u16) -> u8 {
-        if addr >= 0x8000 && addr <= 0x9fff {
-            self.read_vram(addr, self.vram_select)
-        } else if addr == 0xff40 {
-            self.on_read_ctrl()
-        } else if addr == 0xff41 {
-            self.on_read_status()
-        } else if addr == 0xff42 {
-            self.scy
-        } else if addr == 0xff43 {
-            self.scx
-        } else if addr == 0xff44 {
-            self.ly
-        } else if addr == 0xff45 {
-            self.lyc
-        } else if addr == 0xff46 {
-            unreachable!("DMA request")
-        } else if addr == 0xff47 {
-            debug!("Read Bg palette");
-            from_palette(self.bg_palette.clone())
-        } else if addr == 0xff48 {
-            debug!("Read Object palette 0");
-            from_palette(self.obj_palette0.clone())
-        } else if addr == 0xff49 {
-            debug!("Read Object palette 1");
-            from_palette(self.obj_palette1.clone())
-        } else if addr == 0xff4a {
-            self.wy
-        } else if addr == 0xff4b {
-            self.wx
-        } else if addr == 0xff4f {
-            self.vram_select as u8 & 0xfe
-        } else if addr == 0xff51 {
-            todo!("hdma") //self.hdma.src_high
-        } else if addr == 0xff52 {
-            todo!("hdma") //self.hdma.src_low
-        } else if addr == 0xff53 {
-            todo!("hdma") // self.hdma.dst_high
-        } else if addr == 0xff54 {
-            todo!("hdma") // self.hdma.dst_low
-        } else if addr == 0xff55 {
-            todo!("hdma")
-            // let mut v = 0;
-            // v |= self.hdma.len & 0x7f;
-            // v |= if self.hdma.on { 0x00 } else { 0x80 };
-            // v
-        } else if addr == 0xff68 {
-            unimplemented!()
-        } else if addr == 0xff69 {
-            self.bg_color_palette.read()
-        } else if addr == 0xff6a {
-            unimplemented!()
-        } else if addr == 0xff6b {
-            self.obj_color_palette.read()
-        } else {
-            warn!("Unsupported GPU register read: {:04x}", addr);
-            0
-        }
-    }
-
-    pub(crate) fn on_write(&mut self, addr: u16, value: u8) {
-        trace!("Write GPU register: {:04x} {:02x}", addr, value);
-        if addr >= 0x8000 && addr <= 0x9fff {
-            self.write_vram(addr, value, self.vram_select);
-        } else if addr == 0xff40 {
-            self.on_write_ctrl(value);
-        } else if addr == 0xff41 {
-            self.on_write_status(value);
-        } else if addr == 0xff42 {
-            self.scy = value;
-        } else if addr == 0xff43 {
-            debug!("Write SCX: {}", value);
-            self.scx = value;
-        } else if addr == 0xff44 {
-            self.ly = 0;
-        } else if addr == 0xff45 {
-            self.lyc = value;
-        } else if addr == 0xff46 {
-            unreachable!("Request DMA: {:02x}", value);
-        } else if addr == 0xff47 {
-            self.bg_palette = to_palette(value);
-            debug!("Bg palette updated: {:?}", self.bg_palette);
-        } else if addr == 0xff48 {
-            self.obj_palette0 = to_palette(value);
-            debug!("Object palette 0 updated: {:?}", self.obj_palette0);
-        } else if addr == 0xff49 {
-            self.obj_palette1 = to_palette(value);
-            debug!("Object palette 1 updated: {:?}", self.obj_palette1);
-        } else if addr == 0xff4a {
-            debug!("Window Y: {}", value);
-            self.wy = value;
-        } else if addr == 0xff4b {
-            debug!("Window X: {}", value);
-            self.wx = value;
-        } else if addr == 0xff4f {
-            self.vram_select = value as usize & 1;
-        } else if addr == 0xff51 {
-            todo!("hdma") // self.hdma.src_high = value;
-        } else if addr == 0xff52 {
-            todo!("hdma") // self.hdma.src_low = value;
-        } else if addr == 0xff53 {
-            todo!("hdma") // self.hdma.dst_high = value;
-        } else if addr == 0xff54 {
-            todo!("hdma") // self.hdma.dst_low = value;
-        } else if addr == 0xff55 {
-            todo!("hdma") // self.hdma.start(value);
-        } else if addr == 0xff68 {
-            self.bg_color_palette.select(value);
-        } else if addr == 0xff69 {
-            self.bg_color_palette.write(value);
-        } else if addr == 0xff6a {
-            self.obj_color_palette.select(value);
-        } else if addr == 0xff6b {
-            self.obj_color_palette.write(value);
-        } else {
-            warn!(
-                "Unsupported GPU register is written: {:04x} {:02x}",
-                addr, value
-            );
-        }
     }
 }
