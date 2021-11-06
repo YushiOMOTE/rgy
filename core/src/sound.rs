@@ -246,70 +246,103 @@ impl RandomWave {
 }
 
 #[derive(Debug, Clone)]
-struct Tone {
+pub struct Tone {
+    sweep: u8,
     sweep_time: usize,
     sweep_sub: bool,
     sweep_shift: usize,
+    wave: u8,
     sound_len: usize,
     wave_duty: usize,
+    envelop: u8,
     env_init: usize,
     env_inc: bool,
     env_count: usize,
     counter: bool,
     freq: usize,
-    nr: [u8; 5],
+    freq_high: u8,
 }
 
 impl Tone {
     fn new() -> Self {
         Self {
+            sweep: 0,
             sweep_time: 0,
             sweep_sub: false,
             sweep_shift: 0,
+            wave: 0,
             sound_len: 0,
             wave_duty: 0,
+            envelop: 0,
             env_init: 0,
             env_inc: false,
             env_count: 0,
             counter: false,
             freq: 0,
-            nr: [0; 5],
+            freq_high: 0,
         }
     }
 
-    fn on_read(&self, base: u16, addr: u16) -> u8 {
-        if addr == base + 3 {
-            0xff
-        } else {
-            self.nr[(addr - base) as usize]
-        }
+    /// Read NR10 register (0xff10)
+    pub fn read_sweep(&self) -> u8 {
+        self.sweep
     }
 
-    fn on_write(&mut self, base: u16, addr: u16, value: u8) -> bool {
-        if addr == base + 0 {
-            self.sweep_time = ((value >> 4) & 0x7) as usize;
-            self.sweep_sub = value & 0x08 != 0;
-            self.sweep_shift = (value & 0x07) as usize;
-        } else if addr == base + 1 {
-            self.wave_duty = (value >> 6).into();
-            self.sound_len = (value & 0x1f) as usize;
-        } else if addr == base + 2 {
-            self.env_init = (value >> 4) as usize;
-            self.env_inc = value & 0x08 != 0;
-            self.env_count = (value & 0x7) as usize;
-        } else if addr == base + 3 {
-            self.freq = (self.freq & !0xff) | value as usize;
-        } else if addr == base + 4 {
-            self.counter = value & 0x40 != 0;
-            self.freq = (self.freq & !0x700) | (((value & 0x7) as usize) << 8);
-            return value & 0x80 != 0;
-        } else {
-            unreachable!()
-        }
+    /// Write NR10 register (0xff10)
+    pub fn write_sweep(&mut self, value: u8) {
+        self.sweep = value;
+        self.sweep_time = ((value >> 4) & 0x7) as usize;
+        self.sweep_sub = value & 0x08 != 0;
+        self.sweep_shift = (value & 0x07) as usize;
+    }
 
-        self.nr[(addr - base) as usize] = value;
+    /// Read NR11/NR21 register (0xff11/0xff21)
+    pub fn read_wave(&self) -> u8 {
+        self.wave
+    }
 
-        false
+    /// Write NR11/NR21 register (0xff11/0xff21)
+    pub fn write_wave(&mut self, value: u8) {
+        self.wave = value;
+        self.wave_duty = (value >> 6).into();
+        self.sound_len = (value & 0x1f) as usize;
+    }
+
+    /// Read NR12/NR22 register (0xff12/0xff22)
+    pub fn read_envelop(&self) -> u8 {
+        self.envelop
+    }
+
+    /// Write NR12/NR22 register (0xff12/0xff22)
+    pub fn write_envelop(&mut self, value: u8) {
+        self.envelop = value;
+        self.env_init = (value >> 4) as usize;
+        self.env_inc = value & 0x08 != 0;
+        self.env_count = (value & 0x7) as usize;
+    }
+
+    /// Read NR13/NR23 register (0xff13/0xff23)
+    pub fn read_freq_low(&self) -> u8 {
+        // Write only
+        0xff
+    }
+
+    /// Write NR13/NR23 register (0xff13/0xff23)
+    pub fn write_freq_low(&mut self, value: u8) {
+        self.freq = (self.freq & !0xff) | value as usize;
+    }
+
+    /// Read NR14/NR24 register (0xff14/0xff24)
+    pub fn read_freq_high(&self) -> u8 {
+        self.freq_high
+    }
+
+    /// Write NR14/NR24 register (0xff14/0xff24)
+    fn write_freq_high(&mut self, value: u8) -> bool {
+        self.freq_high = value;
+        self.counter = value & 0x40 != 0;
+        self.freq = (self.freq & !0x700) | (((value & 0x7) as usize) << 8);
+        value & 0x80 != 0
     }
 }
 
@@ -382,14 +415,15 @@ impl Stream for ToneStream {
 }
 
 #[derive(Debug, Clone)]
-struct Wave {
+pub struct Wave {
     enable: bool,
     sound_len: usize,
+    amp: u8,
     amp_shift: Arc<AtomicUsize>,
     counter: bool,
     freq: Arc<AtomicUsize>,
+    freq_high: u8,
     wavebuf: [u8; 16],
-    nr: [u8; 5],
 }
 
 impl Wave {
@@ -397,53 +431,86 @@ impl Wave {
         Self {
             enable: false,
             sound_len: 0,
+            amp: 0,
             amp_shift: Arc::new(AtomicUsize::new(0)),
             counter: false,
             freq: Arc::new(AtomicUsize::new(0)),
+            freq_high: 0,
             wavebuf: [0; 16],
-            nr: [0; 5],
         }
     }
 
-    fn on_read(&self, addr: u16) -> u8 {
-        if addr == 0xff1d {
-            0xff
+    /// Read NR30 register (0xff1a)
+    pub fn read_enable(&self) -> u8 {
+        if self.enable {
+            0x80
         } else {
-            self.nr[(addr - 0xff1a) as usize]
+            0x00
         }
     }
 
-    fn on_write(&mut self, addr: u16, value: u8) -> bool {
-        if addr >= 0xff1a && addr <= 0xff1e {
-            self.nr[(addr - 0xff1a) as usize] = value;
-        }
+    /// Write NR30 register (0xff1a)
+    fn write_enable(&mut self, value: u8) {
+        debug!("Wave enable: {:02x}", value);
+        self.enable = value & 0x80 != 0;
+    }
 
-        if addr == 0xff1a {
-            debug!("Wave enable: {:02x}", value);
-            self.enable = value & 0x80 != 0;
-            return true;
-        } else if addr == 0xff1b {
-            debug!("Wave len: {:02x}", value);
-            self.sound_len = value as usize;
-        } else if addr == 0xff1c {
-            debug!("Wave amp shift: {:02x}", value);
-            self.amp_shift.set((value as usize >> 5) & 0x3);
-        } else if addr == 0xff1d {
-            debug!("Wave freq1: {:02x}", value);
-            self.freq.set((self.freq.get() & !0xff) | value as usize);
-        } else if addr == 0xff1e {
-            debug!("Wave freq2: {:02x}", value);
-            self.counter = value & 0x40 != 0;
-            self.freq
-                .set((self.freq.get() & !0x700) | (((value & 0x7) as usize) << 8));
-            return value & 0x80 != 0;
-        } else if addr >= 0xff30 && addr <= 0xff3f {
-            self.wavebuf[(addr - 0xff30) as usize] = value;
-        } else {
-            unreachable!()
-        }
+    /// Read NR31 register (0xff1b)
+    pub fn read_len(&self) -> u8 {
+        self.sound_len as u8
+    }
 
-        false
+    /// Write NR31 register (0xff1b)
+    pub fn write_len(&mut self, value: u8) {
+        debug!("Wave len: {:02x}", value);
+        self.sound_len = value as usize;
+    }
+
+    /// Read NR32 register (0xff1c)
+    pub fn read_amp(&self) -> u8 {
+        self.amp
+    }
+
+    /// Write NR32 register (0xff1c)
+    pub fn write_amp(&mut self, value: u8) {
+        debug!("Wave amp shift: {:02x}", value);
+        self.amp = value;
+        self.amp_shift.set((value as usize >> 5) & 0x3);
+    }
+
+    /// Read NR33 register (0xff1d)
+    pub fn read_freq_low(&self) -> u8 {
+        // Write only
+        0xff
+    }
+
+    /// Write NR33 register (0xff1d)
+    pub fn write_freq_low(&mut self, value: u8) {
+        self.freq.set((self.freq.get() & !0xff) | value as usize);
+    }
+
+    /// Read NR34 register (0xff1e)
+    pub fn read_freq_high(&self) -> u8 {
+        self.freq_high
+    }
+
+    /// Write NR34 register (0xff1e)
+    fn write_freq_high(&mut self, value: u8) -> bool {
+        self.freq_high = value;
+        self.counter = value & 0x40 != 0;
+        self.freq
+            .set((self.freq.get() & !0x700) | (((value & 0x7) as usize) << 8));
+        value & 0x80 != 0
+    }
+
+    /// Read wave pattern buffer
+    pub fn read_wave_buf(&self, offset: u16) -> u8 {
+        self.wavebuf[offset as usize - 0xff30]
+    }
+
+    /// Write wave pattern buffer
+    pub fn write_wave_buf(&mut self, offset: u16, value: u8) {
+        self.wavebuf[offset as usize - 0xff30] = value;
     }
 }
 
@@ -506,21 +573,22 @@ impl Stream for WaveStream {
 }
 
 #[derive(Debug, Clone)]
-struct Noise {
+pub struct Noise {
     sound_len: usize,
 
+    envelop: u8,
     env_init: usize,
     env_inc: bool,
     env_count: usize,
 
+    poly_counter: u8,
     shift_freq: usize,
     step: bool,
     div_freq: usize,
 
+    select: u8,
     counter: bool,
     freq: usize,
-
-    nr: [u8; 4],
 }
 
 impl Noise {
@@ -528,46 +596,68 @@ impl Noise {
         Self {
             sound_len: 0,
 
+            envelop: 0,
             env_init: 0,
             env_inc: false,
             env_count: 0,
 
+            poly_counter: 0,
             shift_freq: 0,
             step: false,
             div_freq: 0,
 
+            select: 0,
             counter: false,
             freq: 0,
-
-            nr: [0; 4],
         }
     }
 
-    fn on_read(&self, addr: u16) -> u8 {
-        self.nr[(addr - 0xff20) as usize]
+    /// Read NR41 register (0xff20)
+    pub fn read_len(&self) -> u8 {
+        self.sound_len as u8
     }
 
-    fn on_write(&mut self, addr: u16, value: u8) -> bool {
-        self.nr[(addr - 0xff20) as usize] = value;
+    /// Write NR41 register (0xff20)
+    pub fn write_len(&mut self, value: u8) {
+        self.sound_len = (value & 0x1f) as usize;
+    }
 
-        if addr == 0xff20 {
-            self.sound_len = (value & 0x1f) as usize;
-        } else if addr == 0xff21 {
-            self.env_init = (value >> 4) as usize;
-            self.env_inc = value & 0x08 != 0;
-            self.env_count = (value & 0x7) as usize;
-        } else if addr == 0xff22 {
-            self.shift_freq = (value >> 4) as usize;
-            self.step = value & 0x08 != 0;
-            self.div_freq = (value & 0x7) as usize;
-        } else if addr == 0xff23 {
-            self.counter = value & 0x40 != 0;
-            return value & 0x80 != 0;
-        } else {
-            unreachable!()
-        }
+    /// Read NR42 register (0xff21)
+    pub fn read_envelop(&self) -> u8 {
+        self.envelop
+    }
 
-        false
+    /// Write NR42 register (0xff21)
+    pub fn write_envelop(&mut self, value: u8) {
+        self.envelop = value;
+        self.env_init = (value >> 4) as usize;
+        self.env_inc = value & 0x08 != 0;
+        self.env_count = (value & 0x7) as usize;
+    }
+
+    /// Read NR43 register (0xff22)
+    pub fn read_poly_counter(&self) -> u8 {
+        self.poly_counter
+    }
+
+    /// Write NR43 register (0xff22)
+    pub fn write_poly_counter(&mut self, value: u8) {
+        self.poly_counter = value;
+        self.shift_freq = (value >> 4) as usize;
+        self.step = value & 0x08 != 0;
+        self.div_freq = (value & 0x7) as usize;
+    }
+
+    /// Read NR44 register (0xff23)
+    pub fn read_select(&self) -> u8 {
+        self.select
+    }
+
+    /// Write NR44 register (0xff23)
+    fn write_select(&mut self, value: u8) -> bool {
+        self.select = value;
+        self.counter = value & 0x40 != 0;
+        value & 0x80 != 0
     }
 }
 
@@ -627,24 +717,24 @@ impl Stream for NoiseStream {
     }
 }
 
-struct Mixer {
+pub struct Mixer {
+    ctrl: u8,
     so1_volume: usize,
     so2_volume: usize,
     so_mask: usize,
     enable: bool,
     stream: MixerStream,
-    nr: [u8; 3],
 }
 
 impl Mixer {
     fn new() -> Self {
         Self {
+            ctrl: 0,
             so1_volume: 0,
             so2_volume: 0,
             so_mask: 0,
             enable: false,
             stream: MixerStream::new(),
-            nr: [0; 3],
         }
     }
 
@@ -654,41 +744,49 @@ impl Mixer {
             .sound_play(Box::new(self.stream.clone()))
     }
 
-    fn on_read(&self, addr: u16) -> u8 {
-        if addr == 0xff26 {
-            let mut v = 0;
-            v |= if self.enable { 0x80 } else { 0x00 };
-            v |= if self.stream.tone1.on() { 0x08 } else { 0x00 };
-            v |= if self.stream.tone2.on() { 0x04 } else { 0x00 };
-            v |= if self.stream.wave.on() { 0x02 } else { 0x00 };
-            v |= if self.stream.noise.on() { 0x01 } else { 0x00 };
-            v
-        } else {
-            self.nr[(addr - 0xff24) as usize]
-        }
+    /// Read NR50 register (0xff24)
+    pub fn read_ctrl(&self) -> u8 {
+        self.ctrl
     }
 
-    fn on_write(&mut self, addr: u16, value: u8) {
-        self.nr[(addr - 0xff24) as usize] = value;
+    /// Write NR50 register (0xff24)
+    pub fn write_ctrl(&mut self, value: u8) {
+        self.so1_volume = (value as usize & 0x70) >> 4;
+        self.so2_volume = value as usize & 0x07;
+        self.update_volume();
+    }
 
-        if addr == 0xff24 {
-            self.so1_volume = (value as usize & 0x70) >> 4;
-            self.so2_volume = value as usize & 0x07;
-            self.update_volume();
-        } else if addr == 0xff25 {
-            self.so_mask = value as usize;
-            self.update_volume();
-        } else if addr == 0xff26 {
-            self.enable = value & 0x80 != 0;
-            if self.enable {
-                info!("Sound master enabled");
-            } else {
-                info!("Sound master disabled");
-            }
-            self.update_volume();
+    /// Read NR51 register (0xff25)
+    pub fn read_so_mask(&self) -> u8 {
+        self.so_mask as u8
+    }
+
+    /// Write NR51 register (0xff25)
+    pub fn write_so_mask(&mut self, value: u8) {
+        self.so_mask = value as usize;
+        self.update_volume();
+    }
+
+    /// Read NR52 register (0xff26)
+    pub fn read_enable(&self) -> u8 {
+        let mut v = 0;
+        v |= if self.enable { 0x80 } else { 0x00 };
+        v |= if self.stream.tone1.on() { 0x08 } else { 0x00 };
+        v |= if self.stream.tone2.on() { 0x04 } else { 0x00 };
+        v |= if self.stream.wave.on() { 0x02 } else { 0x00 };
+        v |= if self.stream.noise.on() { 0x01 } else { 0x00 };
+        v
+    }
+
+    /// Write NR52 register (0xff26)
+    pub fn write_enable(&mut self, value: u8) {
+        self.enable = value & 0x80 != 0;
+        if self.enable {
+            info!("Sound master enabled");
         } else {
-            unreachable!()
+            info!("Sound master disabled");
         }
+        self.update_volume();
     }
 
     fn restart_tone1(&self, t: Tone) {
@@ -854,40 +952,72 @@ impl Sound {
         }
     }
 
-    pub fn on_read(&self, addr: u16) -> u8 {
-        match addr {
-            0xff10..=0xff14 => self.tone1.on_read(0xff10, addr),
-            0xff15..=0xff19 => self.tone2.on_read(0xff15, addr),
-            0xff1a..=0xff1e => self.wave.on_read(addr),
-            0xff20..=0xff23 => self.noise.on_read(addr),
-            0xff24..=0xff26 => self.mixer.on_read(addr),
-            _ => unimplemented!(),
+    pub fn tone1(&self) -> &Tone {
+        &self.tone1
+    }
+
+    pub fn tone2(&self) -> &Tone {
+        &self.tone2
+    }
+
+    pub fn wave(&self) -> &Wave {
+        &self.wave
+    }
+
+    pub fn noise(&self) -> &Noise {
+        &self.noise
+    }
+
+    pub fn mixer(&self) -> &Mixer {
+        &self.mixer
+    }
+
+    pub fn tone1_mut(&mut self) -> &mut Tone {
+        &mut self.tone1
+    }
+
+    pub fn tone2_mut(&mut self) -> &mut Tone {
+        &mut self.tone2
+    }
+
+    pub fn wave_mut(&mut self) -> &mut Wave {
+        &mut self.wave
+    }
+
+    pub fn noise_mut(&mut self) -> &mut Noise {
+        &mut self.noise
+    }
+
+    pub fn mixer_mut(&mut self) -> &mut Mixer {
+        &mut self.mixer
+    }
+
+    pub fn write_tone1_start(&mut self, value: u8) {
+        if self.tone1.write_freq_high(value) {
+            self.mixer.restart_tone1(self.tone1.clone());
         }
     }
 
-    pub fn on_write(&mut self, addr: u16, value: u8) {
-        if addr >= 0xff10 && addr <= 0xff14 {
-            if self.tone1.on_write(0xff10, addr, value) {
-                self.mixer.restart_tone1(self.tone1.clone());
-            }
-        } else if addr >= 0xff15 && addr <= 0xff19 {
-            if self.tone2.on_write(0xff15, addr, value) {
-                self.mixer.restart_tone2(self.tone2.clone());
-            }
-        } else if addr >= 0xff1a && addr <= 0xff1e {
-            if self.wave.on_write(addr, value) {
-                self.mixer.restart_wave(self.wave.clone());
-            }
-        } else if addr >= 0xff30 && addr <= 0xff3f {
-            let _ = self.wave.on_write(addr, value);
-        } else if addr >= 0xff20 && addr <= 0xff23 {
-            if self.noise.on_write(addr, value) {
-                self.mixer.restart_noise(self.noise.clone());
-            }
-        } else if addr >= 0xff24 && addr <= 0xff26 {
-            self.mixer.on_write(addr, value);
-        } else {
-            info!("Write sound: {:04x} {:02x}", addr, value);
+    pub fn write_tone2_start(&mut self, value: u8) {
+        if self.tone2.write_freq_high(value) {
+            self.mixer.restart_tone2(self.tone2.clone());
+        }
+    }
+
+    pub fn write_wave_enable(&mut self, value: u8) {
+        self.wave.write_enable(value);
+        self.mixer.restart_wave(self.wave.clone());
+    }
+
+    pub fn write_wave_start(&mut self, value: u8) {
+        if self.wave.write_freq_high(value) {
+            self.mixer.restart_wave(self.wave.clone());
+        }
+    }
+
+    pub fn write_noise_start(&mut self, value: u8) {
+        if self.noise.write_select(value) {
+            self.mixer.restart_noise(self.noise.clone());
         }
     }
 }
