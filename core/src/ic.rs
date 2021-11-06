@@ -2,6 +2,7 @@ use alloc::rc::Rc;
 use core::cell::RefCell;
 use log::*;
 
+/// Sharable handle for I/O devices to request/cancel interrupts
 #[derive(Clone)]
 pub struct Irq {
     enable: Rc<RefCell<Ints>>,
@@ -16,54 +17,27 @@ impl Irq {
         }
     }
 
-    pub fn peek(&self) -> Option<u8> {
-        self.check(false)
-    }
-
-    pub fn poll(&self) -> Option<u8> {
-        self.check(true)
-    }
-
-    fn check(&self, consume: bool) -> Option<u8> {
-        let e = self.enable.borrow();
-        let mut r = self.request.borrow_mut();
-
-        if e.vblank && r.vblank {
-            r.vblank = !consume;
-            Some(0x40)
-        } else if e.lcd && r.lcd {
-            r.lcd = !consume;
-            Some(0x48)
-        } else if e.timer && r.timer {
-            r.timer = !consume;
-            Some(0x50)
-        } else if e.serial && r.serial {
-            r.serial = !consume;
-            Some(0x58)
-        } else if e.joypad && r.joypad {
-            r.joypad = !consume;
-            Some(0x60)
-        } else {
-            None
-        }
-    }
-
+    /// Request/cacnel vblank interrupt
     pub fn vblank(&self, v: bool) {
         self.request.borrow_mut().vblank = v;
     }
 
+    /// Request/cancel LCD interrupt
     pub fn lcd(&self, v: bool) {
         self.request.borrow_mut().lcd = v;
     }
 
+    /// Request/cancel timer interrupt
     pub fn timer(&self, v: bool) {
         self.request.borrow_mut().timer = v;
     }
 
+    /// Request/cancel serial interrupt
     pub fn serial(&self, v: bool) {
         self.request.borrow_mut().serial = v;
     }
 
+    /// Request/cancel joypad interrupt
     pub fn joypad(&self, v: bool) {
         self.request.borrow_mut().joypad = v;
     }
@@ -98,6 +72,7 @@ impl Ints {
     }
 }
 
+/// Interrupt controller
 pub struct Ic {
     irq: Irq,
 }
@@ -107,24 +82,62 @@ impl Ic {
         Ic { irq }
     }
 
-    pub(crate) fn get_enabled(&self) -> u8 {
+    /// Get the interrupt vector address without clearing the interrupt flag state
+    pub fn peek(&self) -> Option<u8> {
+        self.check(false)
+    }
+
+    /// Get the interrupt vector address clearing the interrupt flag state
+    pub fn pop(&self) -> Option<u8> {
+        self.check(true)
+    }
+
+    fn check(&self, consume: bool) -> Option<u8> {
+        let e = self.irq.enable.borrow();
+        let mut r = self.irq.request.borrow_mut();
+
+        if e.vblank && r.vblank {
+            r.vblank = !consume;
+            Some(0x40)
+        } else if e.lcd && r.lcd {
+            r.lcd = !consume;
+            Some(0x48)
+        } else if e.timer && r.timer {
+            r.timer = !consume;
+            Some(0x50)
+        } else if e.serial && r.serial {
+            r.serial = !consume;
+            Some(0x58)
+        } else if e.joypad && r.joypad {
+            r.joypad = !consume;
+            Some(0x60)
+        } else {
+            None
+        }
+    }
+
+    /// Read IE register (0xffff)
+    pub fn read_enabled(&self) -> u8 {
         let v = self.irq.enable.borrow().get();
         info!("Read interrupt enable: {:02x}", v);
         v
     }
 
-    pub(crate) fn get_flags(&self) -> u8 {
+    /// Write IF register (0xff0f)
+    pub fn read_flags(&self) -> u8 {
         let v = self.irq.request.borrow().get();
         info!("Read interrupt: {:02x}", v);
         v
     }
 
-    pub(crate) fn set_enabled(&mut self, value: u8) {
+    /// Write IE register (0xffff)
+    pub fn write_enabled(&mut self, value: u8) {
         info!("Write interrupt enable: {:02x}", value);
         self.irq.enable.borrow_mut().set(value);
     }
 
-    pub(crate) fn set_flags(&mut self, value: u8) {
+    /// Write IF register (0xff0f)
+    pub fn write_flags(&mut self, value: u8) {
         info!("Write interrupt: {:02x}", value);
         self.irq.request.borrow_mut().set(value);
     }

@@ -1,8 +1,6 @@
-use crate::hardware::HardwareHandle;
 use crate::mmu::Mmu;
+use alloc::fmt;
 use log::*;
-
-use alloc::{fmt, vec::Vec};
 
 /// Represents CPU state.
 pub struct Cpu {
@@ -53,7 +51,7 @@ impl fmt::Display for Cpu {
 
 impl Cpu {
     /// Create a new CPU state.
-    pub fn new(hw: HardwareHandle, mmu: Mmu) -> Cpu {
+    pub fn new(mmu: Mmu) -> Cpu {
         Cpu {
             a: 0,
             b: 0,
@@ -119,7 +117,7 @@ impl Cpu {
             if self.halt {
                 // If HALT is executed while interrupt is disabled,
                 // the interrupt wakes up CPU without being consumed.
-                if let Some(value) = self.mmu.irq().peek() {
+                if let Some(value) = self.mmu.peek_int_vec() {
                     debug!("Interrupted on halt + ime=0: {:02x}", value);
                     self.halt = false;
                 }
@@ -127,7 +125,7 @@ impl Cpu {
 
             0
         } else {
-            let value = match self.mmu.irq().poll() {
+            let value = match self.mmu.pop_int_vec() {
                 Some(value) => value,
                 None => return 0,
             };
@@ -142,11 +140,11 @@ impl Cpu {
         }
     }
 
-    fn interrupted(&mut self, value: u8) {
+    fn interrupted(&mut self, vector_addr: u8) {
         self.disable_interrupt();
 
         self.push(self.get_pc());
-        self.set_pc(value as u16);
+        self.set_pc(vector_addr as u16);
     }
 
     /// Stop the CPU.

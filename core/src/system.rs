@@ -6,7 +6,6 @@ use crate::debug::Debugger;
 use crate::fc::FreqControl;
 // use crate::gpu::Gpu;
 use crate::hardware::{Hardware, HardwareHandle};
-use crate::ic::Irq;
 // use crate::joypad::Joypad;
 // use crate::mbc::Mbc;
 use crate::mmu::Mmu;
@@ -97,7 +96,7 @@ where
 
         // let dbg = Device::mediate(dbg);
         let mmu = Mmu::new(hw.clone(), rom.to_vec());
-        let cpu = Cpu::new(hw.clone(), mmu);
+        let cpu = Cpu::new(mmu);
         // let mut mmu = Mmu::new();
         // let sound = Device::new(Sound::new(hw.clone()));
         // let ic = Device::new(Ic::new());

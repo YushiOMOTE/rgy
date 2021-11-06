@@ -1,6 +1,5 @@
 use crate::alu;
 use crate::cpu::Cpu;
-use crate::mmu::Mmu;
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
 use log::*;

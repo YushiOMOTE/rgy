@@ -6,7 +6,6 @@ use crate::mbc::Mbc;
 use crate::serial::Serial;
 use crate::timer::Timer;
 use alloc::{vec, vec::Vec};
-use core::cell::RefCell;
 
 /// Handles work ram access between 0xc000 - 0xdfff
 pub struct Wram {
@@ -80,7 +79,6 @@ pub struct Mmu {
     ic: Ic,
     serial: Serial,
     joypad: Joypad,
-    irq: Irq,
 }
 
 impl Mmu {
@@ -96,13 +94,18 @@ impl Mmu {
             timer: Timer::new(irq.clone()),
             ic: Ic::new(irq.clone()),
             serial: Serial::new(hw.clone(), irq.clone()),
-            joypad: Joypad::new(hw, irq.clone()),
-            irq,
+            joypad: Joypad::new(hw, irq),
         }
     }
 
-    pub fn irq(&self) -> &Irq {
-        &self.irq
+    /// Get the interrupt vector address without clearing the interrupt flag state
+    pub fn peek_int_vec(&self) -> Option<u8> {
+        self.ic.peek()
+    }
+
+    /// Get the interrupt vector address clearing the interrupt flag state
+    pub fn pop_int_vec(&self) -> Option<u8> {
+        self.ic.pop()
     }
 
     /// Reads one byte from the given address in the memory.
@@ -116,7 +119,7 @@ impl Mmu {
             0xfea0..=0xfeff => unimplemented!("unusable: addr={:04x}", addr),
             0xff00..=0xff7f => self.io_read(addr),
             0xff80..=0xfffe => self.hram.get8(addr),
-            0xffff..=0xffff => self.ic.get_enabled(),
+            0xffff..=0xffff => self.ic.read_enabled(),
         }
     }
 
@@ -131,7 +134,7 @@ impl Mmu {
             0xfea0..=0xfeff => unimplemented!("unusable: addr={:04x}, value={:04x}", addr, v),
             0xff00..=0xff7f => self.io_write(addr, v),
             0xff80..=0xfffe => self.hram.set8(addr, v),
-            0xffff..=0xffff => self.ic.set_enabled(v),
+            0xffff..=0xffff => self.ic.write_enabled(v),
         }
     }
 
@@ -143,7 +146,7 @@ impl Mmu {
             0xff03 => todo!("i/o write: addr={:04x}", addr),
             0xff04..=0xff07 => self.timer.on_read(addr),
             0xff08..=0xff0e => todo!("i/o read: addr={:04x}", addr),
-            0xff0f => self.ic.get_flags(),
+            0xff0f => self.ic.read_flags(),
             0xff10..=0xff3f => 0, // sound
             0xff40 => self.gpu.read_ctrl(),
             0xff41 => self.gpu.read_status(),
@@ -178,7 +181,7 @@ impl Mmu {
             0xff03 => todo!("i/o write: addr={:04x}, v={:02x}", addr, v),
             0xff04..=0xff07 => self.timer.on_write(addr, v),
             0xff08..=0xff0e => todo!("i/o write: addr={:04x}, v={:02x}", addr, v),
-            0xff0f => self.ic.set_flags(v),
+            0xff0f => self.ic.write_flags(v),
             0xff10..=0xff3f => {} // sound
             0xff40 => self.gpu.write_ctrl(v),
             0xff41 => self.gpu.write_status(v),

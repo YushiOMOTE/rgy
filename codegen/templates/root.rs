@@ -1,7 +1,6 @@
 {% import "ops.rs" as macros %}
 
 use crate::cpu::Cpu;
-use crate::mmu::Mmu;
 use crate::alu;
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
