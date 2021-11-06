@@ -4,9 +4,7 @@ use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use log::*;
 use spin::Mutex;
 
-use crate::device::IoHandler;
 use crate::hardware::{HardwareHandle, Stream};
-use crate::mmu::{MemRead, MemWrite, Mmu};
 
 trait AtomicHelper {
     type Item;
@@ -259,6 +257,7 @@ struct Tone {
     env_count: usize,
     counter: bool,
     freq: usize,
+    nr: [u8; 5],
 }
 
 impl Tone {
@@ -274,14 +273,15 @@ impl Tone {
             env_count: 0,
             counter: false,
             freq: 0,
+            nr: [0; 5],
         }
     }
 
-    fn on_read(&mut self, base: u16, addr: u16) -> MemRead {
+    fn on_read(&self, base: u16, addr: u16) -> u8 {
         if addr == base + 3 {
-            MemRead::Replace(0xff)
+            0xff
         } else {
-            MemRead::PassThrough
+            self.nr[(addr - base) as usize]
         }
     }
 
@@ -306,6 +306,8 @@ impl Tone {
         } else {
             unreachable!()
         }
+
+        self.nr[(addr - base) as usize] = value;
 
         false
     }
@@ -387,6 +389,7 @@ struct Wave {
     counter: bool,
     freq: Arc<AtomicUsize>,
     wavebuf: [u8; 16],
+    nr: [u8; 5],
 }
 
 impl Wave {
@@ -398,18 +401,23 @@ impl Wave {
             counter: false,
             freq: Arc::new(AtomicUsize::new(0)),
             wavebuf: [0; 16],
+            nr: [0; 5],
         }
     }
 
-    fn on_read(&mut self, addr: u16) -> MemRead {
+    fn on_read(&self, addr: u16) -> u8 {
         if addr == 0xff1d {
-            MemRead::Replace(0xff)
+            0xff
         } else {
-            MemRead::PassThrough
+            self.nr[(addr - 0xff1a) as usize]
         }
     }
 
     fn on_write(&mut self, addr: u16, value: u8) -> bool {
+        if addr >= 0xff1a && addr <= 0xff1e {
+            self.nr[(addr - 0xff1a) as usize] = value;
+        }
+
         if addr == 0xff1a {
             debug!("Wave enable: {:02x}", value);
             self.enable = value & 0x80 != 0;
@@ -511,6 +519,8 @@ struct Noise {
 
     counter: bool,
     freq: usize,
+
+    nr: [u8; 4],
 }
 
 impl Noise {
@@ -528,14 +538,18 @@ impl Noise {
 
             counter: false,
             freq: 0,
+
+            nr: [0; 4],
         }
     }
 
-    fn on_read(&mut self, _addr: u16) -> MemRead {
-        MemRead::PassThrough
+    fn on_read(&self, addr: u16) -> u8 {
+        self.nr[(addr - 0xff20) as usize]
     }
 
     fn on_write(&mut self, addr: u16, value: u8) -> bool {
+        self.nr[(addr - 0xff20) as usize] = value;
+
         if addr == 0xff20 {
             self.sound_len = (value & 0x1f) as usize;
         } else if addr == 0xff21 {
@@ -619,6 +633,7 @@ struct Mixer {
     so_mask: usize,
     enable: bool,
     stream: MixerStream,
+    nr: [u8; 3],
 }
 
 impl Mixer {
@@ -629,6 +644,7 @@ impl Mixer {
             so_mask: 0,
             enable: false,
             stream: MixerStream::new(),
+            nr: [0; 3],
         }
     }
 
@@ -638,7 +654,7 @@ impl Mixer {
             .sound_play(Box::new(self.stream.clone()))
     }
 
-    fn on_read(&mut self, addr: u16) -> MemRead {
+    fn on_read(&self, addr: u16) -> u8 {
         if addr == 0xff26 {
             let mut v = 0;
             v |= if self.enable { 0x80 } else { 0x00 };
@@ -646,13 +662,15 @@ impl Mixer {
             v |= if self.stream.tone2.on() { 0x04 } else { 0x00 };
             v |= if self.stream.wave.on() { 0x02 } else { 0x00 };
             v |= if self.stream.noise.on() { 0x01 } else { 0x00 };
-            MemRead::Replace(v)
+            v
         } else {
-            MemRead::PassThrough
+            self.nr[(addr - 0xff24) as usize]
         }
     }
 
     fn on_write(&mut self, addr: u16, value: u8) {
+        self.nr[(addr - 0xff24) as usize] = value;
+
         if addr == 0xff24 {
             self.so1_volume = (value as usize & 0x70) >> 4;
             self.so2_volume = value as usize & 0x07;
@@ -835,26 +853,19 @@ impl Sound {
             mixer,
         }
     }
-}
 
-impl IoHandler for Sound {
-    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
-        if addr >= 0xff10 && addr <= 0xff14 {
-            self.tone1.on_read(0xff10, addr)
-        } else if addr >= 0xff15 && addr <= 0xff19 {
-            self.tone2.on_read(0xff15, addr)
-        } else if addr >= 0xff1a && addr <= 0xff1e {
-            self.wave.on_read(addr)
-        } else if addr >= 0xff20 && addr <= 0xff23 {
-            self.noise.on_read(addr)
-        } else if addr >= 0xff24 && addr <= 0xff26 {
-            self.mixer.on_read(addr)
-        } else {
-            MemRead::PassThrough
+    pub fn on_read(&self, addr: u16) -> u8 {
+        match addr {
+            0xff10..=0xff14 => self.tone1.on_read(0xff10, addr),
+            0xff15..=0xff19 => self.tone2.on_read(0xff15, addr),
+            0xff1a..=0xff1e => self.wave.on_read(addr),
+            0xff20..=0xff23 => self.noise.on_read(addr),
+            0xff24..=0xff26 => self.mixer.on_read(addr),
+            _ => unimplemented!(),
         }
     }
 
-    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    pub fn on_write(&mut self, addr: u16, value: u8) {
         if addr >= 0xff10 && addr <= 0xff14 {
             if self.tone1.on_write(0xff10, addr, value) {
                 self.mixer.restart_tone1(self.tone1.clone());
@@ -878,7 +889,5 @@ impl IoHandler for Sound {
         } else {
             info!("Write sound: {:04x} {:02x}", addr, value);
         }
-
-        MemWrite::PassThrough
     }
 }

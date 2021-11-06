@@ -117,7 +117,7 @@ mod ic;
 mod joypad;
 mod mbc;
 mod serial;
-// mod sound;
+mod sound;
 mod system;
 mod timer;
 

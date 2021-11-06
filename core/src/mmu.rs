@@ -4,6 +4,7 @@ use crate::ic::{Ic, Irq};
 use crate::joypad::Joypad;
 use crate::mbc::Mbc;
 use crate::serial::Serial;
+use crate::sound::Sound;
 use crate::timer::Timer;
 use alloc::{vec, vec::Vec};
 
@@ -79,6 +80,7 @@ pub struct Mmu {
     ic: Ic,
     serial: Serial,
     joypad: Joypad,
+    sound: Sound,
 }
 
 impl Mmu {
@@ -94,7 +96,8 @@ impl Mmu {
             timer: Timer::new(irq.clone()),
             ic: Ic::new(irq.clone()),
             serial: Serial::new(hw.clone(), irq.clone()),
-            joypad: Joypad::new(hw, irq),
+            joypad: Joypad::new(hw.clone(), irq),
+            sound: Sound::new(hw),
         }
     }
 
@@ -147,7 +150,7 @@ impl Mmu {
             0xff04..=0xff07 => self.timer.on_read(addr),
             0xff08..=0xff0e => todo!("i/o read: addr={:04x}", addr),
             0xff0f => self.ic.read_flags(),
-            0xff10..=0xff3f => 0, // sound
+            0xff10..=0xff3f => self.sound.on_read(addr),
             0xff40 => self.gpu.read_ctrl(),
             0xff41 => self.gpu.read_status(),
             0xff42 => self.gpu.read_scy(),
@@ -182,7 +185,7 @@ impl Mmu {
             0xff04..=0xff07 => self.timer.on_write(addr, v),
             0xff08..=0xff0e => todo!("i/o write: addr={:04x}, v={:02x}", addr, v),
             0xff0f => self.ic.write_flags(v),
-            0xff10..=0xff3f => {} // sound
+            0xff10..=0xff3f => self.sound.on_write(addr, v),
             0xff40 => self.gpu.write_ctrl(v),
             0xff41 => self.gpu.write_status(v),
             0xff42 => self.gpu.write_scy(v),
