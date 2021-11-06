@@ -1,3 +1,4 @@
+use crate::dma::Dma;
 use crate::gpu::Gpu;
 use crate::hardware::HardwareHandle;
 use crate::ic::{Ic, Irq};
@@ -7,6 +8,7 @@ use crate::serial::Serial;
 use crate::sound::Sound;
 use crate::timer::Timer;
 use alloc::{vec, vec::Vec};
+use log::*;
 
 /// Handles work ram access between 0xc000 - 0xdfff
 pub struct Wram {
@@ -81,6 +83,7 @@ pub struct Mmu {
     serial: Serial,
     joypad: Joypad,
     sound: Sound,
+    dma: Dma,
 }
 
 impl Mmu {
@@ -98,6 +101,7 @@ impl Mmu {
             serial: Serial::new(hw.clone(), irq.clone()),
             joypad: Joypad::new(hw.clone(), irq),
             sound: Sound::new(hw),
+            dma: Dma::new(),
         }
     }
 
@@ -178,7 +182,7 @@ impl Mmu {
             0xff43 => self.gpu.read_scx(),
             0xff44 => self.gpu.read_ly(),
             0xff45 => self.gpu.read_lyc(),
-            0xff46 => todo!("dma"),
+            0xff46 => self.dma.read(),
             0xff47 => self.gpu.read_bg_palette(),
             0xff48 => self.gpu.read_obj_palette0(),
             0xff49 => self.gpu.read_obj_palette1(),
@@ -234,7 +238,7 @@ impl Mmu {
             0xff43 => self.gpu.write_scx(v),
             0xff44 => self.gpu.clear_ly(),
             0xff45 => self.gpu.write_lyc(v),
-            0xff46 => todo!("dma"),
+            0xff46 => self.dma.start(v),
             0xff47 => self.gpu.write_bg_palette(v),
             0xff48 => self.gpu.write_obj_palette0(v),
             0xff49 => self.gpu.write_obj_palette1(v),
@@ -271,6 +275,10 @@ impl Mmu {
 
     /// Updates the machine state by the given cycles
     pub fn step(&mut self, cycles: usize) {
+        for t in self.dma.step(cycles) {
+            debug!("DMA Transfer: {:02x} to {:02x}", t.src, t.dst);
+            self.set8(t.dst, self.get8(t.src));
+        }
         self.joypad.poll();
         self.gpu.step(cycles);
         self.timer.step(cycles);
