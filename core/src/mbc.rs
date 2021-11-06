@@ -1,8 +1,7 @@
-use crate::device::IoHandler;
 use crate::hardware::HardwareHandle;
-use crate::mmu::{MemRead, MemWrite, Mmu};
 use alloc::{
     string::{String, ToString},
+    vec,
     vec::Vec,
 };
 use log::*;
@@ -20,28 +19,30 @@ const BOOT_ROM: &[u8] = {
 
 struct MbcNone {
     rom: Vec<u8>,
+    ram: Vec<u8>,
 }
 
 impl MbcNone {
     fn new(rom: Vec<u8>) -> Self {
-        Self { rom }
-    }
-
-    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
-        if addr <= 0x7fff {
-            MemRead::Replace(self.rom[addr as usize])
-        } else {
-            MemRead::PassThrough
+        Self {
+            rom,
+            ram: vec![0; 0x2000],
         }
     }
 
-    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        if addr <= 0x7fff {
-            MemWrite::Block
-        } else if addr >= 0xa000 && addr <= 0xbfff {
-            MemWrite::PassThrough
-        } else {
-            unreachable!("Write to ROM: {:02x} {:02x}", addr, value);
+    fn on_read(&self, addr: u16) -> u8 {
+        match addr {
+            0x0000..=0x7fff => self.rom[addr as usize],
+            0xa000..=0xbfff => self.ram[addr as usize - 0xa000],
+            _ => unreachable!("read attempt to mbc0 addr={:04x}", addr),
+        }
+    }
+
+    fn on_write(&mut self, addr: u16, value: u8) {
+        match addr {
+            0x0000..=0x7fff => self.rom[addr as usize] = value,
+            0xa000..=0xbfff => self.ram[addr as usize - 0xa000] = value,
+            _ => unreachable!("write attempt to mbc0 addr={:04x}, v={:02x}", addr, value),
         }
     }
 }
@@ -71,9 +72,9 @@ impl Mbc1 {
         }
     }
 
-    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
+    fn on_read(&self, addr: u16) -> u8 {
         if addr <= 0x3fff {
-            MemRead::Replace(self.rom[addr as usize])
+            self.rom[addr as usize]
         } else if addr >= 0x4000 && addr <= 0x7fff {
             let rom_bank = self.rom_bank.max(1);
 
@@ -88,23 +89,23 @@ impl Mbc1 {
             let base = rom_bank * 0x4000;
             let offset = addr as usize - 0x4000;
             let addr = (base + offset) & (self.rom.len() - 1);
-            MemRead::Replace(self.rom[addr])
+            self.rom[addr]
         } else if addr >= 0xa000 && addr <= 0xbfff {
             if self.ram_enable {
                 let base = self.ram_bank as usize * 0x2000;
                 let offset = addr as usize - 0xa000;
                 let addr = (base + offset) & (self.rom.len() - 1);
-                MemRead::Replace(self.ram[addr])
+                self.ram[addr]
             } else {
                 warn!("Read from disabled external RAM: {:04x}", addr);
-                MemRead::Replace(0)
+                0
             }
         } else {
-            MemRead::PassThrough
+            unimplemented!()
         }
     }
 
-    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&mut self, addr: u16, value: u8) {
         if addr <= 0x1fff {
             if value & 0xf == 0x0a {
                 info!("External RAM enabled");
@@ -114,18 +115,15 @@ impl Mbc1 {
                 self.ram_enable = false;
                 self.hw.get().borrow_mut().save_ram(&self.ram);
             }
-            MemWrite::Block
         } else if addr >= 0x2000 && addr <= 0x3fff {
             self.rom_bank = (self.rom_bank & !0x1f) | (value as usize & 0x1f);
             debug!("Switch ROM bank to {:02x}", self.rom_bank);
-            MemWrite::Block
         } else if addr >= 0x4000 && addr <= 0x5fff {
             if self.ram_select {
                 self.ram_bank = value as usize & 0x3;
             } else {
                 self.rom_bank = (self.rom_bank & !0x60) | ((value as usize & 0x3) << 5);
             }
-            MemWrite::Block
         } else if addr >= 0x6000 && addr <= 0x7fff {
             if value == 0x00 {
                 self.ram_select = false;
@@ -134,16 +132,13 @@ impl Mbc1 {
             } else {
                 unimplemented!("Invalid ROM/RAM select mode");
             }
-            MemWrite::Block
         } else if addr >= 0xa000 && addr <= 0xbfff {
             if self.ram_enable {
                 let base = self.ram_bank as usize * 0x2000;
                 let offset = addr as usize - 0xa000;
                 self.ram[base + offset] = value;
-                MemWrite::Block
             } else {
                 warn!("Write to disabled external RAM: {:04x} {:02x}", addr, value);
-                MemWrite::Block
             }
         } else {
             unimplemented!("write to rom {:04x} {:02x}", addr, value)
@@ -172,26 +167,26 @@ impl Mbc2 {
         }
     }
 
-    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
+    fn on_read(&self, addr: u16) -> u8 {
         if addr <= 0x3fff {
-            MemRead::Replace(self.rom[addr as usize])
+            self.rom[addr as usize]
         } else if addr >= 0x4000 && addr <= 0x7fff {
             let base = self.rom_bank.max(1) * 0x4000;
             let offset = addr as usize - 0x4000;
-            MemRead::Replace(self.rom[base + offset])
+            self.rom[base + offset]
         } else if addr >= 0xa000 && addr <= 0xa1ff {
             if self.ram_enable {
-                MemRead::Replace(self.ram[addr as usize - 0xa000] & 0xf)
+                self.ram[addr as usize - 0xa000] & 0xf
             } else {
                 warn!("Read from disabled cart RAM: {:04x}", addr);
-                MemRead::Replace(0)
+                0
             }
         } else {
-            MemRead::PassThrough
+            unimplemented!()
         }
     }
 
-    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&mut self, addr: u16, value: u8) {
         if addr <= 0x1fff {
             if addr & 0x100 == 0 {
                 self.ram_enable = (value & 0x0f) == 0x0a;
@@ -208,27 +203,21 @@ impl Mbc2 {
                     self.hw.get().borrow_mut().save_ram(&self.ram);
                 }
             }
-            MemWrite::Block
         } else if addr >= 0x2000 && addr <= 0x3fff {
             if addr & 0x100 != 0 {
                 self.rom_bank = (value as usize & 0xf).max(1);
                 debug!("Switch ROM bank to {:02x}", self.rom_bank);
             }
-            MemWrite::Block
         } else if addr >= 0x4000 && addr <= 0x7fff {
             warn!("Writing to read-only range: {:04x} {:02x}", addr, value);
-            MemWrite::Block
         } else if addr >= 0xa000 && addr <= 0xa1ff {
             if self.ram_enable {
                 self.ram[addr as usize - 0xa000] = value & 0xf;
-                MemWrite::Block
             } else {
                 warn!("Write to disabled cart RAM: {:04x} {:02x}", addr, value);
-                MemWrite::Block
             }
         } else {
             warn!("write to rom {:04x} {:02x}", addr, value);
-            MemWrite::PassThrough
         }
     }
 }
@@ -286,26 +275,26 @@ impl Mbc3 {
         self.hw.get().borrow_mut().clock() / 1000_000
     }
 
-    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
+    fn on_read(&self, addr: u16) -> u8 {
         if addr <= 0x3fff {
-            MemRead::Replace(self.rom[addr as usize])
+            self.rom[addr as usize]
         } else if addr >= 0x4000 && addr <= 0x7fff {
             let rom_bank = self.rom_bank.max(1);
             let base = rom_bank * 0x4000;
             let offset = addr as usize - 0x4000;
-            MemRead::Replace(self.rom[base + offset])
+            self.rom[base + offset]
         } else if addr >= 0xa000 && addr <= 0xbfff {
             match self.select {
                 x if x == 0x00 || x == 0x01 || x == 0x02 || x == 0x03 => {
                     let base = x as usize * 0x2000;
                     let offset = addr as usize - 0xa000;
-                    MemRead::Replace(self.ram[base + offset])
+                    self.ram[base + offset]
                 }
-                0x08 => MemRead::Replace(self.rtc_secs),
-                0x09 => MemRead::Replace(self.rtc_mins),
-                0x0a => MemRead::Replace(self.rtc_hours),
-                0x0b => MemRead::Replace(self.rtc_day_low),
-                0x0c => MemRead::Replace(self.rtc_day_high),
+                0x08 => self.rtc_secs,
+                0x09 => self.rtc_mins,
+                0x0a => self.rtc_hours,
+                0x0b => self.rtc_day_low,
+                0x0c => self.rtc_day_high,
                 s => unimplemented!("Unknown selector: {:02x}", s),
             }
         } else {
@@ -313,7 +302,7 @@ impl Mbc3 {
         }
     }
 
-    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&mut self, addr: u16, value: u8) {
         if addr <= 0x1fff {
             if value == 0x00 {
                 info!("External RAM/RTC disabled");
@@ -322,16 +311,13 @@ impl Mbc3 {
                 info!("External RAM/RTC enabled");
                 self.enable = true;
             }
-            MemWrite::Block
         } else if addr >= 0x2000 && addr <= 0x3fff {
             self.rom_bank = value as usize & 0x7f;
             trace!("Switch ROM bank to {}", self.rom_bank);
-            MemWrite::Block
         } else if addr >= 0x4000 && addr <= 0x5fff {
             self.select = value;
             self.save();
             debug!("Select RAM bank/RTC: {:02x}", self.select);
-            MemWrite::Block
         } else if addr >= 0x6000 && addr <= 0x7fff {
             if self.prelatch {
                 if value == 0x01 {
@@ -343,39 +329,32 @@ impl Mbc3 {
                     self.prelatch = true;
                 }
             }
-            MemWrite::Block
         } else if addr >= 0xa000 && addr <= 0xbfff {
             match self.select {
                 x if x == 0x00 || x == 0x01 || x == 0x02 || x == 0x03 => {
                     let base = x as usize * 0x2000;
                     let offset = addr as usize - 0xa000;
                     self.ram[base + offset] = value;
-                    MemWrite::Block
                 }
                 0x08 => {
                     self.rtc_secs = value;
                     self.update_epoch();
-                    MemWrite::Block
                 }
                 0x09 => {
                     self.rtc_mins = value;
                     self.update_epoch();
-                    MemWrite::Block
                 }
                 0x0a => {
                     self.rtc_hours = value;
                     self.update_epoch();
-                    MemWrite::Block
                 }
                 0x0b => {
                     self.rtc_day_low = value;
                     self.update_epoch();
-                    MemWrite::Block
                 }
                 0x0c => {
                     self.rtc_day_high = value;
                     self.update_epoch();
-                    MemWrite::Block
                 }
                 s => unimplemented!("Unknown selector: {:02x}", s),
             }
@@ -466,28 +445,28 @@ impl Mbc5 {
         }
     }
 
-    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
+    fn on_read(&self, addr: u16) -> u8 {
         if addr <= 0x3fff {
-            MemRead::Replace(self.rom[addr as usize])
+            self.rom[addr as usize]
         } else if addr >= 0x4000 && addr <= 0x7fff {
             let base = self.rom_bank * 0x4000;
             let offset = addr as usize - 0x4000;
-            MemRead::Replace(self.rom[base + offset])
+            self.rom[base + offset]
         } else if addr >= 0xa000 && addr <= 0xbfff {
             if self.ram_enable {
                 let base = self.ram_bank * 0x2000;
                 let offset = addr as usize - 0xa000;
-                MemRead::Replace(self.ram[base + offset])
+                self.ram[base + offset]
             } else {
                 warn!("Read from disabled external RAM: {:04x}", addr);
-                MemRead::Replace(0)
+                0
             }
         } else {
-            MemRead::PassThrough
+            unimplemented!()
         }
     }
 
-    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&mut self, addr: u16, value: u8) {
         if addr <= 0x1fff {
             if value & 0xf == 0x0a {
                 info!("External RAM enabled");
@@ -497,27 +476,21 @@ impl Mbc5 {
                 self.ram_enable = false;
                 self.hw.get().borrow_mut().save_ram(&self.ram);
             }
-            MemWrite::Block
         } else if addr >= 0x2000 && addr <= 0x2fff {
             self.rom_bank = (self.rom_bank & !0xff) | value as usize;
             debug!("Switch ROM bank to {:02x}", self.rom_bank);
-            MemWrite::Block
         } else if addr >= 0x3000 && addr <= 0x3fff {
             self.rom_bank = (self.rom_bank & !0x100) | (value as usize & 1) << 8;
             debug!("Switch ROM bank to {:02x}", self.rom_bank);
-            MemWrite::Block
         } else if addr >= 0x4000 && addr <= 0x5fff {
             self.ram_bank = value as usize & 0xf;
-            MemWrite::Block
         } else if addr >= 0xa000 && addr <= 0xbfff {
             if self.ram_enable {
                 let base = self.ram_bank * 0x2000;
                 let offset = addr as usize - 0xa000;
                 self.ram[base + offset] = value;
-                MemWrite::Block
             } else {
                 warn!("Write to disabled external RAM: {:04x} {:02x}", addr, value);
-                MemWrite::Block
             }
         } else {
             unimplemented!("write to rom {:04x} {:02x}", addr, value)
@@ -535,11 +508,11 @@ impl HuC1 {
         Self { rom }
     }
 
-    fn on_read(&mut self, _mmu: &Mmu, _addr: u16) -> MemRead {
+    fn on_read(&self, _addr: u16) -> u8 {
         unimplemented!()
     }
 
-    fn on_write(&mut self, _mmu: &Mmu, _addr: u16, _value: u8) -> MemWrite {
+    fn on_write(&mut self, _addr: u16, _value: u8) {
         unimplemented!()
     }
 }
@@ -572,25 +545,25 @@ impl MbcType {
         }
     }
 
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+    fn on_read(&self, addr: u16) -> u8 {
         match self {
-            MbcType::None(c) => c.on_read(mmu, addr),
-            MbcType::Mbc1(c) => c.on_read(mmu, addr),
-            MbcType::Mbc2(c) => c.on_read(mmu, addr),
-            MbcType::Mbc3(c) => c.on_read(mmu, addr),
-            MbcType::Mbc5(c) => c.on_read(mmu, addr),
-            MbcType::HuC1(c) => c.on_read(mmu, addr),
+            MbcType::None(c) => c.on_read(addr),
+            MbcType::Mbc1(c) => c.on_read(addr),
+            MbcType::Mbc2(c) => c.on_read(addr),
+            MbcType::Mbc3(c) => c.on_read(addr),
+            MbcType::Mbc5(c) => c.on_read(addr),
+            MbcType::HuC1(c) => c.on_read(addr),
         }
     }
 
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    fn on_write(&mut self, addr: u16, value: u8) {
         match self {
-            MbcType::None(c) => c.on_write(mmu, addr, value),
-            MbcType::Mbc1(c) => c.on_write(mmu, addr, value),
-            MbcType::Mbc2(c) => c.on_write(mmu, addr, value),
-            MbcType::Mbc3(c) => c.on_write(mmu, addr, value),
-            MbcType::Mbc5(c) => c.on_write(mmu, addr, value),
-            MbcType::HuC1(c) => c.on_write(mmu, addr, value),
+            MbcType::None(c) => c.on_write(addr, value),
+            MbcType::Mbc1(c) => c.on_write(addr, value),
+            MbcType::Mbc2(c) => c.on_write(addr, value),
+            MbcType::Mbc3(c) => c.on_write(addr, value),
+            MbcType::Mbc5(c) => c.on_write(addr, value),
+            MbcType::HuC1(c) => c.on_write(addr, value),
         }
     }
 }
@@ -718,12 +691,12 @@ impl Cartridge {
         info!("RAM size: {}", ram_size);
     }
 
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
-        self.mbc.on_read(mmu, addr)
+    fn on_read(&self, addr: u16) -> u8 {
+        self.mbc.on_read(addr)
     }
 
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        self.mbc.on_write(mmu, addr, value)
+    fn on_write(&mut self, addr: u16, value: u8) {
+        self.mbc.on_write(addr, value)
     }
 }
 
@@ -748,33 +721,34 @@ impl Mbc {
         if cfg!(feature = "color") {
             assert_eq!(0x900, BOOT_ROM.len());
 
-            (addr < 0x100 || (addr >= 0x200 && addr < 0x900))
+            addr < 0x100 || (addr >= 0x200 && addr < 0x900)
         } else {
             assert_eq!(0x100, BOOT_ROM.len());
 
             addr < 0x100
         }
     }
-}
 
-impl IoHandler for Mbc {
-    fn on_read(&mut self, mmu: &Mmu, addr: u16) -> MemRead {
+    pub(crate) fn on_read(&self, addr: u16) -> u8 {
         if self.use_boot_rom && self.in_boot_rom(addr) {
-            MemRead::Replace(BOOT_ROM[addr as usize])
+            BOOT_ROM[addr as usize]
         } else {
-            self.cartridge.on_read(mmu, addr)
+            self.cartridge.on_read(addr)
         }
     }
 
-    fn on_write(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    pub(crate) fn disable_boot_rom(&mut self, _v: u8) {
+        info!("Disable boot ROM");
+        self.use_boot_rom = false;
+    }
+
+    pub(crate) fn on_write(&mut self, addr: u16, value: u8) {
         if self.use_boot_rom && addr < 0x100 {
             unreachable!("Writing to boot ROM")
         } else if addr == 0xff50 {
-            info!("Disable boot ROM");
             self.use_boot_rom = false;
-            MemWrite::Block
         } else {
-            self.cartridge.on_write(mmu, addr, value)
+            self.cartridge.on_write(addr, value)
         }
     }
 }

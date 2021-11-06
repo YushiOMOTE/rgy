@@ -1,7 +1,5 @@
-use crate::device::IoHandler;
 use crate::hardware::{HardwareHandle, VRAM_HEIGHT, VRAM_WIDTH};
 use crate::ic::Irq;
-use crate::mmu::{MemRead, MemWrite, Mmu};
 use alloc::{vec, vec::Vec};
 use log::*;
 
@@ -75,7 +73,7 @@ pub struct Gpu {
     vram: Vec<Vec<u8>>,
     vram_select: usize,
 
-    hdma: Hdma,
+    oam: Vec<u8>,
 }
 
 fn to_palette(p: u8) -> Vec<Color> {
@@ -382,22 +380,22 @@ impl Gpu {
             obj_color_palette: ColorPalette::new(),
             vram: vec![vec![0; 0x2000]; 2],
             vram_select: 0,
-            hdma: Hdma::new(),
+            oam: vec![0; 0xa0],
         }
     }
 
-    fn hdma_run(&mut self, mmu: &Mmu) {
-        match self.hdma.run() {
-            Some((dst, src, size)) => {
-                for i in 0..size {
-                    self.write_vram(dst + i, mmu.get8(src + i), self.vram_select);
-                }
-            }
-            _ => {}
-        }
-    }
+    // fn hdma_run(&mut self, mmu: &Mmu) {
+    //     match self.hdma.run() {
+    //         Some((dst, src, size)) => {
+    //             for i in 0..size {
+    //                 self.write_vram(dst + i, mmu.get8(src + i), self.vram_select);
+    //             }
+    //         }
+    //         _ => {}
+    //     }
+    // }
 
-    pub fn step(&mut self, time: usize, mmu: &mut Mmu) {
+    pub fn step(&mut self, time: usize) {
         let clocks = self.clocks + time;
 
         let (clocks, mode) = match &self.mode {
@@ -410,8 +408,8 @@ impl Gpu {
             }
             Mode::VRAM => {
                 if clocks >= 172 {
-                    self.draw(mmu);
-                    self.hdma_run(mmu);
+                    self.draw();
+                    // self.hdma_run(mmu);
 
                     if self.hblank_interrupt {
                         self.irq.lcd(true);
@@ -476,7 +474,7 @@ impl Gpu {
         self.mode = mode;
     }
 
-    fn draw(&mut self, mmu: &Mmu) {
+    fn draw(&mut self) {
         let height = VRAM_HEIGHT;
         let width = VRAM_WIDTH;
 
@@ -547,11 +545,11 @@ impl Gpu {
 
         if self.spenable {
             for i in 0..40 {
-                let oam = 0xfe00 + i * 4;
-                let ypos = mmu.get8(oam + 0) as u16;
-                let xpos = mmu.get8(oam + 1) as u16;
-                let ti = mmu.get8(oam + 2);
-                let attr = self.get_sp_attr(mmu.get8(oam + 3));
+                let oam = i * 4;
+                let ypos = self.oam[oam] as u16;
+                let xpos = self.oam[oam + 1] as u16;
+                let ti = self.oam[oam + 2];
+                let attr = self.get_sp_attr(self.oam[oam + 3]);
 
                 let ly = self.ly as u16;
                 if ly + 16 < ypos {
@@ -665,7 +663,7 @@ impl Gpu {
         debug!("HBlank interrupt: {}", self.hblank_interrupt);
     }
 
-    fn on_read_ctrl(&mut self) -> u8 {
+    fn on_read_ctrl(&self) -> u8 {
         let mut v = 0;
         v |= if self.enable { 0x80 } else { 0x00 };
         v |= if self.winmap == 0x9c00 { 0x40 } else { 0x00 };
@@ -678,7 +676,7 @@ impl Gpu {
         v
     }
 
-    fn on_read_status(&mut self) -> u8 {
+    fn on_read_status(&self) -> u8 {
         let mut v = 0;
         v |= if self.lyc_interrupt { 0x40 } else { 0x00 };
         v |= if self.oam_interrupt { 0x20 } else { 0x00 };
@@ -774,69 +772,76 @@ impl Gpu {
 
         (h | l) as usize
     }
-}
 
-impl IoHandler for Gpu {
-    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
+    pub(crate) fn on_read_oam(&self, addr: u16) -> u8 {
+        self.oam[addr as usize - 0xfe00]
+    }
+
+    pub(crate) fn on_write_oam(&mut self, addr: u16, v: u8) {
+        self.oam[addr as usize - 0xfe00] = v;
+    }
+
+    pub(crate) fn on_read(&self, addr: u16) -> u8 {
         if addr >= 0x8000 && addr <= 0x9fff {
-            MemRead::Replace(self.read_vram(addr, self.vram_select))
+            self.read_vram(addr, self.vram_select)
         } else if addr == 0xff40 {
-            MemRead::Replace(self.on_read_ctrl())
+            self.on_read_ctrl()
         } else if addr == 0xff41 {
-            MemRead::Replace(self.on_read_status())
+            self.on_read_status()
         } else if addr == 0xff42 {
-            MemRead::Replace(self.scy)
+            self.scy
         } else if addr == 0xff43 {
-            MemRead::Replace(self.scx)
+            self.scx
         } else if addr == 0xff44 {
-            MemRead::Replace(self.ly)
+            self.ly
         } else if addr == 0xff45 {
-            MemRead::Replace(self.lyc)
+            self.lyc
         } else if addr == 0xff46 {
             unreachable!("DMA request")
         } else if addr == 0xff47 {
             debug!("Read Bg palette");
-            MemRead::Replace(from_palette(self.bg_palette.clone()))
+            from_palette(self.bg_palette.clone())
         } else if addr == 0xff48 {
             debug!("Read Object palette 0");
-            MemRead::Replace(from_palette(self.obj_palette0.clone()))
+            from_palette(self.obj_palette0.clone())
         } else if addr == 0xff49 {
             debug!("Read Object palette 1");
-            MemRead::Replace(from_palette(self.obj_palette1.clone()))
+            from_palette(self.obj_palette1.clone())
         } else if addr == 0xff4a {
-            MemRead::Replace(self.wy)
+            self.wy
         } else if addr == 0xff4b {
-            MemRead::Replace(self.wx)
+            self.wx
         } else if addr == 0xff4f {
-            MemRead::Replace(self.vram_select as u8 & 0xfe)
+            self.vram_select as u8 & 0xfe
         } else if addr == 0xff51 {
-            MemRead::Replace(self.hdma.src_high)
+            todo!("hdma") //self.hdma.src_high
         } else if addr == 0xff52 {
-            MemRead::Replace(self.hdma.src_low)
+            todo!("hdma") //self.hdma.src_low
         } else if addr == 0xff53 {
-            MemRead::Replace(self.hdma.dst_high)
+            todo!("hdma") // self.hdma.dst_high
         } else if addr == 0xff54 {
-            MemRead::Replace(self.hdma.dst_low)
+            todo!("hdma") // self.hdma.dst_low
         } else if addr == 0xff55 {
-            let mut v = 0;
-            v |= self.hdma.len & 0x7f;
-            v |= if self.hdma.on { 0x00 } else { 0x80 };
-            MemRead::Replace(v)
+            todo!("hdma")
+            // let mut v = 0;
+            // v |= self.hdma.len & 0x7f;
+            // v |= if self.hdma.on { 0x00 } else { 0x80 };
+            // v
         } else if addr == 0xff68 {
-            MemRead::PassThrough
+            unimplemented!()
         } else if addr == 0xff69 {
-            MemRead::Replace(self.bg_color_palette.read())
+            self.bg_color_palette.read()
         } else if addr == 0xff6a {
-            MemRead::PassThrough
+            unimplemented!()
         } else if addr == 0xff6b {
-            MemRead::Replace(self.obj_color_palette.read())
+            self.obj_color_palette.read()
         } else {
             warn!("Unsupported GPU register read: {:04x}", addr);
-            MemRead::Replace(0)
+            0
         }
     }
 
-    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    pub(crate) fn on_write(&mut self, addr: u16, value: u8) {
         trace!("Write GPU register: {:04x} {:02x}", addr, value);
         if addr >= 0x8000 && addr <= 0x9fff {
             self.write_vram(addr, value, self.vram_select);
@@ -873,15 +878,15 @@ impl IoHandler for Gpu {
         } else if addr == 0xff4f {
             self.vram_select = value as usize & 1;
         } else if addr == 0xff51 {
-            self.hdma.src_high = value;
+            todo!("hdma") // self.hdma.src_high = value;
         } else if addr == 0xff52 {
-            self.hdma.src_low = value;
+            todo!("hdma") // self.hdma.src_low = value;
         } else if addr == 0xff53 {
-            self.hdma.dst_high = value;
+            todo!("hdma") // self.hdma.dst_high = value;
         } else if addr == 0xff54 {
-            self.hdma.dst_low = value;
+            todo!("hdma") // self.hdma.dst_low = value;
         } else if addr == 0xff55 {
-            self.hdma.start(value);
+            todo!("hdma") // self.hdma.start(value);
         } else if addr == 0xff68 {
             self.bg_color_palette.select(value);
         } else if addr == 0xff69 {
@@ -896,7 +901,5 @@ impl IoHandler for Gpu {
                 addr, value
             );
         }
-
-        MemWrite::PassThrough
     }
 }

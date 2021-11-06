@@ -1,17 +1,51 @@
-use crate::device::IoHandler;
-use crate::mmu::{MemRead, MemWrite, Mmu};
 use alloc::rc::Rc;
 use core::cell::RefCell;
 use log::*;
 
 #[derive(Clone)]
 pub struct Irq {
+    enable: Rc<RefCell<Ints>>,
     request: Rc<RefCell<Ints>>,
 }
 
 impl Irq {
-    fn new(request: Rc<RefCell<Ints>>) -> Irq {
-        Irq { request }
+    pub fn new() -> Irq {
+        Irq {
+            enable: Rc::new(RefCell::new(Ints::default())),
+            request: Rc::new(RefCell::new(Ints::default())),
+        }
+    }
+
+    pub fn peek(&self) -> Option<u8> {
+        self.check(false)
+    }
+
+    pub fn poll(&self) -> Option<u8> {
+        self.check(true)
+    }
+
+    fn check(&self, consume: bool) -> Option<u8> {
+        let e = self.enable.borrow();
+        let mut r = self.request.borrow_mut();
+
+        if e.vblank && r.vblank {
+            r.vblank = !consume;
+            Some(0x40)
+        } else if e.lcd && r.lcd {
+            r.lcd = !consume;
+            Some(0x48)
+        } else if e.timer && r.timer {
+            r.timer = !consume;
+            Some(0x50)
+        } else if e.serial && r.serial {
+            r.serial = !consume;
+            Some(0x58)
+        } else if e.joypad && r.joypad {
+            r.joypad = !consume;
+            Some(0x60)
+        } else {
+            None
+        }
     }
 
     pub fn vblank(&self, v: bool) {
@@ -65,82 +99,33 @@ impl Ints {
 }
 
 pub struct Ic {
-    enable: Rc<RefCell<Ints>>,
-    request: Rc<RefCell<Ints>>,
+    irq: Irq,
 }
 
 impl Ic {
-    pub fn new() -> Ic {
-        Ic {
-            enable: Rc::new(RefCell::new(Ints::default())),
-            request: Rc::new(RefCell::new(Ints::default())),
-        }
+    pub fn new(irq: Irq) -> Ic {
+        Ic { irq }
     }
 
-    pub fn irq(&self) -> Irq {
-        Irq::new(self.request.clone())
+    pub(crate) fn get_enabled(&self) -> u8 {
+        let v = self.irq.enable.borrow().get();
+        info!("Read interrupt enable: {:02x}", v);
+        v
     }
 
-    pub fn peek(&self) -> Option<u8> {
-        self.check(false)
+    pub(crate) fn get_flags(&self) -> u8 {
+        let v = self.irq.request.borrow().get();
+        info!("Read interrupt: {:02x}", v);
+        v
     }
 
-    pub fn poll(&self) -> Option<u8> {
-        self.check(true)
+    pub(crate) fn set_enabled(&mut self, value: u8) {
+        info!("Write interrupt enable: {:02x}", value);
+        self.irq.enable.borrow_mut().set(value);
     }
 
-    fn check(&self, consume: bool) -> Option<u8> {
-        let e = self.enable.borrow();
-        let mut r = self.request.borrow_mut();
-
-        if e.vblank && r.vblank {
-            r.vblank = !consume;
-            Some(0x40)
-        } else if e.lcd && r.lcd {
-            r.lcd = !consume;
-            Some(0x48)
-        } else if e.timer && r.timer {
-            r.timer = !consume;
-            Some(0x50)
-        } else if e.serial && r.serial {
-            r.serial = !consume;
-            Some(0x58)
-        } else if e.joypad && r.joypad {
-            r.joypad = !consume;
-            Some(0x60)
-        } else {
-            None
-        }
-    }
-}
-
-impl IoHandler for Ic {
-    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
-        if addr == 0xffff {
-            let v = self.enable.borrow().get();
-            info!("Read interrupt enable: {:02x}", v);
-            MemRead::Replace(v)
-        } else if addr == 0xff0f {
-            let v = self.request.borrow().get();
-            info!("Read interrupt: {:02x}", v);
-            MemRead::Replace(v)
-        } else {
-            MemRead::PassThrough
-        }
-    }
-
-    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        if addr == 0xffff {
-            info!("Write interrupt enable: {:02x}", value);
-            self.enable.borrow_mut().set(value);
-            MemWrite::Block
-        } else if addr == 0xff0f {
-            info!("Write interrupt: {:02x}", value);
-            self.request.borrow_mut().set(value);
-            MemWrite::Block
-        } else {
-            info!("Writing to IC register: {:04x}", addr);
-            MemWrite::PassThrough
-        }
+    pub(crate) fn set_flags(&mut self, value: u8) {
+        info!("Write interrupt: {:02x}", value);
+        self.irq.request.borrow_mut().set(value);
     }
 }

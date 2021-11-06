@@ -1,37 +1,70 @@
-use alloc::rc::Rc;
+use crate::gpu::Gpu;
+use crate::hardware::HardwareHandle;
+use crate::ic::{Ic, Irq};
+use crate::joypad::Joypad;
+use crate::mbc::Mbc;
+use crate::serial::Serial;
+use crate::timer::Timer;
 use alloc::{vec, vec::Vec};
-use hashbrown::HashMap;
+use core::cell::RefCell;
 
-/// The variants to control memory read access from the CPU.
-pub enum MemRead {
-    /// Replaces the value passed from the memory to the CPU.
-    Replace(u8),
-    /// Shows the actual value passed from the memory to the CPU.
-    PassThrough,
+/// Handles work ram access between 0xc000 - 0xdfff
+pub struct Wram {
+    n: usize,
+    bank: Vec<Vec<u8>>,
 }
 
-/// The variants to control memory write access from the CPU.
-pub enum MemWrite {
-    /// Replaces the value to be written by the CPU to the memory.
-    Replace(u8),
-    /// Allows to write the original value from the CPU to the memory.
-    PassThrough,
-    /// Discard the write access from the CPU.
-    Block,
+impl Wram {
+    fn new() -> Self {
+        Self {
+            n: 1,
+            bank: vec![vec![0; 0x1000]; 8],
+        }
+    }
+
+    fn switch_bank(&mut self, n: u8) {
+        self.n = n as usize;
+    }
+
+    fn get8(&self, addr: u16) -> u8 {
+        match addr {
+            0xc000..=0xcfff => self.bank[0][addr as usize - 0xc000],
+            0xd000..=0xdfff => self.bank[self.n][addr as usize - 0xd000],
+            0xe000..=0xfdff => self.get8(addr - 0xe000 + 0xc000),
+            _ => unreachable!("read attemp to wram addr={:04x}", addr),
+        }
+    }
+
+    fn set8(&mut self, addr: u16, v: u8) {
+        match addr {
+            0xc000..=0xcfff => self.bank[0][addr as usize - 0xc000] = v,
+            0xd000..=0xdfff => self.bank[self.n][addr as usize - 0xd000] = v,
+            0xe000..=0xfdff => self.set8(addr - 0xe000 + 0xc000, v),
+            _ => unreachable!("write attemp to wram addr={:04x} v={:02x}", addr, v),
+        }
+    }
 }
 
-/// The handler to intercept memory access from the CPU.
-pub trait MemHandler {
-    /// The function is called when the CPU attempts to read from the memory.
-    fn on_read(&self, mmu: &Mmu, addr: u16) -> MemRead;
-
-    /// The function is called when the CPU attempts to write to the memory.
-    fn on_write(&self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite;
+/// Handles high ram access between 0xff80 - 0xfffe
+pub struct Hram {
+    bank: Vec<u8>,
 }
 
-/// The handle of a memory handler.
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct Handle(u64);
+impl Hram {
+    fn new() -> Self {
+        Self {
+            bank: vec![0; 0x7f],
+        }
+    }
+
+    fn get8(&self, addr: u16) -> u8 {
+        self.bank[addr as usize - 0xff80]
+    }
+
+    fn set8(&mut self, addr: u16, v: u8) {
+        self.bank[addr as usize - 0xff80] = v;
+    }
+}
 
 /// The memory management unit (MMU)
 ///
@@ -39,114 +72,100 @@ pub struct Handle(u64);
 /// It provides the logic to intercept access from the CPU to the memory byte array,
 /// and to modify the memory access behaviour.
 pub struct Mmu {
-    ram: Vec<u8>,
-    handles: HashMap<Handle, (u16, u16)>,
-    handlers: HashMap<u16, Vec<(Handle, Rc<dyn MemHandler>)>>,
-    hdgen: u64,
+    wram: Wram,
+    hram: Hram,
+    gpu: Gpu,
+    mbc: Mbc,
+    timer: Timer,
+    ic: Ic,
+    serial: Serial,
+    joypad: Joypad,
+    irq: Irq,
 }
 
 impl Mmu {
     /// Create a new MMU instance.
-    pub fn new() -> Mmu {
+    pub fn new(hw: HardwareHandle, rom: Vec<u8>) -> Mmu {
+        let irq = Irq::new();
+
         Mmu {
-            ram: vec![0u8; 0x10000],
-            handles: HashMap::new(),
-            handlers: HashMap::new(),
-            hdgen: 0,
+            wram: Wram::new(),
+            hram: Hram::new(),
+            gpu: Gpu::new(hw.clone(), irq.clone()),
+            mbc: Mbc::new(hw.clone(), rom),
+            timer: Timer::new(irq.clone()),
+            ic: Ic::new(irq.clone()),
+            serial: Serial::new(hw.clone(), irq.clone()),
+            joypad: Joypad::new(hw, irq.clone()),
+            irq,
         }
     }
 
-    fn next_handle(&mut self) -> Handle {
-        let handle = self.hdgen;
-
-        self.hdgen += 1;
-
-        Handle(handle)
-    }
-
-    /// Add a new memory handler.
-    pub fn add_handler<T>(&mut self, range: (u16, u16), handler: T) -> Handle
-    where
-        T: MemHandler + 'static,
-    {
-        let handle = self.next_handle();
-        let handler = Rc::new(handler);
-
-        self.handles.insert(handle.clone(), range);
-
-        for i in range.0..=range.1 {
-            if self.handlers.contains_key(&i) {
-                match self.handlers.get_mut(&i) {
-                    Some(v) => v.push((handle.clone(), handler.clone())),
-                    None => {}
-                }
-            } else {
-                self.handlers
-                    .insert(i, vec![(handle.clone(), handler.clone())]);
-            }
-        }
-
-        handle
-    }
-
-    /// Remove a memory handler.
-    #[allow(unused)]
-    pub fn remove_handler<T>(&mut self, handle: &Handle)
-    where
-        T: MemHandler + 'static,
-    {
-        let range = match self.handles.remove(&handle) {
-            Some(range) => range,
-            None => return,
-        };
-
-        for i in range.0..range.1 {
-            match self.handlers.get_mut(&i) {
-                Some(v) => v.retain(|(hd, _)| hd != handle),
-                None => {}
-            }
-        }
+    pub fn irq(&self) -> &Irq {
+        &self.irq
     }
 
     /// Reads one byte from the given address in the memory.
     pub fn get8(&self, addr: u16) -> u8 {
-        if let Some(handlers) = self.handlers.get(&addr) {
-            for (_, handler) in handlers {
-                match handler.on_read(self, addr) {
-                    MemRead::Replace(alt) => return alt,
-                    MemRead::PassThrough => {}
-                }
-            }
-        }
-
-        if addr >= 0xe000 && addr <= 0xfdff {
-            // echo ram
-            self.ram[addr as usize - 0x2000]
-        } else {
-            self.ram[addr as usize]
+        match addr {
+            0x0000..=0x7fff => self.mbc.on_read(addr),
+            0x8000..=0x9fff => self.gpu.on_read(addr),
+            0xa000..=0xbfff => self.mbc.on_read(addr),
+            0xc000..=0xfdff => self.wram.get8(addr),
+            0xfe00..=0xfe9f => self.gpu.on_read_oam(addr),
+            0xfea0..=0xfeff => unreachable!("access to unusable memory"),
+            0xff00..=0xff7f => self.io_read(addr),
+            0xff80..=0xfffe => self.hram.get8(addr),
+            0xffff..=0xffff => self.ic.get_enabled(),
         }
     }
 
     /// Writes one byte at the given address in the memory.
     pub fn set8(&mut self, addr: u16, v: u8) {
-        if let Some(handlers) = self.handlers.get(&addr) {
-            for (_, handler) in handlers {
-                match handler.on_write(self, addr, v) {
-                    MemWrite::Replace(alt) => {
-                        self.ram[addr as usize] = alt;
-                        return;
-                    }
-                    MemWrite::PassThrough => {}
-                    MemWrite::Block => return,
-                }
-            }
+        match addr {
+            0x0000..=0x7fff => self.mbc.on_write(addr, v),
+            0x8000..=0x9fff => self.gpu.on_write(addr, v),
+            0xa000..=0xbfff => self.mbc.on_write(addr, v),
+            0xc000..=0xfdff => self.wram.set8(addr, v),
+            0xfe00..=0xfe9f => self.gpu.on_write_oam(addr, v),
+            0xfea0..=0xfeff => unreachable!("access to unusable memory"),
+            0xff00..=0xff7f => self.io_write(addr, v),
+            0xff80..=0xfffe => self.hram.set8(addr, v),
+            0xffff..=0xffff => self.ic.set_enabled(v),
         }
+    }
 
-        if addr >= 0xe000 && addr <= 0xfdff {
-            // echo ram
-            self.ram[addr as usize - 0x2000] = v
-        } else {
-            self.ram[addr as usize] = v
+    fn io_read(&self, addr: u16) -> u8 {
+        match addr {
+            0xff00 => self.joypad.read(),
+            0xff01 => self.serial.get_data(),
+            0xff02 => self.serial.get_ctrl(),
+            0xff03 => todo!("i/o write: addr={:04x}", addr),
+            0xff04..=0xff07 => self.timer.on_read(addr),
+            0xff08..=0xff0e => todo!("i/o read: addr={:04x}", addr),
+            0xff0f => self.ic.get_flags(),
+            0xff10..=0xff3f => 0, // sound
+            0xff40..=0xff6b => self.gpu.on_read(addr),
+            0xff6c..=0xff7f => todo!("i/o read: addr={:04x}", addr),
+            _ => unreachable!("read attempt to i/o addr={:04x}", addr),
+        }
+    }
+
+    fn io_write(&mut self, addr: u16, v: u8) {
+        match addr {
+            0xff00 => self.joypad.write(v),
+            0xff01 => self.serial.set_data(v),
+            0xff02 => self.serial.set_ctrl(v),
+            0xff03 => todo!("i/o write: addr={:04x}, v={:02x}", addr, v),
+            0xff04..=0xff07 => self.timer.on_write(addr, v),
+            0xff08..=0xff0e => todo!("i/o write: addr={:04x}, v={:02x}", addr, v),
+            0xff0f => self.ic.set_flags(v),
+            0xff10..=0xff3f => {} // sound
+            0xff40..=0xff4f => self.gpu.on_write(addr, v),
+            0xff50 => self.mbc.disable_boot_rom(v),
+            0xff51..=0xff6b => self.gpu.on_write(addr, v),
+            0xff6c..=0xff7f => todo!("i/o write: addr={:04x}, v={:02x}", addr, v),
+            _ => unreachable!("write attempt to i/o addr={:04x}, v={:04x}", addr, v),
         }
     }
 
@@ -161,5 +180,12 @@ impl Mmu {
     pub fn set16(&mut self, addr: u16, v: u16) {
         self.set8(addr, v as u8);
         self.set8(addr + 1, (v >> 8) as u8);
+    }
+
+    pub fn step(&mut self, cycles: usize) {
+        self.joypad.poll();
+        self.gpu.step(cycles);
+        self.timer.step(cycles);
+        self.serial.step(cycles);
     }
 }

@@ -1,6 +1,4 @@
-use crate::device::IoHandler;
 use crate::ic::Irq;
-use crate::mmu::{MemRead, MemWrite, Mmu};
 use log::*;
 
 pub struct Timer {
@@ -62,6 +60,7 @@ impl Timer {
                 self.tim = tim;
                 if of {
                     self.tim = self.tim_load;
+                    info!("Timer interrupt");
                     self.irq.timer(true);
                 }
                 self.tim_clock_reset();
@@ -75,21 +74,19 @@ impl Timer {
             self.tim_clocks -= time;
         }
     }
-}
 
-impl IoHandler for Timer {
-    fn on_read(&mut self, _mmu: &Mmu, addr: u16) -> MemRead {
+    pub(crate) fn on_read(&self, addr: u16) -> u8 {
         info!("Timer read: {:04x}", addr);
         match addr {
-            0xff04 => MemRead::Replace(self.div),
-            0xff05 => MemRead::Replace(self.tim),
-            0xff06 => MemRead::Replace(self.tim_load),
-            0xff07 => MemRead::Replace(self.ctrl),
-            _ => MemRead::PassThrough,
+            0xff04 => self.div,
+            0xff05 => self.tim,
+            0xff06 => self.tim_load,
+            0xff07 => self.ctrl,
+            _ => unreachable!("invalid timer read addr={:04x}", addr),
         }
     }
 
-    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
+    pub(crate) fn on_write(&mut self, addr: u16, value: u8) {
         info!("Timer write: {:04x} {:02x}", addr, value);
         match addr {
             0xff04 => self.div = 0,
@@ -104,8 +101,7 @@ impl IoHandler for Timer {
                     self.tim_clock_reset();
                 }
             }
-            _ => {}
+            _ => unreachable!("invalid timer write addr={:04x}, value={:04x}", addr, value),
         }
-        MemWrite::PassThrough
     }
 }

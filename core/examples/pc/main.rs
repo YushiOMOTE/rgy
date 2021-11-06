@@ -1,9 +1,9 @@
-mod debug;
+// mod debug;
 mod hardware;
 mod loader;
 
 use crate::{
-    debug::Debugger,
+    // debug::Debugger,
     hardware::Hardware,
     loader::{load_rom, Loader},
 };
@@ -78,7 +78,7 @@ fn main() {
         set_affinity();
 
         if opt.debug {
-            rgy::run_debug(to_cfg(opt), &rom, hw1, Debugger::new());
+            // rgy::run_debug(to_cfg(opt), &rom, hw1, Debugger::new());
         } else {
             rgy::run(to_cfg(opt), &rom, hw1);
         }
