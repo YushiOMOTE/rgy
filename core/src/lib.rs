@@ -109,7 +109,7 @@
 extern crate alloc;
 
 mod alu;
-// mod cgb;
+mod cgb;
 mod dma;
 mod fc;
 mod gpu;

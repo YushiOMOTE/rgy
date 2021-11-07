@@ -1,3 +1,4 @@
+use crate::cgb::Cgb;
 use crate::dma::{Dma, DmaRequest};
 use crate::gpu::Gpu;
 use crate::hardware::HardwareHandle;
@@ -89,6 +90,7 @@ pub struct Mmu {
     joypad: Joypad,
     sound: Sound,
     dma: Dma,
+    cgb: Cgb,
 }
 
 impl Mmu {
@@ -107,6 +109,7 @@ impl Mmu {
             joypad: Joypad::new(hw.clone(), irq),
             sound: Sound::new(hw),
             dma: Dma::new(),
+            cgb: Cgb::new(),
         }
     }
 
@@ -193,7 +196,7 @@ impl Mmu {
             0xff49 => self.gpu.read_obj_palette1(),
             0xff4a => self.gpu.read_wy(),
             0xff4b => self.gpu.read_wx(),
-            0xff4d => 0, // cgb
+            0xff4d => self.cgb.read_speed_switch(),
             0xff4f => self.gpu.read_vram_bank_select(),
             0xff51 => self.gpu.read_hdma_src_high(),
             0xff52 => self.gpu.read_hdma_src_low(),
@@ -254,7 +257,7 @@ impl Mmu {
             0xff49 => self.gpu.write_obj_palette1(v),
             0xff4a => self.gpu.write_wy(v),
             0xff4b => self.gpu.write_wx(v),
-            0xff4d => {} // cgb
+            0xff4d => self.cgb.write_speed_switch(v),
             0xff4f => self.gpu.select_vram_bank(v),
             0xff50 => self.mbc.disable_boot_rom(v),
             0xff51 => self.gpu.write_hdma_src_high(v),
