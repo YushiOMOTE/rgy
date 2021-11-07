@@ -24,8 +24,13 @@ impl Wram {
         }
     }
 
-    fn switch_bank(&mut self, n: u8) {
-        self.n = n as usize;
+    fn select_bank(&mut self, n: u8) {
+        self.n = (n as usize & 0x7).max(1);
+        info!("WRAM bank selected: {:02x}", self.n);
+    }
+
+    fn get_bank(&self) -> u8 {
+        self.n as u8
     }
 
     fn get8(&self, addr: u16) -> u8 {
@@ -200,6 +205,7 @@ impl Mmu {
             0xff69 => self.gpu.read_bg_color_palette(),
             0xff6a => todo!("cgb bg palette data"),
             0xff6b => self.gpu.read_obj_color_palette(),
+            0xff70 => self.wram.get_bank(),
             0x0000..=0xfeff | 0xff80..=0xffff => unreachable!("read non-i/o addr={:04x}", addr),
             _ => unimplemented!("read unknown i/o addr={:04x}", addr),
         }
@@ -261,6 +267,7 @@ impl Mmu {
             0xff69 => self.gpu.write_bg_color_palette(v),
             0xff6a => self.gpu.select_obj_color_palette(v),
             0xff6b => self.gpu.write_obj_color_palette(v),
+            0xff70 => self.wram.select_bank(v),
             0x0000..=0xfeff | 0xff80..=0xffff => {
                 unreachable!("write non-i/o addr={:04x}, v={:02x}", addr, v)
             }

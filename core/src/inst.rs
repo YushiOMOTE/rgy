@@ -6490,6 +6490,7 @@ pub fn mnem(code: u16) -> &'static str {
 
 /// Decodes the opecode and actually executes one instruction.
 impl Cpu {
+    /// Execute the instruction returning the consumed cycles and the instruction size
     pub fn decode(&mut self, code: u16, arg: u16) -> (usize, usize) {
         trace!("{:04x}: {:04x}: {}", self.get_pc(), code, mnem(code));
 
