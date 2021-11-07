@@ -1,9 +1,10 @@
+use crate::dma::DmaRequest;
 use crate::hardware::{HardwareHandle, VRAM_HEIGHT, VRAM_WIDTH};
 use crate::ic::Irq;
 use alloc::{vec, vec::Vec};
 use log::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Mode {
     OAM,
     VRAM,
@@ -74,6 +75,8 @@ pub struct Gpu {
     vram_select: usize,
 
     oam: Vec<u8>,
+
+    hdma: Hdma,
 }
 
 fn to_palette(p: u8) -> Vec<Color> {
@@ -284,6 +287,7 @@ impl Hdma {
         }
     }
 
+    /// Write HDMA5 register (0xff55)
     fn start(&mut self, value: u8) {
         if self.on && self.hblank && value & 0x80 == 0 {
             self.on = false;
@@ -304,32 +308,44 @@ impl Hdma {
         }
     }
 
-    fn run(&mut self) -> Option<(u16, u16, u16)> {
-        if self.on {
-            let size = if self.hblank {
-                0x10
-            } else {
-                (self.len as u16 + 1) * 0x10
-            };
+    /// Read HDMA5 register (0xff55)
+    fn status(&self) -> u8 {
+        self.len | if self.on { 0x80 } else { 0x00 }
+    }
 
-            info!(
-                "HDMA transfer: {:04x} -> {:04x} ({})",
-                self.src_wip, self.dst_wip, size
-            );
-
-            let range = (self.dst_wip, self.src_wip, size);
-
-            self.src_wip += size;
-            self.dst_wip += size;
-            let (rem, of) = self.len.overflowing_sub(1);
-
-            self.len = if self.hblank { rem } else { 0xff };
-            self.on = if self.hblank { !of } else { false };
-
-            Some(range)
-        } else {
-            None
+    fn run(&mut self, hblank: bool) -> Option<DmaRequest> {
+        if !self.on {
+            return None;
         }
+
+        // H-blank mode runs only in hblank.
+        if self.hblank && !hblank {
+            return None;
+        }
+
+        let size = if self.hblank {
+            // H-blank mode copies 16 bytes.
+            0x10
+        } else {
+            // General mode copies all bytes at once.
+            (self.len as u16 + 1) * 0x10
+        };
+
+        info!(
+            "HDMA transfer: {:04x} -> {:04x} ({})",
+            self.src_wip, self.dst_wip, size
+        );
+
+        let req = DmaRequest::new(self.src_wip, self.dst_wip, size);
+
+        self.src_wip += size;
+        self.dst_wip += size;
+        let (rem, of) = self.len.overflowing_sub(1);
+
+        self.len = if self.hblank { rem } else { 0xff };
+        self.on = if self.hblank { !of } else { false };
+
+        Some(req)
     }
 }
 
@@ -381,27 +397,17 @@ impl Gpu {
             vram: vec![vec![0; 0x2000]; 2],
             vram_select: 0,
             oam: vec![0; 0xa0],
+            hdma: Hdma::new(),
         }
     }
 
-    // fn hdma_run(&mut self, mmu: &Mmu) {
-    //     match self.hdma.run() {
-    //         Some((dst, src, size)) => {
-    //             for i in 0..size {
-    //                 self.write_vram_bank(dst + i, mmu.get8(src + i), self.vram_select);
-    //             }
-    //         }
-    //         _ => {}
-    //     }
-    // }
-
-    pub fn step(&mut self, time: usize) {
+    pub fn step(&mut self, time: usize) -> Option<DmaRequest> {
         let clocks = self.clocks + time;
 
         let (clocks, mode) = match &self.mode {
             Mode::OAM => {
                 if clocks >= 80 {
-                    (0, Mode::VRAM)
+                    (clocks - 80, Mode::VRAM)
                 } else {
                     (clocks, Mode::OAM)
                 }
@@ -409,13 +415,12 @@ impl Gpu {
             Mode::VRAM => {
                 if clocks >= 172 {
                     self.draw();
-                    // self.hdma_run(mmu);
 
                     if self.hblank_interrupt {
                         self.irq.lcd(true);
                     }
 
-                    (0, Mode::HBlank)
+                    (clocks - 172, Mode::HBlank)
                 } else {
                     (clocks, Mode::VRAM)
                 }
@@ -432,13 +437,13 @@ impl Gpu {
                             self.irq.lcd(true);
                         }
 
-                        (0, Mode::VBlank)
+                        (clocks - 204, Mode::VBlank)
                     } else {
                         if self.oam_interrupt {
                             self.irq.lcd(true);
                         }
 
-                        (0, Mode::OAM)
+                        (clocks - 204, Mode::OAM)
                     }
                 } else {
                     (clocks, Mode::HBlank)
@@ -455,9 +460,9 @@ impl Gpu {
                             self.irq.lcd(true);
                         }
 
-                        (0, Mode::OAM)
+                        (clocks - 456, Mode::OAM)
                     } else {
-                        (0, Mode::VBlank)
+                        (clocks - 456, Mode::VBlank)
                     }
                 } else {
                     (clocks, Mode::VBlank)
@@ -470,8 +475,12 @@ impl Gpu {
             self.irq.lcd(true);
         }
 
+        let enter_hblank = self.mode != Mode::HBlank && mode == Mode::HBlank;
+
         self.clocks = clocks;
         self.mode = mode;
+
+        self.hdma.run(enter_hblank)
     }
 
     fn draw(&mut self) {
@@ -819,6 +828,56 @@ impl Gpu {
     /// Write VBK register (0xff4f)
     pub(crate) fn select_vram_bank(&mut self, v: u8) {
         self.vram_select = v as usize & 1;
+    }
+
+    /// Read HDMA1 register (0xff51)
+    pub(crate) fn read_hdma_src_high(&self) -> u8 {
+        self.hdma.src_high
+    }
+
+    /// Write HDMA1 register (0xff51)
+    pub(crate) fn write_hdma_src_high(&mut self, v: u8) {
+        self.hdma.src_high = v;
+    }
+
+    /// Read HDMA2 register (0xff52)
+    pub(crate) fn read_hdma_src_low(&self) -> u8 {
+        self.hdma.src_low
+    }
+
+    /// Write HDMA2 register (0xff52)
+    pub(crate) fn write_hdma_src_low(&mut self, v: u8) {
+        self.hdma.src_low = v;
+    }
+
+    /// Read HDMA3 register (0xff53)
+    pub(crate) fn read_hdma_dst_high(&self) -> u8 {
+        self.hdma.dst_high
+    }
+
+    /// Write HDMA3 register (0xff53)
+    pub(crate) fn write_hdma_dst_high(&mut self, v: u8) {
+        self.hdma.dst_high = v;
+    }
+
+    /// Read HDMA4 register (0xff54)
+    pub(crate) fn read_hdma_dst_low(&self) -> u8 {
+        self.hdma.dst_low
+    }
+
+    /// Write HDMA4 register (0xff54)
+    pub(crate) fn write_hdma_dst_low(&mut self, v: u8) {
+        self.hdma.dst_low = v;
+    }
+
+    /// Read HDMA5 register (0xff55)
+    pub(crate) fn read_hdma_start(&self) -> u8 {
+        self.hdma.status()
+    }
+
+    /// Write HDMA5 register (0xff55)
+    pub(crate) fn write_hdma_start(&mut self, v: u8) {
+        self.hdma.start(v);
     }
 
     /// Write BCPS/BGPI register (0xff68)

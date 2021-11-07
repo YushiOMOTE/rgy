@@ -1,4 +1,4 @@
-use crate::dma::Dma;
+use crate::dma::{Dma, DmaRequest};
 use crate::gpu::Gpu;
 use crate::hardware::HardwareHandle;
 use crate::ic::{Ic, Irq};
@@ -190,7 +190,11 @@ impl Mmu {
             0xff4b => self.gpu.read_wx(),
             0xff4d => 0, // cgb
             0xff4f => self.gpu.read_vram_bank_select(),
-            0xff50..=0xff55 => todo!("hdma"),
+            0xff51 => self.gpu.read_hdma_src_high(),
+            0xff52 => self.gpu.read_hdma_src_low(),
+            0xff53 => self.gpu.read_hdma_dst_high(),
+            0xff54 => self.gpu.read_hdma_dst_low(),
+            0xff55 => self.gpu.read_hdma_start(),
             0xff56 => todo!("ir"),
             0xff68 => todo!("cgb bg palette index"),
             0xff69 => self.gpu.read_bg_color_palette(),
@@ -247,7 +251,11 @@ impl Mmu {
             0xff4d => {} // cgb
             0xff4f => self.gpu.select_vram_bank(v),
             0xff50 => self.mbc.disable_boot_rom(v),
-            0xff51..=0xff55 => todo!("hdma"),
+            0xff51 => self.gpu.write_hdma_src_high(v),
+            0xff52 => self.gpu.write_hdma_src_low(v),
+            0xff53 => self.gpu.write_hdma_dst_high(v),
+            0xff54 => self.gpu.write_hdma_dst_low(v),
+            0xff55 => self.gpu.write_hdma_start(v),
             0xff56 => todo!("ir"),
             0xff68 => self.gpu.select_bg_color_palette(v),
             0xff69 => self.gpu.write_bg_color_palette(v),
@@ -275,13 +283,26 @@ impl Mmu {
 
     /// Updates the machine state by the given cycles
     pub fn step(&mut self, cycles: usize) {
-        for t in self.dma.step(cycles) {
-            debug!("DMA Transfer: {:02x} to {:02x}", t.src, t.dst);
-            self.set8(t.dst, self.get8(t.src));
+        for req in self.dma.step(cycles) {
+            self.run_dma(req);
         }
-        self.joypad.poll();
-        self.gpu.step(cycles);
+        for req in self.gpu.step(cycles) {
+            self.run_dma(req);
+        }
         self.timer.step(cycles);
         self.serial.step(cycles);
+        self.joypad.poll();
+    }
+
+    fn run_dma(&mut self, req: DmaRequest) {
+        debug!(
+            "DMA Transfer: {:04x} to {:04x} ({:04x} bytes)",
+            req.src(),
+            req.dst(),
+            req.len()
+        );
+        for i in 0..req.len() {
+            self.set8(req.dst() + i, self.get8(req.src() + i));
+        }
     }
 }
