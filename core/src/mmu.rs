@@ -131,7 +131,7 @@ impl Mmu {
             0xa000..=0xbfff => self.mbc.on_read(addr),
             0xc000..=0xfdff => self.wram.get8(addr),
             0xfe00..=0xfe9f => self.gpu.read_oam(addr),
-            0xfea0..=0xfeff => unimplemented!("unusable: addr={:04x}", addr),
+            0xfea0..=0xfeff => 0, // Unusable range
             0xff00..=0xff7f => self.io_read(addr),
             0xff80..=0xfffe => self.hram.get8(addr),
             0xffff..=0xffff => self.ic.read_enabled(),
@@ -146,7 +146,7 @@ impl Mmu {
             0xa000..=0xbfff => self.mbc.on_write(addr, v),
             0xc000..=0xfdff => self.wram.set8(addr, v),
             0xfe00..=0xfe9f => self.gpu.write_oam(addr, v),
-            0xfea0..=0xfeff => unimplemented!("unusable: addr={:04x}, value={:04x}", addr, v),
+            0xfea0..=0xfeff => {} // Unusable range
             0xff00..=0xff7f => self.io_write(addr, v),
             0xff80..=0xfffe => self.hram.set8(addr, v),
             0xffff..=0xffff => self.ic.write_enabled(v),
