@@ -113,6 +113,7 @@ mod cgb;
 mod dma;
 mod fc;
 mod gpu;
+mod hram;
 mod ic;
 mod joypad;
 mod mbc;
@@ -120,6 +121,7 @@ mod serial;
 mod sound;
 mod system;
 mod timer;
+mod wram;
 
 /// CPU state.
 pub mod cpu;

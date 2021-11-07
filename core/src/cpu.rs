@@ -2,8 +2,39 @@ use crate::mmu::Mmu;
 use alloc::fmt;
 use log::*;
 
+/// Interface for CPU to interact with memory/devices
+pub trait Sys {
+    /// Get the interrupt vector address clearing the interrupt flag state
+    fn pop_int_vec(&self) -> Option<u8>;
+
+    /// Get the interrupt vector address without clearing the interrupt flag state
+    fn peek_int_vec(&self) -> Option<u8>;
+
+    /// Read a byte from the address.
+    fn get8(&self, addr: u16) -> u8;
+
+    /// Write a byte to the address.
+    fn set8(&mut self, addr: u16, v: u8);
+
+    /// Reads two bytes from the given addresss in the memory.
+    fn get16(&self, addr: u16) -> u16 {
+        let l = self.get8(addr);
+        let h = self.get8(addr + 1);
+        (h as u16) << 8 | l as u16
+    }
+
+    /// Writes two bytes at the given address in the memory.
+    fn set16(&mut self, addr: u16, v: u16) {
+        self.set8(addr, v as u8);
+        self.set8(addr + 1, (v >> 8) as u8);
+    }
+
+    /// Proceed the system state by the given CPU cycles.
+    fn step(&mut self, cycles: usize);
+}
+
 /// Represents CPU state.
-pub struct Cpu {
+pub struct Cpu<T = Mmu> {
     a: u8,
     b: u8,
     c: u8,
@@ -16,10 +47,10 @@ pub struct Cpu {
     sp: u16,
     ime: bool,
     halt: bool,
-    pub(crate) mmu: Mmu,
+    pub(crate) sys: T,
 }
 
-impl fmt::Display for Cpu {
+impl<T: Sys> fmt::Display for Cpu<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -49,9 +80,9 @@ impl fmt::Display for Cpu {
     }
 }
 
-impl Cpu {
+impl<T: Sys> Cpu<T> {
     /// Create a new CPU state.
-    pub fn new(mmu: Mmu) -> Cpu {
+    pub fn new(sys: T) -> Cpu<T> {
         Cpu {
             a: 0,
             b: 0,
@@ -65,7 +96,7 @@ impl Cpu {
             sp: 0,
             ime: true,
             halt: false,
-            mmu,
+            sys,
         }
     }
 
@@ -93,7 +124,7 @@ impl Cpu {
 
         cycles += self.check_interrupt();
 
-        self.mmu.step(cycles);
+        self.sys.step(cycles);
 
         cycles
     }
@@ -117,7 +148,7 @@ impl Cpu {
             if self.halt {
                 // If HALT is executed while interrupt is disabled,
                 // the interrupt wakes up CPU without being consumed.
-                if let Some(value) = self.mmu.peek_int_vec() {
+                if let Some(value) = self.sys.peek_int_vec() {
                     debug!("Interrupted on halt + ime=0: {:02x}", value);
                     self.halt = false;
                 }
@@ -125,7 +156,7 @@ impl Cpu {
 
             0
         } else {
-            let value = match self.mmu.pop_int_vec() {
+            let value = match self.sys.pop_int_vec() {
                 Some(value) => value,
                 None => return 0,
             };
@@ -346,24 +377,24 @@ impl Cpu {
     pub fn push(&mut self, v: u16) {
         let p = self.get_sp().wrapping_sub(2);
         self.set_sp(self.get_sp().wrapping_sub(2));
-        self.mmu.set16(p, v)
+        self.sys.set16(p, v)
     }
 
     /// Pops a 16-bit value from the stack, updating the stack pointer register.
     pub fn pop(&mut self) -> u16 {
         let p = self.get_sp();
         self.set_sp(self.get_sp().wrapping_add(2));
-        self.mmu.get16(p)
+        self.sys.get16(p)
     }
 
     /// Fetches an opcode from the memory and returns it with its length.
     pub fn fetch(&self) -> (u16, u16) {
         let pc = self.get_pc();
 
-        let fb = self.mmu.get8(pc);
+        let fb = self.sys.get8(pc);
 
         if fb == 0xcb {
-            let sb = self.mmu.get8(pc + 1);
+            let sb = self.sys.get8(pc + 1);
             (0xcb00 | sb as u16, 2)
         } else {
             (fb as u16, 1)
@@ -374,15 +405,9 @@ impl Cpu {
 #[cfg(test)]
 mod test {
     use super::*;
-    use alloc::{vec, vec::Vec};
+    use crate::mmu::Ram;
 
-    fn write(mmu: &mut Mmu, m: Vec<u8>) {
-        for i in 0..m.len() {
-            mmu.set8(i as u16, m[i]);
-        }
-    }
-
-    fn exec(cpu: &mut Cpu) {
+    fn exec(cpu: &mut Cpu<Ram>) {
         let (code, arg) = cpu.fetch();
 
         let (_, size) = cpu.decode(code, arg);
@@ -393,11 +418,11 @@ mod test {
     #[test]
     fn op_00af() {
         // xor a
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(Ram::new());
 
         cpu.set_a(0x32);
 
-        write(&mut cpu.mmu, vec![0xaf]);
+        cpu.sys.write(&[0xaf]);
         exec(&mut cpu);
 
         assert_eq!(cpu.get_a(), 0x00);
@@ -406,13 +431,11 @@ mod test {
     #[test]
     fn op_00f1() {
         // pop af
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(Ram::new());
 
         cpu.set_bc(0x1301);
-        write(
-            &mut cpu.mmu,
-            vec![0xc5, 0xf1, 0xf5, 0xd1, 0x79, 0xe6, 0xf0, 0xbb],
-        );
+        cpu.sys
+            .write(&[0xc5, 0xf1, 0xf5, 0xd1, 0x79, 0xe6, 0xf0, 0xbb]);
         exec(&mut cpu); // push bc
         assert_eq!(cpu.get_bc(), 0x1301);
         exec(&mut cpu); // pop af

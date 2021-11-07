@@ -1,6 +1,6 @@
 {% import "ops.rs" as macros %}
 
-use crate::cpu::Cpu;
+use crate::cpu::{Cpu, Sys};
 use crate::alu;
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
@@ -16,7 +16,7 @@ lazy_static! {
     };
 }
 
-impl Cpu {
+impl<T: Sys> Cpu<T> {
 {% for i in insts %}
     /// {{i.operator}} {{i.operands | join(sep=",")}}
     #[allow(unused_variables)]
@@ -208,7 +208,7 @@ pub fn mnem(code: u16) -> &'static str {
 }
 
 /// Decodes the opecode and actually executes one instruction.
-impl Cpu {
+impl<T: Sys> Cpu<T> {
     /// Execute the instruction returning the consumed cycles and the instruction size
     pub fn decode(&mut self, code: u16, arg: u16) -> (usize, usize) {
         trace!("{:04x}: {:04x}: {}", self.get_pc(), code, mnem(code));

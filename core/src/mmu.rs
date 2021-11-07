@@ -1,78 +1,18 @@
 use crate::cgb::Cgb;
+use crate::cpu::Sys;
 use crate::dma::{Dma, DmaRequest};
 use crate::gpu::Gpu;
 use crate::hardware::HardwareHandle;
+use crate::hram::Hram;
 use crate::ic::{Ic, Irq};
 use crate::joypad::Joypad;
 use crate::mbc::Mbc;
 use crate::serial::Serial;
 use crate::sound::Sound;
 use crate::timer::Timer;
-use alloc::{vec, vec::Vec};
+use crate::wram::Wram;
+use alloc::vec::Vec;
 use log::*;
-
-/// Handles work ram access between 0xc000 - 0xdfff
-pub struct Wram {
-    n: usize,
-    bank: Vec<Vec<u8>>,
-}
-
-impl Wram {
-    fn new() -> Self {
-        Self {
-            n: 1,
-            bank: vec![vec![0; 0x1000]; 8],
-        }
-    }
-
-    fn select_bank(&mut self, n: u8) {
-        self.n = (n as usize & 0x7).max(1);
-        info!("WRAM bank selected: {:02x}", self.n);
-    }
-
-    fn get_bank(&self) -> u8 {
-        self.n as u8
-    }
-
-    fn get8(&self, addr: u16) -> u8 {
-        match addr {
-            0xc000..=0xcfff => self.bank[0][addr as usize - 0xc000],
-            0xd000..=0xdfff => self.bank[self.n][addr as usize - 0xd000],
-            0xe000..=0xfdff => self.get8(addr - 0xe000 + 0xc000),
-            _ => unreachable!("read attemp to wram addr={:04x}", addr),
-        }
-    }
-
-    fn set8(&mut self, addr: u16, v: u8) {
-        match addr {
-            0xc000..=0xcfff => self.bank[0][addr as usize - 0xc000] = v,
-            0xd000..=0xdfff => self.bank[self.n][addr as usize - 0xd000] = v,
-            0xe000..=0xfdff => self.set8(addr - 0xe000 + 0xc000, v),
-            _ => unreachable!("write attemp to wram addr={:04x} v={:02x}", addr, v),
-        }
-    }
-}
-
-/// Handles high ram access between 0xff80 - 0xfffe
-pub struct Hram {
-    bank: Vec<u8>,
-}
-
-impl Hram {
-    fn new() -> Self {
-        Self {
-            bank: vec![0; 0x7f],
-        }
-    }
-
-    fn get8(&self, addr: u16) -> u8 {
-        self.bank[addr as usize - 0xff80]
-    }
-
-    fn set8(&mut self, addr: u16, v: u8) {
-        self.bank[addr as usize - 0xff80] = v;
-    }
-}
 
 /// The memory management unit (MMU)
 ///
@@ -110,46 +50,6 @@ impl Mmu {
             sound: Sound::new(hw),
             dma: Dma::new(),
             cgb: Cgb::new(),
-        }
-    }
-
-    /// Get the interrupt vector address without clearing the interrupt flag state
-    pub fn peek_int_vec(&self) -> Option<u8> {
-        self.ic.peek()
-    }
-
-    /// Get the interrupt vector address clearing the interrupt flag state
-    pub fn pop_int_vec(&self) -> Option<u8> {
-        self.ic.pop()
-    }
-
-    /// Reads one byte from the given address in the memory.
-    pub fn get8(&self, addr: u16) -> u8 {
-        match addr {
-            0x0000..=0x7fff => self.mbc.on_read(addr),
-            0x8000..=0x9fff => self.gpu.read_vram(addr),
-            0xa000..=0xbfff => self.mbc.on_read(addr),
-            0xc000..=0xfdff => self.wram.get8(addr),
-            0xfe00..=0xfe9f => self.gpu.read_oam(addr),
-            0xfea0..=0xfeff => 0, // Unusable range
-            0xff00..=0xff7f => self.io_read(addr),
-            0xff80..=0xfffe => self.hram.get8(addr),
-            0xffff..=0xffff => self.ic.read_enabled(),
-        }
-    }
-
-    /// Writes one byte at the given address in the memory.
-    pub fn set8(&mut self, addr: u16, v: u8) {
-        match addr {
-            0x0000..=0x7fff => self.mbc.on_write(addr, v),
-            0x8000..=0x9fff => self.gpu.write_vram(addr, v),
-            0xa000..=0xbfff => self.mbc.on_write(addr, v),
-            0xc000..=0xfdff => self.wram.set8(addr, v),
-            0xfe00..=0xfe9f => self.gpu.write_oam(addr, v),
-            0xfea0..=0xfeff => {} // Unusable range
-            0xff00..=0xff7f => self.io_write(addr, v),
-            0xff80..=0xfffe => self.hram.set8(addr, v),
-            0xffff..=0xffff => self.ic.write_enabled(v),
         }
     }
 
@@ -278,32 +178,6 @@ impl Mmu {
         }
     }
 
-    /// Reads two bytes from the given addresss in the memory.
-    pub fn get16(&self, addr: u16) -> u16 {
-        let l = self.get8(addr);
-        let h = self.get8(addr + 1);
-        (h as u16) << 8 | l as u16
-    }
-
-    /// Writes two bytes at the given address in the memory.
-    pub fn set16(&mut self, addr: u16, v: u16) {
-        self.set8(addr, v as u8);
-        self.set8(addr + 1, (v >> 8) as u8);
-    }
-
-    /// Updates the machine state by the given cycles
-    pub fn step(&mut self, cycles: usize) {
-        for req in self.dma.step(cycles) {
-            self.run_dma(req);
-        }
-        for req in self.gpu.step(cycles) {
-            self.run_dma(req);
-        }
-        self.timer.step(cycles);
-        self.serial.step(cycles);
-        self.joypad.poll();
-    }
-
     fn run_dma(&mut self, req: DmaRequest) {
         debug!(
             "DMA Transfer: {:04x} to {:04x} ({:04x} bytes)",
@@ -315,4 +189,98 @@ impl Mmu {
             self.set8(req.dst() + i, self.get8(req.src() + i));
         }
     }
+}
+
+impl Sys for Mmu {
+    /// Get the interrupt vector address without clearing the interrupt flag state
+    fn peek_int_vec(&self) -> Option<u8> {
+        self.ic.peek()
+    }
+
+    /// Get the interrupt vector address clearing the interrupt flag state
+    fn pop_int_vec(&self) -> Option<u8> {
+        self.ic.pop()
+    }
+
+    /// Reads one byte from the given address in the memory.
+    fn get8(&self, addr: u16) -> u8 {
+        match addr {
+            0x0000..=0x7fff => self.mbc.on_read(addr),
+            0x8000..=0x9fff => self.gpu.read_vram(addr),
+            0xa000..=0xbfff => self.mbc.on_read(addr),
+            0xc000..=0xfdff => self.wram.get8(addr),
+            0xfe00..=0xfe9f => self.gpu.read_oam(addr),
+            0xfea0..=0xfeff => 0, // Unusable range
+            0xff00..=0xff7f => self.io_read(addr),
+            0xff80..=0xfffe => self.hram.get8(addr),
+            0xffff..=0xffff => self.ic.read_enabled(),
+        }
+    }
+
+    /// Writes one byte at the given address in the memory.
+    fn set8(&mut self, addr: u16, v: u8) {
+        match addr {
+            0x0000..=0x7fff => self.mbc.on_write(addr, v),
+            0x8000..=0x9fff => self.gpu.write_vram(addr, v),
+            0xa000..=0xbfff => self.mbc.on_write(addr, v),
+            0xc000..=0xfdff => self.wram.set8(addr, v),
+            0xfe00..=0xfe9f => self.gpu.write_oam(addr, v),
+            0xfea0..=0xfeff => {} // Unusable range
+            0xff00..=0xff7f => self.io_write(addr, v),
+            0xff80..=0xfffe => self.hram.set8(addr, v),
+            0xffff..=0xffff => self.ic.write_enabled(v),
+        }
+    }
+
+    /// Updates the machine state by the given cycles
+    fn step(&mut self, cycles: usize) {
+        for req in self.dma.step(cycles) {
+            self.run_dma(req);
+        }
+        for req in self.gpu.step(cycles) {
+            self.run_dma(req);
+        }
+        self.timer.step(cycles);
+        self.serial.step(cycles);
+        self.joypad.poll();
+    }
+}
+
+/// Behaves as a byte array for unit tests
+pub struct Ram {
+    ram: [u8; 0x10000],
+}
+
+impl Ram {
+    /// Create a new ram instance.
+    pub fn new() -> Self {
+        Self { ram: [0; 0x10000] }
+    }
+
+    /// Write a byte array at the beginnig of the memory.
+    pub fn write(&mut self, m: &[u8]) {
+        for i in 0..m.len() {
+            self.set8(i as u16, m[i]);
+        }
+    }
+}
+
+impl Sys for Ram {
+    fn peek_int_vec(&self) -> Option<u8> {
+        None
+    }
+
+    fn pop_int_vec(&self) -> Option<u8> {
+        None
+    }
+
+    fn get8(&self, addr: u16) -> u8 {
+        self.ram[addr as usize]
+    }
+
+    fn set8(&mut self, addr: u16, v: u8) {
+        self.ram[addr as usize] = v;
+    }
+
+    fn step(&mut self, _: usize) {}
 }

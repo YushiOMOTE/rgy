@@ -40,9 +40,9 @@ fn eval_getter(s: &str, b: usize) -> String {
     } else if s == "cf" {
         format!("self.get_cf()")
     } else if s == "d8" || s == "a8" || s == "r8" {
-        format!("self.mmu.get8(self.get_pc().wrapping_add(arg))")
+        format!("self.sys.get8(self.get_pc().wrapping_add(arg))")
     } else if s == "d16" || s == "a16" {
-        format!("self.mmu.get16(self.get_pc().wrapping_add(arg))")
+        format!("self.sys.get16(self.get_pc().wrapping_add(arg))")
     } else if s.starts_with("0x") {
         let mut expr = s.split("+");
         let offset = expr.next().expect("No offset");
@@ -51,7 +51,7 @@ fn eval_getter(s: &str, b: usize) -> String {
     } else if is_num(s) {
         format!("{}", s)
     } else if s.starts_with("(") {
-        format!("self.mmu.get{}({})", b, eval_getter(&s[1..s.len() - 1], b))
+        format!("self.sys.get{}({})", b, eval_getter(&s[1..s.len() - 1], b))
     } else {
         format!("self.get_{}()", s)
     }
@@ -65,7 +65,7 @@ pub fn getter(value: Value, map: HashMap<String, Value>) -> tera::Result<Value> 
 
 fn eval_setter(s: &str, b: usize) -> String {
     if s.starts_with("(") {
-        format!("self.mmu.set{}({}, ", b, eval_getter(&s[1..s.len() - 1], b))
+        format!("self.sys.set{}({}, ", b, eval_getter(&s[1..s.len() - 1], b))
     } else {
         format!("self.set_{}(", s)
     }
