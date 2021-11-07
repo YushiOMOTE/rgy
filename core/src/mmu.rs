@@ -167,7 +167,7 @@ impl Mmu {
             0xff1b => self.sound.wave().read_len(),
             0xff1c => self.sound.wave().read_amp(),
             0xff1d => self.sound.wave().read_freq_low(),
-            0xff1e => self.sound.wave().read_freq_low(),
+            0xff1e => self.sound.wave().read_freq_high(),
             0xff20 => self.sound.noise().read_len(),
             0xff21 => self.sound.noise().read_envelop(),
             0xff22 => self.sound.noise().read_poly_counter(),
