@@ -102,7 +102,7 @@ where
             return false;
         }
 
-        let time = self.cpu.step();
+        let time = self.cpu.execute();
 
         if !self.cfg.native_speed {
             self.fc.adjust(time);

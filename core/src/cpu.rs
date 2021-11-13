@@ -47,7 +47,8 @@ pub struct Cpu<T = Mmu> {
     sp: u16,
     ime: bool,
     halt: bool,
-    pub(crate) sys: T,
+    cycles: usize,
+    sys: T,
 }
 
 impl<T: Sys> fmt::Display for Cpu<T> {
@@ -96,6 +97,7 @@ impl<T: Sys> Cpu<T> {
             sp: 0,
             ime: true,
             halt: false,
+            cycles: 0,
             sys,
         }
     }
@@ -112,21 +114,28 @@ impl<T: Sys> Cpu<T> {
     /// decodes it, and updates the CPU/memory state accordingly.
     /// The return value is the number of clock cycles consumed by the instruction.
     /// If the CPU is in the halt state, the function does nothing but returns a fixed clock cycle.
-    pub fn step(&mut self) -> usize {
-        let mut cycles = if self.halt {
-            4
+    pub fn execute(&mut self) -> usize {
+        if self.halt {
+            self.step(4);
         } else {
             let (code, arg) = self.fetch();
             let (time, size) = self.decode(code, arg);
             self.set_pc(self.get_pc().wrapping_add(size as u16));
-            time
-        };
+            assert_eq!(self.cycles, time, "cycle mismatch op={:04x}", code);
+        }
 
-        cycles += self.check_interrupt();
+        self.check_interrupt();
 
-        self.sys.step(cycles);
-
+        // Get the cycles consumed and reset
+        let cycles = self.cycles;
+        self.cycles = 0;
         cycles
+    }
+
+    /// Step forward
+    pub fn step(&mut self, cycles: usize) {
+        self.cycles = self.cycles.wrapping_add(cycles);
+        self.sys.step(cycles);
     }
 
     /// Disable interrupts to this CPU.
@@ -143,7 +152,7 @@ impl<T: Sys> Cpu<T> {
 
     /// Check if pending interrupts in the interrupt controller,
     /// and process them if any.
-    pub fn check_interrupt(&mut self) -> usize {
+    pub fn check_interrupt(&mut self) {
         if !self.ime {
             if self.halt {
                 // If HALT is executed while interrupt is disabled,
@@ -153,12 +162,10 @@ impl<T: Sys> Cpu<T> {
                     self.halt = false;
                 }
             }
-
-            0
         } else {
             let value = match self.sys.pop_int_vec() {
                 Some(value) => value,
-                None => return 0,
+                None => return,
             };
 
             info!("Interrupted: {:02x}", value);
@@ -167,7 +174,7 @@ impl<T: Sys> Cpu<T> {
 
             self.halt = false;
 
-            16
+            self.step(16);
         }
     }
 
@@ -373,28 +380,58 @@ impl<T: Sys> Cpu<T> {
         self.sp = v
     }
 
+    /// Jump
+    pub fn jump(&mut self, a: u16) {
+        self.step(4);
+        self.set_pc(a);
+    }
+
+    /// Read a byte from memory
+    pub fn get8(&mut self, a: u16) -> u8 {
+        self.step(4);
+        self.sys.get8(a)
+    }
+
+    /// Read a word from memory
+    pub fn get16(&mut self, a: u16) -> u16 {
+        self.step(8);
+        self.sys.get16(a)
+    }
+
+    /// Write a byte to memory
+    pub fn set8(&mut self, a: u16, v: u8) {
+        self.step(4);
+        self.sys.set8(a, v);
+    }
+
+    /// Write a word to memory
+    pub fn set16(&mut self, a: u16, v: u16) {
+        self.step(8);
+        self.sys.set16(a, v)
+    }
+
     /// Pushes a 16-bit value to the stack, updating the stack pointer register.
     pub fn push(&mut self, v: u16) {
         let p = self.get_sp().wrapping_sub(2);
         self.set_sp(self.get_sp().wrapping_sub(2));
-        self.sys.set16(p, v)
+        self.set16(p, v)
     }
 
     /// Pops a 16-bit value from the stack, updating the stack pointer register.
     pub fn pop(&mut self) -> u16 {
         let p = self.get_sp();
         self.set_sp(self.get_sp().wrapping_add(2));
-        self.sys.get16(p)
+        self.get16(p)
     }
 
     /// Fetches an opcode from the memory and returns it with its length.
-    pub fn fetch(&self) -> (u16, u16) {
+    pub fn fetch(&mut self) -> (u16, u16) {
         let pc = self.get_pc();
 
         let fb = self.sys.get8(pc);
 
         if fb == 0xcb {
-            let sb = self.sys.get8(pc + 1);
+            let sb = self.get8(pc + 1);
             (0xcb00 | sb as u16, 2)
         } else {
             (fb as u16, 1)

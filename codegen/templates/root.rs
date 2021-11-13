@@ -209,15 +209,20 @@ pub fn mnem(code: u16) -> &'static str {
 
 /// Decodes the opecode and actually executes one instruction.
 impl<T: Sys> Cpu<T> {
-    /// Execute the instruction returning the consumed cycles and the instruction size
+    /// Execute the instruction returning the expected consumed cycles and the instruction size
     pub fn decode(&mut self, code: u16, arg: u16) -> (usize, usize) {
         trace!("{:04x}: {:04x}: {}", self.get_pc(), code, mnem(code));
 
-        match code {
+        let (time, size) = match code {
             {%- for i in insts -%}
             0x{{i.code | hex}} => self.op_{{i.code | hex}}(arg),
             {%- endfor -%}
             _ => panic!("Invalid opcode: {:04x}: {:04x}", self.get_pc(), code),
-        }
+        };
+
+        // Every instruction consumes at least 4 cycles.
+        self.step(4);
+
+        (time, size)
     }
 }

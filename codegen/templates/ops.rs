@@ -4,11 +4,13 @@
 {% macro inc16(i) %}
   let v = {{ i.operands[0] | getter(bits=i.bits) }}.wrapping_add(1);
   {{ i.operands[0] | setter(bits=i.bits) }}v);
+  self.step(4);
 {% endmacro %}
 
 {% macro dec16(i) %}
   let v = {{ i.operands[0] | getter(bits=i.bits) }}.wrapping_sub(1);
   {{ i.operands[0] | setter(bits=i.bits) }}v);
+  self.step(4);
 {% endmacro %}
 
 {% macro inc8(i) %}
@@ -26,6 +28,9 @@
 {% macro ld(i) %}
   let v = {{ i.operands[1] | getter(bits=i.bits) }};
   {{ i.operands[0] | setter(bits=i.bits) }}v);
+  {% if i.operands[0] == "sp" and i.operands[1] == "hl" %}
+  self.step(4);
+  {% endif %}
 {% endmacro %}
 
 {% macro ldhl(i) %}
@@ -33,6 +38,7 @@
   let q = {{ i.operands[1] | getter(bits=i.bits) }};
   let (v, h, c, z) = alu::add16e(p, q, false);
   self.set_hl(v);
+  self.step(4);
 {% endmacro %}
 
 {% macro add8(i) %}
@@ -47,6 +53,7 @@
   let q = {{ i.operands[1] | getter(bits=i.bits) }};
   let (v, h, c, z) = alu::add16(p, q, false);
   {{ i.operands[0] | setter(bits=i.bits) }}v);
+  self.step(4);
 {% endmacro %}
 
 {% macro addsp(i) %}
@@ -54,6 +61,7 @@
   let q = {{ i.operands[1] | getter(bits=i.bits) }};
   let (v, h, c, z) = alu::add16e(p, q, false);
   {{ i.operands[0] | setter(bits=i.bits) }}v);
+  self.step(8);
 {% endmacro %}
 
 {% macro sub(i) %}
@@ -78,17 +86,20 @@
 {% endmacro %}
 
 {% macro and(i) %}
-  self.set_a(self.get_a() & {{ i.operands[0] | getter(bits=i.bits) }});
+  let v = self.get_a() & {{ i.operands[0] | getter(bits=i.bits) }};
+  self.set_a(v);
   let z = self.get_a() == 0;
 {% endmacro %}
 
 {% macro or(i) %}
-  self.set_a(self.get_a() | {{ i.operands[0] | getter(bits=i.bits) }});
+  let v = self.get_a() | {{ i.operands[0] | getter(bits=i.bits) }};
+  self.set_a(v);
   let z = self.get_a() == 0;
 {% endmacro %}
 
 {% macro xor(i) %}
-  self.set_a(self.get_a() ^ {{ i.operands[0] | getter(bits=i.bits) }});
+  let v = self.get_a() ^ {{ i.operands[0] | getter(bits=i.bits) }};
+  self.set_a(v);
   let z = self.get_a() == 0;
 {% endmacro %}
 
@@ -100,6 +111,7 @@
 
 {% macro push(i) %}
   self.push({{ i.operands[0] | getter(bits=i.bits) }});
+  self.step(4);
 {% endmacro %}
 
 {% macro pop(i) %}
@@ -278,29 +290,33 @@
 {% macro jr(i) %}
   let p = {{ i.operands[0] | getter(bits=i.bits) }};
   let pc = self.get_pc().wrapping_add(alu::signed(p));
-  self.set_pc(pc);
+  self.jump(pc);
 {% endmacro %}
 
 {% macro jrif(i) %}
   let flg = {{ i.operands[0] | getter(bits=i.bits) }};
+  let p = {{ i.operands[1] | getter(bits=i.bits) }};
   if flg {
-    let p = {{ i.operands[1] | getter(bits=i.bits) }};
     let pc = self.get_pc().wrapping_add(alu::signed(p));
-    self.set_pc(pc);
+    self.jump(pc);
     return ({{ i.time[0] }}, {{ i.size }})
   }
 {% endmacro %}
 
 {% macro jp(i) %}
   let pc = {{ i.operands[0] | getter(bits=16) }};
+  {% if i.operands[0] == "hl" %}
   self.set_pc(pc.wrapping_sub({{ i.size }}));
+  {% else %}
+  self.jump(pc.wrapping_sub({{ i.size }}));
+  {% endif %}
 {% endmacro %}
 
 {% macro jpif(i) %}
   let flg = {{ i.operands[0] | getter(bits=16) }};
+  let pc = {{ i.operands[1] | getter(bits=i.bits) }};
   if flg {
-    let pc = {{ i.operands[1] | getter(bits=i.bits) }};
-    self.set_pc(pc);
+    self.jump(pc);
     return ({{ i.time[0] }}, 0)
   }
 {% endmacro %}
@@ -308,39 +324,43 @@
 
 {% macro call(i) %}
   self.push(self.get_pc().wrapping_add({{ i.size }}));
-  self.set_pc({{ i.operands[0] | getter(bits=i.bits) }}.wrapping_sub({{i.size}}));
+  let pc = {{ i.operands[0] | getter(bits=i.bits) }}.wrapping_sub({{i.size}});
+  self.jump(pc);
 {% endmacro %}
 
 {% macro callif(i) %}
   let flg = {{ i.operands[0] | getter(bits=i.bits) }};
+  let pc = {{ i.operands[1] | getter(bits=i.bits) }};
   if flg {
     self.push(self.get_pc().wrapping_add({{ i.size }}));
-    self.set_pc({{ i.operands[1] | getter(bits=i.bits) }});
+    self.jump(pc);
     return ({{ i.time[0] }}, 0)
   }
 {% endmacro %}
 
 {% macro rst(i) %}
   self.push(self.get_pc().wrapping_add({{ i.size }}));
-  self.set_pc({{ i.operands[0] }}u16.wrapping_sub({{i.size}}));
+  let pc = {{ i.operands[0] }}u16.wrapping_sub({{i.size}});
+  self.jump(pc);
 {% endmacro %}
 
 {% macro ret(i) %}
   let pc = self.pop().wrapping_sub({{i.size}});
-  self.set_pc(pc);
+  self.jump(pc);
 {% endmacro %}
 
 {% macro retif(i) %}
   let flg = {{ i.operands[0] | getter(bits=i.bits) }};
+  self.step(4);
   if flg {
     let pc = self.pop();
-    self.set_pc(pc);
+    self.jump(pc);
     return ({{ i.time[0] }}, 0)
   }
 {% endmacro %}
 
 {% macro reti(i) %}
   let pc = self.pop().wrapping_sub({{i.size}});
-  self.set_pc(pc);
+  self.jump(pc);
   self.enable_interrupt();
 {% endmacro %}

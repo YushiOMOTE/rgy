@@ -522,7 +522,7 @@ impl<T: Sys> Cpu<T> {
     /// ld bc,d16
     #[allow(unused_variables)]
     fn op_0001(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get16(self.get_pc().wrapping_add(arg));
+        let v = self.get16(self.get_pc().wrapping_add(arg));
         self.set_bc(v);
 
         (12, 3)
@@ -532,7 +532,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0002(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_a();
-        self.sys.set8(self.get_bc(), v);
+        let x = self.get_bc();
+        self.set8(x, v);
 
         (8, 1)
     }
@@ -542,6 +543,7 @@ impl<T: Sys> Cpu<T> {
     fn op_0003(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_bc().wrapping_add(1);
         self.set_bc(v);
+        self.step(4);
 
         (8, 1)
     }
@@ -575,7 +577,7 @@ impl<T: Sys> Cpu<T> {
     /// ld b,d8
     #[allow(unused_variables)]
     fn op_0006(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_pc().wrapping_add(arg));
+        let v = self.get8(self.get_pc().wrapping_add(arg));
         self.set_b(v);
 
         (8, 2)
@@ -601,8 +603,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0008(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_sp();
-        self.sys
-            .set16(self.sys.get16(self.get_pc().wrapping_add(arg)), v);
+        let x = self.get16(self.get_pc().wrapping_add(arg));
+        self.set16(x, v);
 
         (20, 3)
     }
@@ -614,6 +616,7 @@ impl<T: Sys> Cpu<T> {
         let q = self.get_bc();
         let (v, h, c, z) = alu::add16(p, q, false);
         self.set_hl(v);
+        self.step(4);
 
         self.set_nf(false);
         self.set_hf(h);
@@ -625,7 +628,10 @@ impl<T: Sys> Cpu<T> {
     /// ld a,(bc)
     #[allow(unused_variables)]
     fn op_000a(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_bc());
+        let v = {
+            let x = self.get_bc();
+            self.get8(x)
+        };
         self.set_a(v);
 
         (8, 1)
@@ -636,6 +642,7 @@ impl<T: Sys> Cpu<T> {
     fn op_000b(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_bc().wrapping_sub(1);
         self.set_bc(v);
+        self.step(4);
 
         (8, 1)
     }
@@ -669,7 +676,7 @@ impl<T: Sys> Cpu<T> {
     /// ld c,d8
     #[allow(unused_variables)]
     fn op_000e(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_pc().wrapping_add(arg));
+        let v = self.get8(self.get_pc().wrapping_add(arg));
         self.set_c(v);
 
         (8, 2)
@@ -702,7 +709,7 @@ impl<T: Sys> Cpu<T> {
     /// ld de,d16
     #[allow(unused_variables)]
     fn op_0011(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get16(self.get_pc().wrapping_add(arg));
+        let v = self.get16(self.get_pc().wrapping_add(arg));
         self.set_de(v);
 
         (12, 3)
@@ -712,7 +719,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0012(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_a();
-        self.sys.set8(self.get_de(), v);
+        let x = self.get_de();
+        self.set8(x, v);
 
         (8, 1)
     }
@@ -722,6 +730,7 @@ impl<T: Sys> Cpu<T> {
     fn op_0013(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_de().wrapping_add(1);
         self.set_de(v);
+        self.step(4);
 
         (8, 1)
     }
@@ -755,7 +764,7 @@ impl<T: Sys> Cpu<T> {
     /// ld d,d8
     #[allow(unused_variables)]
     fn op_0016(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_pc().wrapping_add(arg));
+        let v = self.get8(self.get_pc().wrapping_add(arg));
         self.set_d(v);
 
         (8, 2)
@@ -780,9 +789,9 @@ impl<T: Sys> Cpu<T> {
     /// jr r8
     #[allow(unused_variables)]
     fn op_0018(&mut self, arg: u16) -> (usize, usize) {
-        let p = self.sys.get8(self.get_pc().wrapping_add(arg));
+        let p = self.get8(self.get_pc().wrapping_add(arg));
         let pc = self.get_pc().wrapping_add(alu::signed(p));
-        self.set_pc(pc);
+        self.jump(pc);
 
         (12, 2)
     }
@@ -794,6 +803,7 @@ impl<T: Sys> Cpu<T> {
         let q = self.get_de();
         let (v, h, c, z) = alu::add16(p, q, false);
         self.set_hl(v);
+        self.step(4);
 
         self.set_nf(false);
         self.set_hf(h);
@@ -805,7 +815,10 @@ impl<T: Sys> Cpu<T> {
     /// ld a,(de)
     #[allow(unused_variables)]
     fn op_001a(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_de());
+        let v = {
+            let x = self.get_de();
+            self.get8(x)
+        };
         self.set_a(v);
 
         (8, 1)
@@ -816,6 +829,7 @@ impl<T: Sys> Cpu<T> {
     fn op_001b(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_de().wrapping_sub(1);
         self.set_de(v);
+        self.step(4);
 
         (8, 1)
     }
@@ -849,7 +863,7 @@ impl<T: Sys> Cpu<T> {
     /// ld e,d8
     #[allow(unused_variables)]
     fn op_001e(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_pc().wrapping_add(arg));
+        let v = self.get8(self.get_pc().wrapping_add(arg));
         self.set_e(v);
 
         (8, 2)
@@ -875,10 +889,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0020(&mut self, arg: u16) -> (usize, usize) {
         let flg = !self.get_zf();
+        let p = self.get8(self.get_pc().wrapping_add(arg));
         if flg {
-            let p = self.sys.get8(self.get_pc().wrapping_add(arg));
             let pc = self.get_pc().wrapping_add(alu::signed(p));
-            self.set_pc(pc);
+            self.jump(pc);
             return (12, 2);
         }
 
@@ -888,7 +902,7 @@ impl<T: Sys> Cpu<T> {
     /// ld hl,d16
     #[allow(unused_variables)]
     fn op_0021(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get16(self.get_pc().wrapping_add(arg));
+        let v = self.get16(self.get_pc().wrapping_add(arg));
         self.set_hl(v);
 
         (12, 3)
@@ -898,7 +912,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0022(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_a();
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
 
         self.set_hl(self.get_hl().wrapping_add(1));
 
@@ -910,6 +925,7 @@ impl<T: Sys> Cpu<T> {
     fn op_0023(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_hl().wrapping_add(1);
         self.set_hl(v);
+        self.step(4);
 
         (8, 1)
     }
@@ -943,7 +959,7 @@ impl<T: Sys> Cpu<T> {
     /// ld h,d8
     #[allow(unused_variables)]
     fn op_0026(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_pc().wrapping_add(arg));
+        let v = self.get8(self.get_pc().wrapping_add(arg));
         self.set_h(v);
 
         (8, 2)
@@ -984,10 +1000,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0028(&mut self, arg: u16) -> (usize, usize) {
         let flg = self.get_zf();
+        let p = self.get8(self.get_pc().wrapping_add(arg));
         if flg {
-            let p = self.sys.get8(self.get_pc().wrapping_add(arg));
             let pc = self.get_pc().wrapping_add(alu::signed(p));
-            self.set_pc(pc);
+            self.jump(pc);
             return (12, 2);
         }
 
@@ -1001,6 +1017,7 @@ impl<T: Sys> Cpu<T> {
         let q = self.get_hl();
         let (v, h, c, z) = alu::add16(p, q, false);
         self.set_hl(v);
+        self.step(4);
 
         self.set_nf(false);
         self.set_hf(h);
@@ -1012,7 +1029,10 @@ impl<T: Sys> Cpu<T> {
     /// ldi a,(hl)
     #[allow(unused_variables)]
     fn op_002a(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         self.set_a(v);
 
         self.set_hl(self.get_hl().wrapping_add(1));
@@ -1025,6 +1045,7 @@ impl<T: Sys> Cpu<T> {
     fn op_002b(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_hl().wrapping_sub(1);
         self.set_hl(v);
+        self.step(4);
 
         (8, 1)
     }
@@ -1058,7 +1079,7 @@ impl<T: Sys> Cpu<T> {
     /// ld l,d8
     #[allow(unused_variables)]
     fn op_002e(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_pc().wrapping_add(arg));
+        let v = self.get8(self.get_pc().wrapping_add(arg));
         self.set_l(v);
 
         (8, 2)
@@ -1079,10 +1100,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0030(&mut self, arg: u16) -> (usize, usize) {
         let flg = !self.get_cf();
+        let p = self.get8(self.get_pc().wrapping_add(arg));
         if flg {
-            let p = self.sys.get8(self.get_pc().wrapping_add(arg));
             let pc = self.get_pc().wrapping_add(alu::signed(p));
-            self.set_pc(pc);
+            self.jump(pc);
             return (12, 2);
         }
 
@@ -1092,7 +1113,7 @@ impl<T: Sys> Cpu<T> {
     /// ld sp,d16
     #[allow(unused_variables)]
     fn op_0031(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get16(self.get_pc().wrapping_add(arg));
+        let v = self.get16(self.get_pc().wrapping_add(arg));
         self.set_sp(v);
 
         (12, 3)
@@ -1102,7 +1123,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0032(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_a();
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
 
         self.set_hl(self.get_hl().wrapping_sub(1));
 
@@ -1114,6 +1136,7 @@ impl<T: Sys> Cpu<T> {
     fn op_0033(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_sp().wrapping_add(1);
         self.set_sp(v);
+        self.step(4);
 
         (8, 1)
     }
@@ -1121,9 +1144,13 @@ impl<T: Sys> Cpu<T> {
     /// inc (hl)
     #[allow(unused_variables)]
     fn op_0034(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let (v, h, c, z) = alu::add8(v, 1, false);
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
         self.set_zf(z);
         self.set_nf(false);
         self.set_hf(h);
@@ -1134,9 +1161,13 @@ impl<T: Sys> Cpu<T> {
     /// dec (hl)
     #[allow(unused_variables)]
     fn op_0035(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let (v, h, c, z) = alu::sub8(v, 1, false);
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
         self.set_zf(z);
         self.set_nf(true);
         self.set_hf(h);
@@ -1147,8 +1178,9 @@ impl<T: Sys> Cpu<T> {
     /// ld (hl),d8
     #[allow(unused_variables)]
     fn op_0036(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_pc().wrapping_add(arg));
-        self.sys.set8(self.get_hl(), v);
+        let v = self.get8(self.get_pc().wrapping_add(arg));
+        let x = self.get_hl();
+        self.set8(x, v);
 
         (12, 2)
     }
@@ -1169,10 +1201,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0038(&mut self, arg: u16) -> (usize, usize) {
         let flg = self.get_cf();
+        let p = self.get8(self.get_pc().wrapping_add(arg));
         if flg {
-            let p = self.sys.get8(self.get_pc().wrapping_add(arg));
             let pc = self.get_pc().wrapping_add(alu::signed(p));
-            self.set_pc(pc);
+            self.jump(pc);
             return (12, 2);
         }
 
@@ -1186,6 +1218,7 @@ impl<T: Sys> Cpu<T> {
         let q = self.get_sp();
         let (v, h, c, z) = alu::add16(p, q, false);
         self.set_hl(v);
+        self.step(4);
 
         self.set_nf(false);
         self.set_hf(h);
@@ -1197,7 +1230,10 @@ impl<T: Sys> Cpu<T> {
     /// ldd a,(hl)
     #[allow(unused_variables)]
     fn op_003a(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         self.set_a(v);
 
         self.set_hl(self.get_hl().wrapping_sub(1));
@@ -1210,6 +1246,7 @@ impl<T: Sys> Cpu<T> {
     fn op_003b(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_sp().wrapping_sub(1);
         self.set_sp(v);
+        self.step(4);
 
         (8, 1)
     }
@@ -1243,7 +1280,7 @@ impl<T: Sys> Cpu<T> {
     /// ld a,d8
     #[allow(unused_variables)]
     fn op_003e(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_pc().wrapping_add(arg));
+        let v = self.get8(self.get_pc().wrapping_add(arg));
         self.set_a(v);
 
         (8, 2)
@@ -1318,7 +1355,10 @@ impl<T: Sys> Cpu<T> {
     /// ld b,(hl)
     #[allow(unused_variables)]
     fn op_0046(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         self.set_b(v);
 
         (8, 1)
@@ -1390,7 +1430,10 @@ impl<T: Sys> Cpu<T> {
     /// ld c,(hl)
     #[allow(unused_variables)]
     fn op_004e(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         self.set_c(v);
 
         (8, 1)
@@ -1462,7 +1505,10 @@ impl<T: Sys> Cpu<T> {
     /// ld d,(hl)
     #[allow(unused_variables)]
     fn op_0056(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         self.set_d(v);
 
         (8, 1)
@@ -1534,7 +1580,10 @@ impl<T: Sys> Cpu<T> {
     /// ld e,(hl)
     #[allow(unused_variables)]
     fn op_005e(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         self.set_e(v);
 
         (8, 1)
@@ -1606,7 +1655,10 @@ impl<T: Sys> Cpu<T> {
     /// ld h,(hl)
     #[allow(unused_variables)]
     fn op_0066(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         self.set_h(v);
 
         (8, 1)
@@ -1678,7 +1730,10 @@ impl<T: Sys> Cpu<T> {
     /// ld l,(hl)
     #[allow(unused_variables)]
     fn op_006e(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         self.set_l(v);
 
         (8, 1)
@@ -1697,7 +1752,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0070(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_b();
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
 
         (8, 1)
     }
@@ -1706,7 +1762,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0071(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_c();
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
 
         (8, 1)
     }
@@ -1715,7 +1772,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0072(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_d();
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
 
         (8, 1)
     }
@@ -1724,7 +1782,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0073(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_e();
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
 
         (8, 1)
     }
@@ -1733,7 +1792,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0074(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_h();
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
 
         (8, 1)
     }
@@ -1742,7 +1802,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0075(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_l();
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
 
         (8, 1)
     }
@@ -1759,7 +1820,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0077(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_a();
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
 
         (8, 1)
     }
@@ -1821,7 +1883,10 @@ impl<T: Sys> Cpu<T> {
     /// ld a,(hl)
     #[allow(unused_variables)]
     fn op_007e(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         self.set_a(v);
 
         (8, 1)
@@ -1930,7 +1995,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0086(&mut self, arg: u16) -> (usize, usize) {
         let p = self.get_a();
-        let q = self.sys.get8(self.get_hl());
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let (v, h, c, z) = alu::add8(p, q, false);
         self.set_a(v);
         self.set_zf(z);
@@ -2050,7 +2118,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_008e(&mut self, arg: u16) -> (usize, usize) {
         let p = self.get_a();
-        let q = self.sys.get8(self.get_hl());
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let (v, h, c, z) = alu::add8(p, q, self.get_cf());
         self.set_a(v);
         self.set_zf(z);
@@ -2170,7 +2241,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_0096(&mut self, arg: u16) -> (usize, usize) {
         let p = self.get_a();
-        let q = self.sys.get8(self.get_hl());
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let (v, h, c, z) = alu::sub8(p, q, false);
         self.set_a(v);
         self.set_zf(z);
@@ -2290,7 +2364,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_009e(&mut self, arg: u16) -> (usize, usize) {
         let p = self.get_a();
-        let q = self.sys.get8(self.get_hl());
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let (v, h, c, z) = alu::sub8(p, q, self.get_cf());
         self.set_a(v);
         self.set_zf(z);
@@ -2319,7 +2396,8 @@ impl<T: Sys> Cpu<T> {
     /// and b
     #[allow(unused_variables)]
     fn op_00a0(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() & self.get_b());
+        let v = self.get_a() & self.get_b();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2332,7 +2410,8 @@ impl<T: Sys> Cpu<T> {
     /// and c
     #[allow(unused_variables)]
     fn op_00a1(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() & self.get_c());
+        let v = self.get_a() & self.get_c();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2345,7 +2424,8 @@ impl<T: Sys> Cpu<T> {
     /// and d
     #[allow(unused_variables)]
     fn op_00a2(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() & self.get_d());
+        let v = self.get_a() & self.get_d();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2358,7 +2438,8 @@ impl<T: Sys> Cpu<T> {
     /// and e
     #[allow(unused_variables)]
     fn op_00a3(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() & self.get_e());
+        let v = self.get_a() & self.get_e();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2371,7 +2452,8 @@ impl<T: Sys> Cpu<T> {
     /// and h
     #[allow(unused_variables)]
     fn op_00a4(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() & self.get_h());
+        let v = self.get_a() & self.get_h();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2384,7 +2466,8 @@ impl<T: Sys> Cpu<T> {
     /// and l
     #[allow(unused_variables)]
     fn op_00a5(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() & self.get_l());
+        let v = self.get_a() & self.get_l();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2397,7 +2480,11 @@ impl<T: Sys> Cpu<T> {
     /// and (hl)
     #[allow(unused_variables)]
     fn op_00a6(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() & self.sys.get8(self.get_hl()));
+        let v = self.get_a() & {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2410,7 +2497,8 @@ impl<T: Sys> Cpu<T> {
     /// and a
     #[allow(unused_variables)]
     fn op_00a7(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() & self.get_a());
+        let v = self.get_a() & self.get_a();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2423,7 +2511,8 @@ impl<T: Sys> Cpu<T> {
     /// xor b
     #[allow(unused_variables)]
     fn op_00a8(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() ^ self.get_b());
+        let v = self.get_a() ^ self.get_b();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2436,7 +2525,8 @@ impl<T: Sys> Cpu<T> {
     /// xor c
     #[allow(unused_variables)]
     fn op_00a9(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() ^ self.get_c());
+        let v = self.get_a() ^ self.get_c();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2449,7 +2539,8 @@ impl<T: Sys> Cpu<T> {
     /// xor d
     #[allow(unused_variables)]
     fn op_00aa(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() ^ self.get_d());
+        let v = self.get_a() ^ self.get_d();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2462,7 +2553,8 @@ impl<T: Sys> Cpu<T> {
     /// xor e
     #[allow(unused_variables)]
     fn op_00ab(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() ^ self.get_e());
+        let v = self.get_a() ^ self.get_e();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2475,7 +2567,8 @@ impl<T: Sys> Cpu<T> {
     /// xor h
     #[allow(unused_variables)]
     fn op_00ac(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() ^ self.get_h());
+        let v = self.get_a() ^ self.get_h();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2488,7 +2581,8 @@ impl<T: Sys> Cpu<T> {
     /// xor l
     #[allow(unused_variables)]
     fn op_00ad(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() ^ self.get_l());
+        let v = self.get_a() ^ self.get_l();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2501,7 +2595,11 @@ impl<T: Sys> Cpu<T> {
     /// xor (hl)
     #[allow(unused_variables)]
     fn op_00ae(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() ^ self.sys.get8(self.get_hl()));
+        let v = self.get_a() ^ {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2514,7 +2612,8 @@ impl<T: Sys> Cpu<T> {
     /// xor a
     #[allow(unused_variables)]
     fn op_00af(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() ^ self.get_a());
+        let v = self.get_a() ^ self.get_a();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2527,7 +2626,8 @@ impl<T: Sys> Cpu<T> {
     /// or b
     #[allow(unused_variables)]
     fn op_00b0(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() | self.get_b());
+        let v = self.get_a() | self.get_b();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2540,7 +2640,8 @@ impl<T: Sys> Cpu<T> {
     /// or c
     #[allow(unused_variables)]
     fn op_00b1(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() | self.get_c());
+        let v = self.get_a() | self.get_c();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2553,7 +2654,8 @@ impl<T: Sys> Cpu<T> {
     /// or d
     #[allow(unused_variables)]
     fn op_00b2(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() | self.get_d());
+        let v = self.get_a() | self.get_d();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2566,7 +2668,8 @@ impl<T: Sys> Cpu<T> {
     /// or e
     #[allow(unused_variables)]
     fn op_00b3(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() | self.get_e());
+        let v = self.get_a() | self.get_e();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2579,7 +2682,8 @@ impl<T: Sys> Cpu<T> {
     /// or h
     #[allow(unused_variables)]
     fn op_00b4(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() | self.get_h());
+        let v = self.get_a() | self.get_h();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2592,7 +2696,8 @@ impl<T: Sys> Cpu<T> {
     /// or l
     #[allow(unused_variables)]
     fn op_00b5(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() | self.get_l());
+        let v = self.get_a() | self.get_l();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2605,7 +2710,11 @@ impl<T: Sys> Cpu<T> {
     /// or (hl)
     #[allow(unused_variables)]
     fn op_00b6(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() | self.sys.get8(self.get_hl()));
+        let v = self.get_a() | {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2618,7 +2727,8 @@ impl<T: Sys> Cpu<T> {
     /// or a
     #[allow(unused_variables)]
     fn op_00b7(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() | self.get_a());
+        let v = self.get_a() | self.get_a();
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -2716,7 +2826,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00be(&mut self, arg: u16) -> (usize, usize) {
         let p = self.get_a();
-        let q = self.sys.get8(self.get_hl());
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let (_, h, c, z) = alu::sub8(p, q, false);
         self.set_zf(z);
         self.set_nf(true);
@@ -2744,9 +2857,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00c0(&mut self, arg: u16) -> (usize, usize) {
         let flg = !self.get_zf();
+        self.step(4);
         if flg {
             let pc = self.pop();
-            self.set_pc(pc);
+            self.jump(pc);
             return (20, 0);
         }
 
@@ -2766,9 +2880,9 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00c2(&mut self, arg: u16) -> (usize, usize) {
         let flg = !self.get_zf();
+        let pc = self.get16(self.get_pc().wrapping_add(arg));
         if flg {
-            let pc = self.sys.get16(self.get_pc().wrapping_add(arg));
-            self.set_pc(pc);
+            self.jump(pc);
             return (16, 0);
         }
 
@@ -2778,8 +2892,9 @@ impl<T: Sys> Cpu<T> {
     /// jp a16
     #[allow(unused_variables)]
     fn op_00c3(&mut self, arg: u16) -> (usize, usize) {
-        let pc = self.sys.get16(self.get_pc().wrapping_add(arg));
-        self.set_pc(pc.wrapping_sub(3));
+        let pc = self.get16(self.get_pc().wrapping_add(arg));
+
+        self.jump(pc.wrapping_sub(3));
 
         (16, 3)
     }
@@ -2788,9 +2903,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00c4(&mut self, arg: u16) -> (usize, usize) {
         let flg = !self.get_zf();
+        let pc = self.get16(self.get_pc().wrapping_add(arg));
         if flg {
             self.push(self.get_pc().wrapping_add(3));
-            self.set_pc(self.sys.get16(self.get_pc().wrapping_add(arg)));
+            self.jump(pc);
             return (24, 0);
         }
 
@@ -2801,6 +2917,7 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00c5(&mut self, arg: u16) -> (usize, usize) {
         self.push(self.get_bc());
+        self.step(4);
 
         (16, 1)
     }
@@ -2809,7 +2926,7 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00c6(&mut self, arg: u16) -> (usize, usize) {
         let p = self.get_a();
-        let q = self.sys.get8(self.get_pc().wrapping_add(arg));
+        let q = self.get8(self.get_pc().wrapping_add(arg));
         let (v, h, c, z) = alu::add8(p, q, false);
         self.set_a(v);
         self.set_zf(z);
@@ -2824,7 +2941,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00c7(&mut self, arg: u16) -> (usize, usize) {
         self.push(self.get_pc().wrapping_add(1));
-        self.set_pc(0x00u16.wrapping_sub(1));
+        let pc = 0x00u16.wrapping_sub(1);
+        self.jump(pc);
 
         (16, 1)
     }
@@ -2833,9 +2951,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00c8(&mut self, arg: u16) -> (usize, usize) {
         let flg = self.get_zf();
+        self.step(4);
         if flg {
             let pc = self.pop();
-            self.set_pc(pc);
+            self.jump(pc);
             return (20, 0);
         }
 
@@ -2846,7 +2965,7 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00c9(&mut self, arg: u16) -> (usize, usize) {
         let pc = self.pop().wrapping_sub(1);
-        self.set_pc(pc);
+        self.jump(pc);
 
         (16, 1)
     }
@@ -2855,9 +2974,9 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00ca(&mut self, arg: u16) -> (usize, usize) {
         let flg = self.get_zf();
+        let pc = self.get16(self.get_pc().wrapping_add(arg));
         if flg {
-            let pc = self.sys.get16(self.get_pc().wrapping_add(arg));
-            self.set_pc(pc);
+            self.jump(pc);
             return (16, 0);
         }
 
@@ -2874,9 +2993,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00cc(&mut self, arg: u16) -> (usize, usize) {
         let flg = self.get_zf();
+        let pc = self.get16(self.get_pc().wrapping_add(arg));
         if flg {
             self.push(self.get_pc().wrapping_add(3));
-            self.set_pc(self.sys.get16(self.get_pc().wrapping_add(arg)));
+            self.jump(pc);
             return (24, 0);
         }
 
@@ -2887,11 +3007,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00cd(&mut self, arg: u16) -> (usize, usize) {
         self.push(self.get_pc().wrapping_add(3));
-        self.set_pc(
-            self.sys
-                .get16(self.get_pc().wrapping_add(arg))
-                .wrapping_sub(3),
-        );
+        let pc = self.get16(self.get_pc().wrapping_add(arg)).wrapping_sub(3);
+        self.jump(pc);
 
         (24, 3)
     }
@@ -2900,7 +3017,7 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00ce(&mut self, arg: u16) -> (usize, usize) {
         let p = self.get_a();
-        let q = self.sys.get8(self.get_pc().wrapping_add(arg));
+        let q = self.get8(self.get_pc().wrapping_add(arg));
         let (v, h, c, z) = alu::add8(p, q, self.get_cf());
         self.set_a(v);
         self.set_zf(z);
@@ -2915,7 +3032,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00cf(&mut self, arg: u16) -> (usize, usize) {
         self.push(self.get_pc().wrapping_add(1));
-        self.set_pc(0x08u16.wrapping_sub(1));
+        let pc = 0x08u16.wrapping_sub(1);
+        self.jump(pc);
 
         (16, 1)
     }
@@ -2924,9 +3042,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00d0(&mut self, arg: u16) -> (usize, usize) {
         let flg = !self.get_cf();
+        self.step(4);
         if flg {
             let pc = self.pop();
-            self.set_pc(pc);
+            self.jump(pc);
             return (20, 0);
         }
 
@@ -2946,9 +3065,9 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00d2(&mut self, arg: u16) -> (usize, usize) {
         let flg = !self.get_cf();
+        let pc = self.get16(self.get_pc().wrapping_add(arg));
         if flg {
-            let pc = self.sys.get16(self.get_pc().wrapping_add(arg));
-            self.set_pc(pc);
+            self.jump(pc);
             return (16, 0);
         }
 
@@ -2959,9 +3078,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00d4(&mut self, arg: u16) -> (usize, usize) {
         let flg = !self.get_cf();
+        let pc = self.get16(self.get_pc().wrapping_add(arg));
         if flg {
             self.push(self.get_pc().wrapping_add(3));
-            self.set_pc(self.sys.get16(self.get_pc().wrapping_add(arg)));
+            self.jump(pc);
             return (24, 0);
         }
 
@@ -2972,6 +3092,7 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00d5(&mut self, arg: u16) -> (usize, usize) {
         self.push(self.get_de());
+        self.step(4);
 
         (16, 1)
     }
@@ -2980,7 +3101,7 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00d6(&mut self, arg: u16) -> (usize, usize) {
         let p = self.get_a();
-        let q = self.sys.get8(self.get_pc().wrapping_add(arg));
+        let q = self.get8(self.get_pc().wrapping_add(arg));
         let (v, h, c, z) = alu::sub8(p, q, false);
         self.set_a(v);
         self.set_zf(z);
@@ -2995,7 +3116,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00d7(&mut self, arg: u16) -> (usize, usize) {
         self.push(self.get_pc().wrapping_add(1));
-        self.set_pc(0x10u16.wrapping_sub(1));
+        let pc = 0x10u16.wrapping_sub(1);
+        self.jump(pc);
 
         (16, 1)
     }
@@ -3004,9 +3126,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00d8(&mut self, arg: u16) -> (usize, usize) {
         let flg = self.get_cf();
+        self.step(4);
         if flg {
             let pc = self.pop();
-            self.set_pc(pc);
+            self.jump(pc);
             return (20, 0);
         }
 
@@ -3017,7 +3140,7 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00d9(&mut self, arg: u16) -> (usize, usize) {
         let pc = self.pop().wrapping_sub(1);
-        self.set_pc(pc);
+        self.jump(pc);
         self.enable_interrupt();
 
         (16, 1)
@@ -3027,9 +3150,9 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00da(&mut self, arg: u16) -> (usize, usize) {
         let flg = self.get_cf();
+        let pc = self.get16(self.get_pc().wrapping_add(arg));
         if flg {
-            let pc = self.sys.get16(self.get_pc().wrapping_add(arg));
-            self.set_pc(pc);
+            self.jump(pc);
             return (16, 0);
         }
 
@@ -3040,9 +3163,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00dc(&mut self, arg: u16) -> (usize, usize) {
         let flg = self.get_cf();
+        let pc = self.get16(self.get_pc().wrapping_add(arg));
         if flg {
             self.push(self.get_pc().wrapping_add(3));
-            self.set_pc(self.sys.get16(self.get_pc().wrapping_add(arg)));
+            self.jump(pc);
             return (24, 0);
         }
 
@@ -3053,7 +3177,7 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00de(&mut self, arg: u16) -> (usize, usize) {
         let p = self.get_a();
-        let q = self.sys.get8(self.get_pc().wrapping_add(arg));
+        let q = self.get8(self.get_pc().wrapping_add(arg));
         let (v, h, c, z) = alu::sub8(p, q, self.get_cf());
         self.set_a(v);
         self.set_zf(z);
@@ -3068,7 +3192,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00df(&mut self, arg: u16) -> (usize, usize) {
         self.push(self.get_pc().wrapping_add(1));
-        self.set_pc(0x18u16.wrapping_sub(1));
+        let pc = 0x18u16.wrapping_sub(1);
+        self.jump(pc);
 
         (16, 1)
     }
@@ -3077,10 +3202,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00e0(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_a();
-        self.sys.set8(
-            0xff00 + self.sys.get8(self.get_pc().wrapping_add(arg)) as u16,
-            v,
-        );
+        let x = 0xff00 + self.get8(self.get_pc().wrapping_add(arg)) as u16;
+        self.set8(x, v);
 
         (12, 2)
     }
@@ -3098,7 +3221,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00e2(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_a();
-        self.sys.set8(0xff00 + self.get_c() as u16, v);
+        let x = 0xff00 + self.get_c() as u16;
+        self.set8(x, v);
 
         (8, 1)
     }
@@ -3107,6 +3231,7 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00e5(&mut self, arg: u16) -> (usize, usize) {
         self.push(self.get_hl());
+        self.step(4);
 
         (16, 1)
     }
@@ -3114,7 +3239,8 @@ impl<T: Sys> Cpu<T> {
     /// and d8
     #[allow(unused_variables)]
     fn op_00e6(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() & self.sys.get8(self.get_pc().wrapping_add(arg)));
+        let v = self.get_a() & self.get8(self.get_pc().wrapping_add(arg));
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -3128,7 +3254,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00e7(&mut self, arg: u16) -> (usize, usize) {
         self.push(self.get_pc().wrapping_add(1));
-        self.set_pc(0x20u16.wrapping_sub(1));
+        let pc = 0x20u16.wrapping_sub(1);
+        self.jump(pc);
 
         (16, 1)
     }
@@ -3137,9 +3264,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00e8(&mut self, arg: u16) -> (usize, usize) {
         let p = self.get_sp();
-        let q = self.sys.get8(self.get_pc().wrapping_add(arg));
+        let q = self.get8(self.get_pc().wrapping_add(arg));
         let (v, h, c, z) = alu::add16e(p, q, false);
         self.set_sp(v);
+        self.step(8);
         self.set_zf(false);
         self.set_nf(false);
         self.set_hf(h);
@@ -3152,6 +3280,7 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00e9(&mut self, arg: u16) -> (usize, usize) {
         let pc = self.get_hl();
+
         self.set_pc(pc.wrapping_sub(1));
 
         (4, 1)
@@ -3161,8 +3290,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00ea(&mut self, arg: u16) -> (usize, usize) {
         let v = self.get_a();
-        self.sys
-            .set8(self.sys.get16(self.get_pc().wrapping_add(arg)), v);
+        let x = self.get16(self.get_pc().wrapping_add(arg));
+        self.set8(x, v);
 
         (16, 3)
     }
@@ -3170,7 +3299,8 @@ impl<T: Sys> Cpu<T> {
     /// xor d8
     #[allow(unused_variables)]
     fn op_00ee(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() ^ self.sys.get8(self.get_pc().wrapping_add(arg)));
+        let v = self.get_a() ^ self.get8(self.get_pc().wrapping_add(arg));
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -3184,7 +3314,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00ef(&mut self, arg: u16) -> (usize, usize) {
         self.push(self.get_pc().wrapping_add(1));
-        self.set_pc(0x28u16.wrapping_sub(1));
+        let pc = 0x28u16.wrapping_sub(1);
+        self.jump(pc);
 
         (16, 1)
     }
@@ -3192,9 +3323,10 @@ impl<T: Sys> Cpu<T> {
     /// ld a,(0xff00+a8)
     #[allow(unused_variables)]
     fn op_00f0(&mut self, arg: u16) -> (usize, usize) {
-        let v = self
-            .sys
-            .get8(0xff00 + self.sys.get8(self.get_pc().wrapping_add(arg)) as u16);
+        let v = {
+            let x = 0xff00 + self.get8(self.get_pc().wrapping_add(arg)) as u16;
+            self.get8(x)
+        };
         self.set_a(v);
 
         (12, 2)
@@ -3212,7 +3344,10 @@ impl<T: Sys> Cpu<T> {
     /// ld a,(0xff00+c)
     #[allow(unused_variables)]
     fn op_00f2(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(0xff00 + self.get_c() as u16);
+        let v = {
+            let x = 0xff00 + self.get_c() as u16;
+            self.get8(x)
+        };
         self.set_a(v);
 
         (8, 1)
@@ -3230,6 +3365,7 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00f5(&mut self, arg: u16) -> (usize, usize) {
         self.push(self.get_af());
+        self.step(4);
 
         (16, 1)
     }
@@ -3237,7 +3373,8 @@ impl<T: Sys> Cpu<T> {
     /// or d8
     #[allow(unused_variables)]
     fn op_00f6(&mut self, arg: u16) -> (usize, usize) {
-        self.set_a(self.get_a() | self.sys.get8(self.get_pc().wrapping_add(arg)));
+        let v = self.get_a() | self.get8(self.get_pc().wrapping_add(arg));
+        self.set_a(v);
         let z = self.get_a() == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -3251,7 +3388,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00f7(&mut self, arg: u16) -> (usize, usize) {
         self.push(self.get_pc().wrapping_add(1));
-        self.set_pc(0x30u16.wrapping_sub(1));
+        let pc = 0x30u16.wrapping_sub(1);
+        self.jump(pc);
 
         (16, 1)
     }
@@ -3260,9 +3398,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00f8(&mut self, arg: u16) -> (usize, usize) {
         let p = self.get_sp();
-        let q = self.sys.get8(self.get_pc().wrapping_add(arg));
+        let q = self.get8(self.get_pc().wrapping_add(arg));
         let (v, h, c, z) = alu::add16e(p, q, false);
         self.set_hl(v);
+        self.step(4);
         self.set_zf(false);
         self.set_nf(false);
         self.set_hf(h);
@@ -3277,15 +3416,18 @@ impl<T: Sys> Cpu<T> {
         let v = self.get_hl();
         self.set_sp(v);
 
+        self.step(4);
+
         (8, 1)
     }
 
     /// ld a,(a16)
     #[allow(unused_variables)]
     fn op_00fa(&mut self, arg: u16) -> (usize, usize) {
-        let v = self
-            .sys
-            .get8(self.sys.get16(self.get_pc().wrapping_add(arg)));
+        let v = {
+            let x = self.get16(self.get_pc().wrapping_add(arg));
+            self.get8(x)
+        };
         self.set_a(v);
 
         (16, 3)
@@ -3303,7 +3445,7 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00fe(&mut self, arg: u16) -> (usize, usize) {
         let p = self.get_a();
-        let q = self.sys.get8(self.get_pc().wrapping_add(arg));
+        let q = self.get8(self.get_pc().wrapping_add(arg));
         let (_, h, c, z) = alu::sub8(p, q, false);
         self.set_zf(z);
         self.set_nf(true);
@@ -3317,7 +3459,8 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_00ff(&mut self, arg: u16) -> (usize, usize) {
         self.push(self.get_pc().wrapping_add(1));
-        self.set_pc(0x38u16.wrapping_sub(1));
+        let pc = 0x38u16.wrapping_sub(1);
+        self.jump(pc);
 
         (16, 1)
     }
@@ -3421,11 +3564,15 @@ impl<T: Sys> Cpu<T> {
     /// rlc (hl)
     #[allow(unused_variables)]
     fn op_cb06(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let c = v & 0x80 != 0;
         let v = v.rotate_left(1);
         let z = v == 0;
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
         self.set_zf(z);
         self.set_nf(false);
         self.set_hf(false);
@@ -3549,11 +3696,15 @@ impl<T: Sys> Cpu<T> {
     /// rrc (hl)
     #[allow(unused_variables)]
     fn op_cb0e(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let c = v & 1 != 0;
         let v = v.rotate_right(1);
         let z = v == 0;
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
         self.set_zf(z);
         self.set_nf(false);
         self.set_hf(false);
@@ -3683,12 +3834,16 @@ impl<T: Sys> Cpu<T> {
     /// rl (hl)
     #[allow(unused_variables)]
     fn op_cb16(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let c = v & 0x80 != 0;
         let v = v.wrapping_shl(1);
         let v = v | if self.get_cf() { 1 } else { 0 };
         let z = v == 0;
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
         self.set_zf(z);
         self.set_nf(false);
         self.set_hf(false);
@@ -3819,12 +3974,16 @@ impl<T: Sys> Cpu<T> {
     /// rr (hl)
     #[allow(unused_variables)]
     fn op_cb1e(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let c = v & 1 != 0;
         let v = v.wrapping_shr(1);
         let v = v | if self.get_cf() { 0x80 } else { 0 };
         let z = v == 0;
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
         self.set_zf(z);
         self.set_nf(false);
         self.set_hf(false);
@@ -3949,11 +4108,15 @@ impl<T: Sys> Cpu<T> {
     /// sla (hl)
     #[allow(unused_variables)]
     fn op_cb26(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let c = v & 0x80 != 0;
         let v = v.wrapping_shl(1);
         let z = v == 0;
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
         self.set_zf(z);
         self.set_nf(false);
         self.set_hf(false);
@@ -4089,13 +4252,17 @@ impl<T: Sys> Cpu<T> {
     /// sra (hl)
     #[allow(unused_variables)]
     fn op_cb2e(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let c = v & 1 != 0;
         let msb = v & 0x80;
         let v = v.wrapping_shr(1);
         let v = v | msb;
         let z = v == 0;
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
         self.set_zf(z);
         self.set_nf(false);
         self.set_hf(false);
@@ -4215,9 +4382,13 @@ impl<T: Sys> Cpu<T> {
     /// swap (hl)
     #[allow(unused_variables)]
     fn op_cb36(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let v = v.rotate_left(4);
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
         let z = v == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -4341,11 +4512,15 @@ impl<T: Sys> Cpu<T> {
     /// srl (hl)
     #[allow(unused_variables)]
     fn op_cb3e(&mut self, arg: u16) -> (usize, usize) {
-        let v = self.sys.get8(self.get_hl());
+        let v = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let c = v & 1 != 0;
         let v = v.wrapping_shr(1);
         let z = v == 0;
-        self.sys.set8(self.get_hl(), v);
+        let x = self.get_hl();
+        self.set8(x, v);
         self.set_zf(z);
         self.set_nf(false);
         self.set_hf(false);
@@ -4452,7 +4627,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cb46(&mut self, arg: u16) -> (usize, usize) {
         let p = 0;
-        let q = self.sys.get8(self.get_hl());
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let z = q & (1 << p) == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -4556,7 +4734,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cb4e(&mut self, arg: u16) -> (usize, usize) {
         let p = 1;
-        let q = self.sys.get8(self.get_hl());
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let z = q & (1 << p) == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -4660,7 +4841,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cb56(&mut self, arg: u16) -> (usize, usize) {
         let p = 2;
-        let q = self.sys.get8(self.get_hl());
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let z = q & (1 << p) == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -4764,7 +4948,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cb5e(&mut self, arg: u16) -> (usize, usize) {
         let p = 3;
-        let q = self.sys.get8(self.get_hl());
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let z = q & (1 << p) == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -4868,7 +5055,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cb66(&mut self, arg: u16) -> (usize, usize) {
         let p = 4;
-        let q = self.sys.get8(self.get_hl());
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let z = q & (1 << p) == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -4972,7 +5162,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cb6e(&mut self, arg: u16) -> (usize, usize) {
         let p = 5;
-        let q = self.sys.get8(self.get_hl());
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let z = q & (1 << p) == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -5076,7 +5269,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cb76(&mut self, arg: u16) -> (usize, usize) {
         let p = 6;
-        let q = self.sys.get8(self.get_hl());
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let z = q & (1 << p) == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -5180,7 +5376,10 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cb7e(&mut self, arg: u16) -> (usize, usize) {
         let p = 7;
-        let q = self.sys.get8(self.get_hl());
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
         let z = q & (1 << p) == 0;
         self.set_zf(z);
         self.set_nf(false);
@@ -5266,8 +5465,12 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cb86(&mut self, arg: u16) -> (usize, usize) {
         let p = 0;
-        let q = self.sys.get8(self.get_hl());
-        self.sys.set8(self.get_hl(), q & !(1 << p));
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        let x = self.get_hl();
+        self.set8(x, q & !(1 << p));
 
         (16, 2)
     }
@@ -5346,8 +5549,12 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cb8e(&mut self, arg: u16) -> (usize, usize) {
         let p = 1;
-        let q = self.sys.get8(self.get_hl());
-        self.sys.set8(self.get_hl(), q & !(1 << p));
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        let x = self.get_hl();
+        self.set8(x, q & !(1 << p));
 
         (16, 2)
     }
@@ -5426,8 +5633,12 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cb96(&mut self, arg: u16) -> (usize, usize) {
         let p = 2;
-        let q = self.sys.get8(self.get_hl());
-        self.sys.set8(self.get_hl(), q & !(1 << p));
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        let x = self.get_hl();
+        self.set8(x, q & !(1 << p));
 
         (16, 2)
     }
@@ -5506,8 +5717,12 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cb9e(&mut self, arg: u16) -> (usize, usize) {
         let p = 3;
-        let q = self.sys.get8(self.get_hl());
-        self.sys.set8(self.get_hl(), q & !(1 << p));
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        let x = self.get_hl();
+        self.set8(x, q & !(1 << p));
 
         (16, 2)
     }
@@ -5586,8 +5801,12 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cba6(&mut self, arg: u16) -> (usize, usize) {
         let p = 4;
-        let q = self.sys.get8(self.get_hl());
-        self.sys.set8(self.get_hl(), q & !(1 << p));
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        let x = self.get_hl();
+        self.set8(x, q & !(1 << p));
 
         (16, 2)
     }
@@ -5666,8 +5885,12 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cbae(&mut self, arg: u16) -> (usize, usize) {
         let p = 5;
-        let q = self.sys.get8(self.get_hl());
-        self.sys.set8(self.get_hl(), q & !(1 << p));
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        let x = self.get_hl();
+        self.set8(x, q & !(1 << p));
 
         (16, 2)
     }
@@ -5746,8 +5969,12 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cbb6(&mut self, arg: u16) -> (usize, usize) {
         let p = 6;
-        let q = self.sys.get8(self.get_hl());
-        self.sys.set8(self.get_hl(), q & !(1 << p));
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        let x = self.get_hl();
+        self.set8(x, q & !(1 << p));
 
         (16, 2)
     }
@@ -5826,8 +6053,12 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cbbe(&mut self, arg: u16) -> (usize, usize) {
         let p = 7;
-        let q = self.sys.get8(self.get_hl());
-        self.sys.set8(self.get_hl(), q & !(1 << p));
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        let x = self.get_hl();
+        self.set8(x, q & !(1 << p));
 
         (16, 2)
     }
@@ -5906,8 +6137,12 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cbc6(&mut self, arg: u16) -> (usize, usize) {
         let p = 0;
-        let q = self.sys.get8(self.get_hl());
-        self.sys.set8(self.get_hl(), q | (1 << p));
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        let x = self.get_hl();
+        self.set8(x, q | (1 << p));
 
         (16, 2)
     }
@@ -5986,8 +6221,12 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cbce(&mut self, arg: u16) -> (usize, usize) {
         let p = 1;
-        let q = self.sys.get8(self.get_hl());
-        self.sys.set8(self.get_hl(), q | (1 << p));
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        let x = self.get_hl();
+        self.set8(x, q | (1 << p));
 
         (16, 2)
     }
@@ -6066,8 +6305,12 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cbd6(&mut self, arg: u16) -> (usize, usize) {
         let p = 2;
-        let q = self.sys.get8(self.get_hl());
-        self.sys.set8(self.get_hl(), q | (1 << p));
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        let x = self.get_hl();
+        self.set8(x, q | (1 << p));
 
         (16, 2)
     }
@@ -6146,8 +6389,12 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cbde(&mut self, arg: u16) -> (usize, usize) {
         let p = 3;
-        let q = self.sys.get8(self.get_hl());
-        self.sys.set8(self.get_hl(), q | (1 << p));
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        let x = self.get_hl();
+        self.set8(x, q | (1 << p));
 
         (16, 2)
     }
@@ -6226,8 +6473,12 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cbe6(&mut self, arg: u16) -> (usize, usize) {
         let p = 4;
-        let q = self.sys.get8(self.get_hl());
-        self.sys.set8(self.get_hl(), q | (1 << p));
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        let x = self.get_hl();
+        self.set8(x, q | (1 << p));
 
         (16, 2)
     }
@@ -6306,8 +6557,12 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cbee(&mut self, arg: u16) -> (usize, usize) {
         let p = 5;
-        let q = self.sys.get8(self.get_hl());
-        self.sys.set8(self.get_hl(), q | (1 << p));
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        let x = self.get_hl();
+        self.set8(x, q | (1 << p));
 
         (16, 2)
     }
@@ -6386,8 +6641,12 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cbf6(&mut self, arg: u16) -> (usize, usize) {
         let p = 6;
-        let q = self.sys.get8(self.get_hl());
-        self.sys.set8(self.get_hl(), q | (1 << p));
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        let x = self.get_hl();
+        self.set8(x, q | (1 << p));
 
         (16, 2)
     }
@@ -6466,8 +6725,12 @@ impl<T: Sys> Cpu<T> {
     #[allow(unused_variables)]
     fn op_cbfe(&mut self, arg: u16) -> (usize, usize) {
         let p = 7;
-        let q = self.sys.get8(self.get_hl());
-        self.sys.set8(self.get_hl(), q | (1 << p));
+        let q = {
+            let x = self.get_hl();
+            self.get8(x)
+        };
+        let x = self.get_hl();
+        self.set8(x, q | (1 << p));
 
         (16, 2)
     }
@@ -6490,11 +6753,11 @@ pub fn mnem(code: u16) -> &'static str {
 
 /// Decodes the opecode and actually executes one instruction.
 impl<T: Sys> Cpu<T> {
-    /// Execute the instruction returning the consumed cycles and the instruction size
+    /// Execute the instruction returning the expected consumed cycles and the instruction size
     pub fn decode(&mut self, code: u16, arg: u16) -> (usize, usize) {
         trace!("{:04x}: {:04x}: {}", self.get_pc(), code, mnem(code));
 
-        match code {
+        let (time, size) = match code {
             0x0000 => self.op_0000(arg),
             0x0001 => self.op_0001(arg),
             0x0002 => self.op_0002(arg),
@@ -6997,6 +7260,11 @@ impl<T: Sys> Cpu<T> {
             0xcbfe => self.op_cbfe(arg),
             0xcbff => self.op_cbff(arg),
             _ => panic!("Invalid opcode: {:04x}: {:04x}", self.get_pc(), code),
-        }
+        };
+
+        // Every instruction consumes at least 4 cycles.
+        self.step(4);
+
+        (time, size)
     }
 }
