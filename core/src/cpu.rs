@@ -46,6 +46,8 @@ pub struct Cpu<T = Mmu> {
     pc: u16,
     sp: u16,
     ime: bool,
+    ei_delay: usize,
+    di_delay: usize,
     halt: bool,
     halt_bug: bool,
     cycles: usize,
@@ -97,6 +99,8 @@ impl<T: Sys> Cpu<T> {
             pc: 0,
             sp: 0,
             ime: true,
+            ei_delay: 0,
+            di_delay: 0,
             halt: false,
             halt_bug: false,
             cycles: 0,
@@ -129,6 +133,7 @@ impl<T: Sys> Cpu<T> {
             assert_eq!(self.cycles, time, "cycle mismatch op={:04x}", code);
         }
 
+        self.update_ime();
         self.check_interrupt();
 
         // Get the cycles consumed and reset
@@ -141,6 +146,33 @@ impl<T: Sys> Cpu<T> {
     pub fn step(&mut self, cycles: usize) {
         self.cycles = self.cycles.wrapping_add(cycles);
         self.sys.step(cycles);
+    }
+
+    /// Handles DI
+    pub fn di(&mut self) {
+        self.di_delay = 2;
+    }
+
+    /// Handles EI
+    pub fn ei(&mut self) {
+        self.ei_delay = 2;
+    }
+
+    /// Update IME
+    fn update_ime(&mut self) {
+        if self.di_delay > 0 {
+            if self.di_delay == 1 {
+                self.ime = false;
+            }
+            self.di_delay -= 1;
+        }
+
+        if self.ei_delay > 0 {
+            if self.ei_delay == 1 {
+                self.ime = true;
+            }
+            self.ei_delay -= 1;
+        }
     }
 
     /// Disable interrupts to this CPU.
@@ -157,7 +189,7 @@ impl<T: Sys> Cpu<T> {
 
     /// Check if pending interrupts in the interrupt controller,
     /// and process them if any.
-    pub fn check_interrupt(&mut self) {
+    fn check_interrupt(&mut self) {
         if !self.ime {
             if self.halt && self.sys.peek_int_vec().is_some() {
                 // If HALT is executed while interrupt is disabled,

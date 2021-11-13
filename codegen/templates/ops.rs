@@ -170,11 +170,11 @@
 {% endmacro %}
 
 {% macro di(i) %}
-  self.disable_interrupt();
+  self.di();
 {% endmacro %}
 
 {% macro ei(i) %}
-  self.enable_interrupt();
+  self.ei();
 {% endmacro %}
 
 {% macro rlc(i) %}

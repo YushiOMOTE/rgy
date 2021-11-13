@@ -3356,7 +3356,7 @@ impl<T: Sys> Cpu<T> {
     /// di
     #[allow(unused_variables)]
     fn op_00f3(&mut self) -> usize {
-        self.disable_interrupt();
+        self.di();
 
         4
     }
@@ -3436,7 +3436,7 @@ impl<T: Sys> Cpu<T> {
     /// ei
     #[allow(unused_variables)]
     fn op_00fb(&mut self) -> usize {
-        self.enable_interrupt();
+        self.ei();
 
         4
     }
