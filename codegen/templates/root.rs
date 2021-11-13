@@ -20,7 +20,7 @@ impl<T: Sys> Cpu<T> {
 {% for i in insts %}
     /// {{i.operator}} {{i.operands | join(sep=",")}}
     #[allow(unused_variables)]
-    fn op_{{i.code | hex}}(&mut self, arg: u16) -> (usize, usize) {
+    fn op_{{i.code | hex}}(&mut self) -> usize {
         {%- if i.operator == "nop" -%}
 
         {{ macros::nop(i=i) }}
@@ -196,8 +196,7 @@ impl<T: Sys> Cpu<T> {
         {{ i.h | setflag(flg="h") }}
         {{ i.c | setflag(flg="c") }}
 
-
-        ({{i.time | untuple}}, {{i.size}})
+        {{i.time | untuple}}
     }
 {% endfor %}
 }
@@ -209,13 +208,13 @@ pub fn mnem(code: u16) -> &'static str {
 
 /// Decodes the opecode and actually executes one instruction.
 impl<T: Sys> Cpu<T> {
-    /// Execute the instruction returning the expected consumed cycles and the instruction size
-    pub fn decode(&mut self, code: u16, arg: u16) -> (usize, usize) {
+    /// Execute the instruction returning the expected consumed cycles
+    pub fn decode(&mut self, code: u16) -> usize {
         trace!("{:04x}: {:04x}: {}", self.get_pc(), code, mnem(code));
 
-        let (time, size) = match code {
+        let time = match code {
             {%- for i in insts -%}
-            0x{{i.code | hex}} => self.op_{{i.code | hex}}(arg),
+            0x{{i.code | hex}} => self.op_{{i.code | hex}}(),
             {%- endfor -%}
             _ => panic!("Invalid opcode: {:04x}: {:04x}", self.get_pc(), code),
         };
@@ -223,6 +222,6 @@ impl<T: Sys> Cpu<T> {
         // Every instruction consumes at least 4 cycles.
         self.step(4);
 
-        (time, size)
+        time
     }
 }

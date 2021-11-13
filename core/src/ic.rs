@@ -127,7 +127,7 @@ impl Ic {
     pub fn read_flags(&self) -> u8 {
         let v = self.irq.request.borrow().get();
         info!("Read interrupt: {:02x}", v);
-        v
+        v | 0xe0
     }
 
     /// Write IE register (0xffff)

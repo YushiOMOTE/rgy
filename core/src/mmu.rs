@@ -171,6 +171,7 @@ impl Mmu {
             0xff6a => self.gpu.select_obj_color_palette(v),
             0xff6b => self.gpu.write_obj_color_palette(v),
             0xff70 => self.wram.select_bank(v),
+            0xff7f => {} // off-by-one error in Tetris
             0x0000..=0xfeff | 0xff80..=0xffff => {
                 unreachable!("write non-i/o addr={:04x}, v={:02x}", addr, v)
             }

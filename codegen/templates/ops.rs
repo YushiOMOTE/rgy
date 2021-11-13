@@ -299,16 +299,16 @@
   if flg {
     let pc = self.get_pc().wrapping_add(alu::signed(p));
     self.jump(pc);
-    return ({{ i.time[0] }}, {{ i.size }})
+    return {{ i.time[0] }}
   }
 {% endmacro %}
 
 {% macro jp(i) %}
   let pc = {{ i.operands[0] | getter(bits=16) }};
   {% if i.operands[0] == "hl" %}
-  self.set_pc(pc.wrapping_sub({{ i.size }}));
+  self.set_pc(pc);
   {% else %}
-  self.jump(pc.wrapping_sub({{ i.size }}));
+  self.jump(pc);
   {% endif %}
 {% endmacro %}
 
@@ -317,14 +317,13 @@
   let pc = {{ i.operands[1] | getter(bits=i.bits) }};
   if flg {
     self.jump(pc);
-    return ({{ i.time[0] }}, 0)
+    return {{ i.time[0] }}
   }
 {% endmacro %}
 
-
 {% macro call(i) %}
-  self.push(self.get_pc().wrapping_add({{ i.size }}));
-  let pc = {{ i.operands[0] | getter(bits=i.bits) }}.wrapping_sub({{i.size}});
+  let pc = {{ i.operands[0] | getter(bits=i.bits) }};
+  self.push(self.get_pc());
   self.jump(pc);
 {% endmacro %}
 
@@ -332,20 +331,20 @@
   let flg = {{ i.operands[0] | getter(bits=i.bits) }};
   let pc = {{ i.operands[1] | getter(bits=i.bits) }};
   if flg {
-    self.push(self.get_pc().wrapping_add({{ i.size }}));
+    self.push(self.get_pc());
     self.jump(pc);
-    return ({{ i.time[0] }}, 0)
+    return {{ i.time[0] }}
   }
 {% endmacro %}
 
 {% macro rst(i) %}
-  self.push(self.get_pc().wrapping_add({{ i.size }}));
-  let pc = {{ i.operands[0] }}u16.wrapping_sub({{i.size}});
+  let pc = {{ i.operands[0] }}u16;
+  self.push(self.get_pc());
   self.jump(pc);
 {% endmacro %}
 
 {% macro ret(i) %}
-  let pc = self.pop().wrapping_sub({{i.size}});
+  let pc = self.pop();
   self.jump(pc);
 {% endmacro %}
 
@@ -355,12 +354,12 @@
   if flg {
     let pc = self.pop();
     self.jump(pc);
-    return ({{ i.time[0] }}, 0)
+    return {{ i.time[0] }}
   }
 {% endmacro %}
 
 {% macro reti(i) %}
-  let pc = self.pop().wrapping_sub({{i.size}});
+  let pc = self.pop();
   self.jump(pc);
   self.enable_interrupt();
 {% endmacro %}

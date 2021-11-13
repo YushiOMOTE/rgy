@@ -47,6 +47,7 @@ pub struct Cpu<T = Mmu> {
     sp: u16,
     ime: bool,
     halt: bool,
+    halt_bug: bool,
     cycles: usize,
     sys: T,
 }
@@ -97,6 +98,7 @@ impl<T: Sys> Cpu<T> {
             sp: 0,
             ime: true,
             halt: false,
+            halt_bug: false,
             cycles: 0,
             sys,
         }
@@ -104,8 +106,12 @@ impl<T: Sys> Cpu<T> {
 
     /// Switch the CPU state to halting.
     pub fn halt(&mut self) {
-        debug!("Halted");
-        self.halt = true;
+        debug!("Halt");
+        if !self.ime && self.sys.peek_int_vec().is_some() {
+            self.halt_bug = true;
+        } else {
+            self.halt = true;
+        }
     }
 
     /// Execute a single instruction.
@@ -118,9 +124,8 @@ impl<T: Sys> Cpu<T> {
         if self.halt {
             self.step(4);
         } else {
-            let (code, arg) = self.fetch();
-            let (time, size) = self.decode(code, arg);
-            self.set_pc(self.get_pc().wrapping_add(size as u16));
+            let code = self.fetch_opcode();
+            let time = self.decode(code);
             assert_eq!(self.cycles, time, "cycle mismatch op={:04x}", code);
         }
 
@@ -154,28 +159,31 @@ impl<T: Sys> Cpu<T> {
     /// and process them if any.
     pub fn check_interrupt(&mut self) {
         if !self.ime {
-            if self.halt {
+            if self.halt && self.sys.peek_int_vec().is_some() {
                 // If HALT is executed while interrupt is disabled,
                 // the interrupt wakes up CPU without being consumed.
-                if let Some(value) = self.sys.peek_int_vec() {
-                    debug!("Interrupted on halt + ime=0: {:02x}", value);
-                    self.halt = false;
-                }
+                self.step(4);
+                self.halt = false;
             }
-        } else {
-            let value = match self.sys.pop_int_vec() {
-                Some(value) => value,
-                None => return,
-            };
-
-            info!("Interrupted: {:02x}", value);
-
-            self.interrupted(value);
-
-            self.halt = false;
-
-            self.step(16);
+            return;
         }
+
+        let value = match self.sys.pop_int_vec() {
+            Some(value) => value,
+            None => return,
+        };
+
+        info!("Interrupted: {:02x}", value);
+
+        self.interrupted(value);
+
+        if self.halt {
+            self.step(24);
+        } else {
+            self.step(20);
+        }
+
+        self.halt = false;
     }
 
     fn interrupted(&mut self, vector_addr: u8) {
@@ -187,7 +195,7 @@ impl<T: Sys> Cpu<T> {
 
     /// Stop the CPU.
     pub fn stop(&self) {
-        // TODO: Stop.
+        todo!("stop {:04x}", self.get_pc());
     }
 
     /// Gets the value of `z` flag in the flag register.
@@ -424,17 +432,42 @@ impl<T: Sys> Cpu<T> {
         self.get16(p)
     }
 
-    /// Fetches an opcode from the memory and returns it with its length.
-    pub fn fetch(&mut self) -> (u16, u16) {
-        let pc = self.get_pc();
+    /// Fetch a byte consuming cycles
+    pub fn fetch8(&mut self) -> u8 {
+        let b = self.get8(self.get_pc());
+        self.inc_pc();
+        b
+    }
 
-        let fb = self.sys.get8(pc);
+    /// Fetch a word consuming cycles
+    pub fn fetch16(&mut self) -> u16 {
+        let l = self.fetch8();
+        let h = self.fetch8();
+        (h as u16) << 8 | l as u16
+    }
 
-        if fb == 0xcb {
-            let sb = self.get8(pc + 1);
-            (0xcb00 | sb as u16, 2)
+    /// Fetch next instruction without consuming cycles
+    fn prefetch(&mut self) -> u8 {
+        let b = self.sys.get8(self.get_pc());
+        self.inc_pc();
+        b
+    }
+
+    /// Add 1 to pc unless HALT bug is triggerred
+    fn inc_pc(&mut self) {
+        if self.halt_bug {
+            info!("Halt bug");
+            self.halt_bug = false;
         } else {
-            (fb as u16, 1)
+            self.set_pc(self.get_pc().wrapping_add(1));
+        }
+    }
+
+    /// Fetches an opcode from the memory and returns it with its length.
+    pub fn fetch_opcode(&mut self) -> u16 {
+        match self.prefetch() {
+            0xcb => 0xcb00 | self.fetch8() as u16,
+            b => b as u16,
         }
     }
 }
@@ -445,9 +478,9 @@ mod test {
     use crate::mmu::Ram;
 
     fn exec(cpu: &mut Cpu<Ram>) {
-        let (code, arg) = cpu.fetch();
+        let code = cpu.fetch8();
 
-        let (_, size) = cpu.decode(code, arg);
+        let (_, size) = cpu.decode(code);
 
         cpu.set_pc(cpu.get_pc().wrapping_add(size as u16));
     }
