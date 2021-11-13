@@ -110,7 +110,10 @@ impl Mmu {
             0xff6b => self.gpu.read_obj_color_palette(),
             0xff70 => self.wram.get_bank(),
             0x0000..=0xfeff | 0xff80..=0xffff => unreachable!("read non-i/o addr={:04x}", addr),
-            _ => unimplemented!("read unknown i/o addr={:04x}", addr),
+            _ => {
+                warn!("read unknown i/o addr={:04x}", addr);
+                0xff
+            }
         }
     }
 
@@ -175,7 +178,7 @@ impl Mmu {
             0x0000..=0xfeff | 0xff80..=0xffff => {
                 unreachable!("write non-i/o addr={:04x}, v={:02x}", addr, v)
             }
-            _ => unimplemented!("write unknown i/o addr={:04x}, v={:02x}", addr, v),
+            _ => warn!("write unknown i/o addr={:04x}, v={:02x}", addr, v),
         }
     }
 

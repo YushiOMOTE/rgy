@@ -1,4 +1,5 @@
 pub struct Cgb {
+    enable: bool,
     double_speed: bool,
     speed_switch: bool,
 }
@@ -7,6 +8,7 @@ pub struct Cgb {
 impl Cgb {
     pub fn new() -> Self {
         Self {
+            enable: cfg!(feature = "color"),
             double_speed: false,
             speed_switch: false,
         }
@@ -25,6 +27,10 @@ impl Cgb {
 
     /// Read KEY1 register (0xff4d)
     pub fn read_speed_switch(&self) -> u8 {
+        if !self.enable {
+            return 0xff;
+        }
+
         let mut v = 0;
         v |= if self.double_speed { 0x80 } else { 0x00 };
         v |= if self.speed_switch { 0x01 } else { 0x00 };
@@ -33,6 +39,8 @@ impl Cgb {
 
     /// Write KEY1 register (0xff4d)
     pub fn write_speed_switch(&mut self, value: u8) {
-        self.speed_switch = value & 0x01 != 0;
+        if self.enable {
+            self.speed_switch = value & 0x01 != 0;
+        }
     }
 }
