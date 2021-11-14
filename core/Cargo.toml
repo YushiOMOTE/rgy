@@ -29,4 +29,3 @@ utils = { path = "../utils" }
 
 [features]
 default = []
-color = []

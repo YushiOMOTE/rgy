@@ -4,19 +4,25 @@ use log::*;
 pub struct Wram {
     n: usize,
     bank: [[u8; 0x1000]; 8],
+    multi_bank: bool,
 }
 
 impl Wram {
-    pub fn new() -> Self {
+    pub fn new(multi_bank: bool) -> Self {
         Self {
             n: 1,
             bank: [[0; 0x1000]; 8],
+            multi_bank,
         }
     }
 
     pub fn select_bank(&mut self, n: u8) {
-        self.n = (n as usize & 0x7).max(1);
-        info!("WRAM bank selected: {:02x}", self.n);
+        if self.multi_bank {
+            self.n = (n as usize & 0x7).max(1);
+            info!("WRAM bank selected: {:02x}", self.n);
+        } else {
+            warn!("WRAM bank select disabled: {:02x}", self.n);
+        }
     }
 
     pub fn get_bank(&self) -> u8 {
@@ -48,13 +54,13 @@ mod test {
 
     #[test]
     fn test_default_bank() {
-        let m = Wram::new();
+        let m = Wram::new(true);
         assert_eq!(m.get_bank(), 1);
     }
 
     #[test]
     fn test_select_bank() {
-        let mut m = Wram::new();
+        let mut m = Wram::new(true);
 
         // fill bank 0
         for i in 0..0x1000 {
@@ -80,8 +86,35 @@ mod test {
     }
 
     #[test]
+    fn test_no_select_bank() {
+        let mut m = Wram::new(false);
+
+        // fill bank 0
+        for i in 0..0x1000 {
+            m.set8(0xc000 + i, 0xf)
+        }
+
+        // fill bank 1-7
+        for b in 1..8 {
+            m.select_bank(b);
+            for i in 0..0x1000 {
+                m.set8(0xd000 + i, b)
+            }
+        }
+
+        // check each bank (no bank switch, so always 7)
+        for b in 1..8 {
+            m.select_bank(b);
+            for i in 0..0x1000 {
+                assert_eq!(m.get8(0xc000 + i), 0xf);
+                assert_eq!(m.get8(0xd000 + i), 7);
+            }
+        }
+    }
+
+    #[test]
     fn test_mirror() {
-        let mut m = Wram::new();
+        let mut m = Wram::new(true);
 
         for v in 1..4 {
             for i in 0..0x1dff {
@@ -96,28 +129,28 @@ mod test {
     #[test]
     #[should_panic]
     fn test_set_too_low() {
-        let mut m = Wram::new();
+        let mut m = Wram::new(true);
         m.set8(0xbfff, 0);
     }
 
     #[test]
     #[should_panic]
     fn test_set_too_high() {
-        let mut m = Wram::new();
+        let mut m = Wram::new(true);
         m.set8(0xfe00, 0);
     }
 
     #[test]
     #[should_panic]
     fn test_get_too_low() {
-        let m = Wram::new();
+        let m = Wram::new(true);
         m.get8(0xbfff);
     }
 
     #[test]
     #[should_panic]
     fn test_get_too_high() {
-        let m = Wram::new();
+        let m = Wram::new(true);
         m.get8(0xfe00);
     }
 }

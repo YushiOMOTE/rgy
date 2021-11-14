@@ -15,6 +15,8 @@ pub struct Config {
     pub(crate) delay_unit: u64,
     /// Don't adjust CPU frequency.
     pub(crate) native_speed: bool,
+    /// Emulate Gameboy Color
+    pub(crate) color: bool,
 }
 
 impl Config {
@@ -26,6 +28,7 @@ impl Config {
             sample: freq / 1000,
             delay_unit: 10,
             native_speed: false,
+            color: false,
         }
     }
 
@@ -50,6 +53,12 @@ impl Config {
     /// Set the flag to run at native speed.
     pub fn native_speed(mut self, native: bool) -> Self {
         self.native_speed = native;
+        self
+    }
+
+    /// Set the flag to enable Gameboy Color.
+    pub fn color(mut self, color: bool) -> Self {
+        self.color = color;
         self
     }
 }
@@ -78,7 +87,7 @@ where
 
         let mut fc = FreqControl::new(hw.clone(), &cfg);
 
-        let mmu = Mmu::new(hw.clone(), rom.to_vec());
+        let mmu = Mmu::new(hw.clone(), rom.to_vec(), cfg.color);
         let cpu = Cpu::new(mmu);
 
         info!("Starting...");

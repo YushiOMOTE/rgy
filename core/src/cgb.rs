@@ -6,9 +6,9 @@ pub struct Cgb {
 
 #[allow(unused)]
 impl Cgb {
-    pub fn new() -> Self {
+    pub fn new(enable: bool) -> Self {
         Self {
-            enable: cfg!(feature = "color"),
+            enable,
             double_speed: false,
             speed_switch: false,
         }

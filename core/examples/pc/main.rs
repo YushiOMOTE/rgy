@@ -14,6 +14,9 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 pub struct Opt {
+    /// Emulate Gameboy Color
+    #[structopt(short = "c", long = "color")]
+    color: bool,
     /// Cpu frequency
     #[structopt(short = "f", long = "freq", default_value = "4200000")]
     freq: u64,
@@ -39,6 +42,7 @@ pub struct Opt {
 
 fn to_cfg(opt: Opt) -> rgy::Config {
     rgy::Config::new()
+        .color(opt.color)
         .freq(opt.freq)
         .sample(opt.sample)
         .delay_unit(opt.delay_unit)
@@ -63,7 +67,7 @@ fn main() {
 
     env_logger::init();
 
-    let hw = Hardware::new(opt.ram.clone());
+    let hw = Hardware::new(opt.ram.clone(), opt.color);
     let hw1 = hw.clone();
 
     std::thread::spawn(move || {

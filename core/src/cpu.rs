@@ -510,11 +510,8 @@ mod test {
     use crate::mmu::Ram;
 
     fn exec(cpu: &mut Cpu<Ram>) {
-        let code = cpu.fetch8();
-
-        let (_, size) = cpu.decode(code);
-
-        cpu.set_pc(cpu.get_pc().wrapping_add(size as u16));
+        let code = cpu.fetch_opcode();
+        cpu.decode(code);
     }
 
     #[test]

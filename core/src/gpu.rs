@@ -38,6 +38,8 @@ impl From<u8> for Mode {
 }
 
 pub struct Gpu {
+    color: bool,
+
     irq: Irq,
 
     clocks: usize,
@@ -350,8 +352,9 @@ impl Hdma {
 }
 
 impl Gpu {
-    pub fn new(hw: HardwareHandle, irq: Irq) -> Self {
+    pub fn new(hw: HardwareHandle, irq: Irq, color: bool) -> Self {
         Self {
+            color,
             irq: irq,
             clocks: 0,
             lyc_interrupt: false,
@@ -512,8 +515,7 @@ impl Gpu {
                 let tyoff = if tattr.yflip { 7 - tyoff } else { tyoff };
                 let txoff = if tattr.xflip { 7 - txoff } else { txoff };
 
-                #[cfg(feature = "color")]
-                {
+                if self.color {
                     assert_eq!(tattr.priority, false);
                 }
 
@@ -932,7 +934,7 @@ impl Gpu {
     }
 
     fn get_tile_attr(&self, mapbase: u16, tx: u16, ty: u16) -> MapAttribute {
-        if cfg!(feature = "color") {
+        if self.color {
             let ti = tx + ty * 32;
             let attr = self.read_vram_bank(mapbase + ti, 1) as usize;
 
@@ -955,7 +957,7 @@ impl Gpu {
     }
 
     fn get_sp_attr(&self, attr: u8) -> MapAttribute {
-        if cfg!(feature = "color") {
+        if self.color {
             let attr = attr as usize;
 
             MapAttribute {

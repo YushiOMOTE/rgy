@@ -6,16 +6,8 @@ use alloc::{
 };
 use log::*;
 
-const BOOT_ROM: &[u8] = {
-    #[cfg(feature = "color")]
-    {
-        include_bytes!("cgb.bin")
-    }
-    #[cfg(not(feature = "color"))]
-    {
-        include_bytes!("dmg.bin")
-    }
-};
+const BOOT_ROM: &[u8] = include_bytes!("dmg.bin");
+const BOOT_ROM_COLOR: &[u8] = include_bytes!("cgb.bin");
 
 struct MbcNone {
     rom: Vec<u8>,
@@ -701,25 +693,27 @@ impl Cartridge {
 }
 
 pub struct Mbc {
+    color: bool,
     cartridge: Cartridge,
     use_boot_rom: bool,
 }
 
 impl Mbc {
-    pub fn new(hw: HardwareHandle, rom: Vec<u8>) -> Self {
+    pub fn new(hw: HardwareHandle, rom: Vec<u8>, color: bool) -> Self {
         let cartridge = Cartridge::new(hw, rom);
 
         cartridge.show_info();
 
         Self {
+            color,
             cartridge,
             use_boot_rom: true,
         }
     }
 
     fn in_boot_rom(&self, addr: u16) -> bool {
-        if cfg!(feature = "color") {
-            assert_eq!(0x900, BOOT_ROM.len());
+        if self.color {
+            assert_eq!(0x900, BOOT_ROM_COLOR.len());
 
             addr < 0x100 || (addr >= 0x200 && addr < 0x900)
         } else {

@@ -35,21 +35,21 @@ pub struct Mmu {
 
 impl Mmu {
     /// Create a new MMU instance.
-    pub fn new(hw: HardwareHandle, rom: Vec<u8>) -> Mmu {
+    pub fn new(hw: HardwareHandle, rom: Vec<u8>, color: bool) -> Mmu {
         let irq = Irq::new();
 
         Mmu {
-            wram: Wram::new(),
+            wram: Wram::new(color),
             hram: Hram::new(),
-            gpu: Gpu::new(hw.clone(), irq.clone()),
-            mbc: Mbc::new(hw.clone(), rom),
+            gpu: Gpu::new(hw.clone(), irq.clone(), color),
+            mbc: Mbc::new(hw.clone(), rom, color),
             timer: Timer::new(irq.clone()),
             ic: Ic::new(irq.clone()),
             serial: Serial::new(hw.clone(), irq.clone()),
             joypad: Joypad::new(hw.clone(), irq),
             sound: Sound::new(hw),
             dma: Dma::new(),
-            cgb: Cgb::new(),
+            cgb: Cgb::new(color),
         }
     }
 
