@@ -131,35 +131,40 @@ impl Envelop {
 }
 
 struct Counter {
-    enable: bool,
+    can_expire: bool,
     count: usize,
     base: usize,
     clock: usize,
+    expired: bool,
 }
 
 impl Counter {
-    fn new(enable: bool, count: usize, base: usize) -> Self {
+    fn new(can_expire: bool, count: usize, base: usize) -> Self {
         Self {
-            enable,
+            can_expire,
+            expired: false,
             count,
             base,
             clock: 0,
         }
     }
 
-    fn stop(&mut self, rate: usize) -> bool {
-        if !self.enable {
-            return false;
+    fn proceed(&mut self, rate: usize) {
+        if !self.can_expire || self.expired {
+            return;
         }
 
         let deadline = rate * (self.base - self.count) / 256;
 
         if self.clock >= deadline {
-            true
+            self.expired = true;
         } else {
             self.clock += 1;
-            false
         }
+    }
+
+    fn is_expired(&self) -> bool {
+        self.expired
     }
 }
 
@@ -285,7 +290,7 @@ impl Tone {
 
     /// Read NR10 register (0xff10)
     pub fn read_sweep(&self) -> u8 {
-        self.sweep
+        self.sweep | 0x80
     }
 
     /// Write NR10 register (0xff10)
@@ -296,24 +301,24 @@ impl Tone {
         self.sweep_shift = (value & 0x07) as usize;
     }
 
-    /// Read NR11/NR21 register (0xff11/0xff21)
+    /// Read NR11/NR21 register (0xff11/0xff16)
     pub fn read_wave(&self) -> u8 {
-        self.wave
+        self.wave | 0x3f
     }
 
-    /// Write NR11/NR21 register (0xff11/0xff21)
+    /// Write NR11/NR21 register (0xff11/0xff16)
     pub fn write_wave(&mut self, value: u8) {
         self.wave = value;
         self.wave_duty = (value >> 6).into();
         self.sound_len = (value & 0x1f) as usize;
     }
 
-    /// Read NR12/NR22 register (0xff12/0xff22)
+    /// Read NR12/NR22 register (0xff12/0xff17)
     pub fn read_envelop(&self) -> u8 {
         self.envelop
     }
 
-    /// Write NR12/NR22 register (0xff12/0xff22)
+    /// Write NR12/NR22 register (0xff12/0xff17)
     pub fn write_envelop(&mut self, value: u8) {
         self.envelop = value;
         self.env_init = (value >> 4) as usize;
@@ -321,28 +326,33 @@ impl Tone {
         self.env_count = (value & 0x7) as usize;
     }
 
-    /// Read NR13/NR23 register (0xff13/0xff23)
+    /// Read NR13/NR23 register (0xff13/0xff18)
     pub fn read_freq_low(&self) -> u8 {
         // Write only
         0xff
     }
 
-    /// Write NR13/NR23 register (0xff13/0xff23)
+    /// Write NR13/NR23 register (0xff13/0xff18)
     pub fn write_freq_low(&mut self, value: u8) {
         self.freq = (self.freq & !0xff) | value as usize;
     }
 
-    /// Read NR14/NR24 register (0xff14/0xff24)
+    /// Read NR14/NR24 register (0xff14/0xff19)
     pub fn read_freq_high(&self) -> u8 {
-        self.freq_high
+        // Fix write-only bits to high
+        self.freq_high | 0xbf
     }
 
-    /// Write NR14/NR24 register (0xff14/0xff24)
+    /// Write NR14/NR24 register (0xff14/0xff19)
     fn write_freq_high(&mut self, value: u8) -> bool {
         self.freq_high = value;
         self.counter = value & 0x40 != 0;
         self.freq = (self.freq & !0x700) | (((value & 0x7) as usize) << 8);
         value & 0x80 != 0
+    }
+
+    fn clear(&mut self) {
+        core::mem::swap(self, &mut Tone::new());
     }
 }
 
@@ -385,8 +395,9 @@ impl Stream for ToneStream {
     fn next(&mut self, rate: u32) -> u16 {
         let rate = rate as usize;
 
-        // Stop counter
-        if self.counter.stop(rate) {
+        self.counter.proceed(rate);
+
+        if self.counter.is_expired() {
             return 0;
         }
 
@@ -411,6 +422,10 @@ impl Stream for ToneStream {
         } else {
             amp as u16
         }
+    }
+
+    fn on(&self) -> bool {
+        !self.counter.is_expired()
     }
 }
 
@@ -443,32 +458,31 @@ impl Wave {
     /// Read NR30 register (0xff1a)
     pub fn read_enable(&self) -> u8 {
         if self.enable {
-            0x80
+            0xff
         } else {
-            0x00
+            0x7f
         }
     }
 
     /// Write NR30 register (0xff1a)
     fn write_enable(&mut self, value: u8) {
-        debug!("Wave enable: {:02x}", value);
         self.enable = value & 0x80 != 0;
     }
 
     /// Read NR31 register (0xff1b)
     pub fn read_len(&self) -> u8 {
-        self.sound_len as u8
+        // Write-only?
+        0xff
     }
 
     /// Write NR31 register (0xff1b)
     pub fn write_len(&mut self, value: u8) {
-        debug!("Wave len: {:02x}", value);
         self.sound_len = value as usize;
     }
 
     /// Read NR32 register (0xff1c)
     pub fn read_amp(&self) -> u8 {
-        self.amp
+        self.amp | 0x9f
     }
 
     /// Write NR32 register (0xff1c)
@@ -491,7 +505,8 @@ impl Wave {
 
     /// Read NR34 register (0xff1e)
     pub fn read_freq_high(&self) -> u8 {
-        self.freq_high
+        // Mask write-only bits
+        self.freq_high | 0xbf
     }
 
     /// Write NR34 register (0xff1e)
@@ -511,6 +526,12 @@ impl Wave {
     /// Write wave pattern buffer
     pub fn write_wave_buf(&mut self, offset: u16, value: u8) {
         self.wavebuf[offset as usize - 0xff30] = value;
+    }
+
+    fn clear(&mut self) {
+        let mut wave = Wave::new();
+        core::mem::swap(&mut wave.wavebuf, &mut self.wavebuf);
+        core::mem::swap(self, &mut wave);
     }
 }
 
@@ -544,8 +565,9 @@ impl Stream for WaveStream {
 
         let rate = rate as usize;
 
-        // Stop counter
-        if self.counter.stop(rate) {
+        self.counter.proceed(rate);
+
+        if self.counter.is_expired() {
             return 0;
         }
 
@@ -569,6 +591,10 @@ impl Stream for WaveStream {
         };
 
         amp as u16
+    }
+
+    fn on(&self) -> bool {
+        !self.counter.is_expired()
     }
 }
 
@@ -614,7 +640,8 @@ impl Noise {
 
     /// Read NR41 register (0xff20)
     pub fn read_len(&self) -> u8 {
-        self.sound_len as u8
+        // Write-only?
+        0xff
     }
 
     /// Write NR41 register (0xff20)
@@ -650,7 +677,7 @@ impl Noise {
 
     /// Read NR44 register (0xff23)
     pub fn read_select(&self) -> u8 {
-        self.select
+        self.select | 0xbf
     }
 
     /// Write NR44 register (0xff23)
@@ -658,6 +685,10 @@ impl Noise {
         self.select = value;
         self.counter = value & 0x40 != 0;
         value & 0x80 != 0
+    }
+
+    fn clear(&mut self) {
+        core::mem::swap(self, &mut Noise::new());
     }
 }
 
@@ -691,8 +722,9 @@ impl Stream for NoiseStream {
     fn next(&mut self, rate: u32) -> u16 {
         let rate = rate as usize;
 
-        // Stop counter
-        if self.counter.stop(rate) {
+        self.counter.proceed(rate);
+
+        if self.counter.is_expired() {
             return 0;
         }
 
@@ -714,6 +746,10 @@ impl Stream for NoiseStream {
         } else {
             0
         }
+    }
+
+    fn on(&self) -> bool {
+        !self.counter.is_expired()
     }
 }
 
@@ -751,9 +787,10 @@ impl Mixer {
 
     /// Write NR50 register (0xff24)
     pub fn write_ctrl(&mut self, value: u8) {
+        self.ctrl = value;
         self.so1_volume = (value as usize & 0x70) >> 4;
         self.so2_volume = value as usize & 0x07;
-        self.update_volume();
+        self.update_stream();
     }
 
     /// Read NR51 register (0xff25)
@@ -764,37 +801,47 @@ impl Mixer {
     /// Write NR51 register (0xff25)
     pub fn write_so_mask(&mut self, value: u8) {
         self.so_mask = value as usize;
-        self.update_volume();
+        self.update_stream();
     }
 
     /// Read NR52 register (0xff26)
     pub fn read_enable(&self) -> u8 {
-        let mut v = 0;
+        let mut v = 0x70;
         v |= if self.enable { 0x80 } else { 0x00 };
-        v |= if self.stream.tone1.on() { 0x08 } else { 0x00 };
-        v |= if self.stream.tone2.on() { 0x04 } else { 0x00 };
-        v |= if self.stream.wave.on() { 0x02 } else { 0x00 };
-        v |= if self.stream.noise.on() { 0x01 } else { 0x00 };
+        v |= if self.stream.tones[0].on() {
+            0x01
+        } else {
+            0x00
+        };
+        v |= if self.stream.tones[1].on() {
+            0x02
+        } else {
+            0x00
+        };
+        v |= if self.stream.wave.on() { 0x04 } else { 0x00 };
+        v |= if self.stream.noise.on() { 0x08 } else { 0x00 };
         v
     }
 
     /// Write NR52 register (0xff26)
-    pub fn write_enable(&mut self, value: u8) {
+    pub fn write_enable(&mut self, value: u8) -> bool {
         self.enable = value & 0x80 != 0;
         if self.enable {
             info!("Sound master enabled");
         } else {
             info!("Sound master disabled");
+            self.ctrl = 0;
+            self.so1_volume = 0;
+            self.so2_volume = 0;
+            self.so_mask = 0;
         }
-        self.update_volume();
+        self.update_stream();
+        self.enable
     }
 
-    fn restart_tone1(&self, t: Tone) {
-        self.stream.tone1.update(Some(ToneStream::new(t, true)));
-    }
-
-    fn restart_tone2(&self, t: Tone) {
-        self.stream.tone2.update(Some(ToneStream::new(t, false)));
+    fn restart_tone(&self, tone: usize, tone_value: Tone) {
+        let sweep = tone == 0;
+        self.stream.tones[tone].update(Some(ToneStream::new(tone_value, sweep)));
     }
 
     fn restart_wave(&self, w: Wave) {
@@ -805,12 +852,17 @@ impl Mixer {
         self.stream.noise.update(Some(NoiseStream::new(n)));
     }
 
-    fn update_volume(&self) {
+    // Update streams based on register settings
+    fn update_stream(&mut self) {
         self.stream.enable.set(self.enable);
-        self.stream.tone1.volume.set(self.get_volume(0));
-        self.stream.tone2.volume.set(self.get_volume(1));
-        self.stream.wave.volume.set(self.get_volume(2));
-        self.stream.noise.volume.set(self.get_volume(3));
+
+        if self.enable {
+            for (i, tone) in self.stream.tones.iter().enumerate() {
+                tone.volume.set(self.get_volume(i as u8))
+            }
+            self.stream.wave.volume.set(self.get_volume(2));
+            self.stream.noise.volume.set(self.get_volume(3));
+        }
     }
 
     fn get_volume(&self, id: u8) -> usize {
@@ -826,6 +878,14 @@ impl Mixer {
             0
         };
         v1 + v2
+    }
+
+    fn clear(&mut self) {
+        for tone in &mut self.stream.tones {
+            tone.clear();
+        }
+        self.stream.wave.clear();
+        self.stream.noise.clear();
     }
 }
 
@@ -854,11 +914,18 @@ impl<T> Unit<T> {
 
 impl<T: Stream> Unit<T> {
     fn on(&self) -> bool {
-        self.stream.lock().is_some()
+        match self.stream.lock().as_ref() {
+            Some(stream) => stream.on(),
+            _ => false,
+        }
     }
 
     fn update(&self, s: Option<T>) {
         *self.stream.lock() = s;
+    }
+
+    fn clear(&self) {
+        self.update(None);
     }
 
     fn next(&self, rate: u32) -> (u16, u16) {
@@ -875,8 +942,7 @@ impl<T: Stream> Unit<T> {
 
 #[derive(Clone)]
 struct MixerStream {
-    tone1: Unit<ToneStream>,
-    tone2: Unit<ToneStream>,
+    tones: [Unit<ToneStream>; 2],
     wave: Unit<WaveStream>,
     noise: Unit<NoiseStream>,
     enable: Arc<AtomicBool>,
@@ -885,8 +951,7 @@ struct MixerStream {
 impl MixerStream {
     fn new() -> Self {
         Self {
-            tone1: Unit::new(),
-            tone2: Unit::new(),
+            tones: [Unit::new(), Unit::new()],
             wave: Unit::new(),
             noise: Unit::new(),
             enable: Arc::new(AtomicBool::new(false)),
@@ -911,9 +976,9 @@ impl Stream for MixerStream {
         if self.enable.get() {
             let mut vol = 0;
 
-            let (t, v) = self.tone1.next(rate);
+            let (t, v) = self.tones[0].next(rate);
             vol += self.volume(t, v);
-            let (t, v) = self.tone2.next(rate);
+            let (t, v) = self.tones[1].next(rate);
             vol += self.volume(t, v);
             let (t, v) = self.wave.next(rate);
             vol += self.volume(t, v);
@@ -927,14 +992,18 @@ impl Stream for MixerStream {
             0
         }
     }
+
+    fn on(&self) -> bool {
+        self.enable.get()
+    }
 }
 
 pub struct Sound {
-    tone1: Tone,
-    tone2: Tone,
+    tones: [Tone; 2],
     wave: Wave,
     noise: Noise,
     mixer: Mixer,
+    enable: bool,
 }
 
 impl Sound {
@@ -944,80 +1013,265 @@ impl Sound {
         mixer.setup_stream(&hw);
 
         Self {
-            tone1: Tone::new(),
-            tone2: Tone::new(),
+            tones: [Tone::new(), Tone::new()],
             wave: Wave::new(),
             noise: Noise::new(),
             mixer,
+            enable: false,
         }
     }
 
-    pub fn tone1(&self) -> &Tone {
-        &self.tone1
+    /// Read NR10 register (0xff10)
+    pub fn read_tone_sweep(&self) -> u8 {
+        self.tones[0].read_sweep()
     }
 
-    pub fn tone2(&self) -> &Tone {
-        &self.tone2
+    /// Write NR10 register (0xff10)
+    pub fn write_tone_sweep(&mut self, value: u8) {
+        if !self.enable {
+            return;
+        }
+        self.tones[0].write_sweep(value)
     }
 
-    pub fn wave(&self) -> &Wave {
-        &self.wave
+    /// Read NR11/NR21 register (0xff11/0xff16)
+    pub fn read_tone_wave(&self, tone: usize) -> u8 {
+        self.tones[tone].read_wave()
     }
 
-    pub fn noise(&self) -> &Noise {
-        &self.noise
+    /// Write NR11/NR21 register (0xff11/0xff16)
+    pub fn write_tone_wave(&mut self, tone: usize, value: u8) {
+        if !self.enable {
+            return;
+        }
+        self.tones[tone].write_wave(value)
     }
 
-    pub fn mixer(&self) -> &Mixer {
-        &self.mixer
+    /// Read NR12/NR22 register (0xff12/0xff17)
+    pub fn read_tone_envelop(&self, tone: usize) -> u8 {
+        self.tones[tone].read_envelop()
     }
 
-    pub fn tone1_mut(&mut self) -> &mut Tone {
-        &mut self.tone1
+    /// Write NR12/NR22 register (0xff12/0xff17)
+    pub fn write_tone_envelop(&mut self, tone: usize, value: u8) {
+        if !self.enable {
+            return;
+        }
+        self.tones[tone].write_envelop(value)
     }
 
-    pub fn tone2_mut(&mut self) -> &mut Tone {
-        &mut self.tone2
+    /// Read NR13/NR23 register (0xff13/0xff18)
+    pub fn read_tone_freq_low(&self, tone: usize) -> u8 {
+        self.tones[tone].read_freq_low()
     }
 
-    pub fn wave_mut(&mut self) -> &mut Wave {
-        &mut self.wave
+    /// Write NR13/NR23 register (0xff13/0xff18)
+    pub fn write_tone_freq_low(&mut self, tone: usize, value: u8) {
+        if !self.enable {
+            return;
+        }
+        self.tones[tone].write_freq_low(value)
     }
 
-    pub fn noise_mut(&mut self) -> &mut Noise {
-        &mut self.noise
+    /// Read NR14/NR24 register (0xff14/0xff19)
+    pub fn read_tone_freq_high(&self, tone: usize) -> u8 {
+        self.tones[tone].read_freq_high()
     }
 
-    pub fn mixer_mut(&mut self) -> &mut Mixer {
-        &mut self.mixer
-    }
-
-    pub fn write_tone1_start(&mut self, value: u8) {
-        if self.tone1.write_freq_high(value) {
-            self.mixer.restart_tone1(self.tone1.clone());
+    /// Write NR14/NR24 register (0xff14/0xff19)
+    pub fn write_tone_freq_high(&mut self, tone: usize, value: u8) {
+        if !self.enable {
+            return;
+        }
+        if self.tones[tone].write_freq_high(value) {
+            self.mixer.restart_tone(tone, self.tones[tone].clone());
         }
     }
 
-    pub fn write_tone2_start(&mut self, value: u8) {
-        if self.tone2.write_freq_high(value) {
-            self.mixer.restart_tone2(self.tone2.clone());
-        }
+    /// Read NR30 register (0xff1a)
+    pub fn read_wave_enable(&self) -> u8 {
+        self.wave.read_enable()
     }
 
+    /// Write NR30 register (0xff1a)
     pub fn write_wave_enable(&mut self, value: u8) {
+        if !self.enable {
+            return;
+        }
         self.wave.write_enable(value);
         self.mixer.restart_wave(self.wave.clone());
     }
 
-    pub fn write_wave_start(&mut self, value: u8) {
+    /// Read NR31 register (0xff1b)
+    pub fn read_wave_len(&self) -> u8 {
+        self.wave.read_len()
+    }
+
+    /// Write NR31 register (0xff1b)
+    pub fn write_wave_len(&mut self, value: u8) {
+        if !self.enable {
+            return;
+        }
+        self.wave.write_len(value);
+    }
+
+    /// Read NR32 register (0xff1c)
+    pub fn read_wave_amp(&self) -> u8 {
+        self.wave.read_amp()
+    }
+
+    /// Write NR32 register (0xff1c)
+    pub fn write_wave_amp(&mut self, value: u8) {
+        if !self.enable {
+            return;
+        }
+        self.wave.write_amp(value)
+    }
+
+    /// Read NR33 register (0xff1d)
+    pub fn read_wave_freq_low(&self) -> u8 {
+        self.wave.read_freq_low()
+    }
+
+    /// Write NR33 register (0xff1d)
+    pub fn write_wave_freq_low(&mut self, value: u8) {
+        if !self.enable {
+            return;
+        }
+        self.wave.write_freq_low(value)
+    }
+
+    /// Read NR34 register (0xff1e)
+    pub fn read_wave_freq_high(&self) -> u8 {
+        self.wave.read_freq_high()
+    }
+
+    /// Write NR34 register (0xff1e)
+    pub fn write_wave_freq_high(&mut self, value: u8) {
+        if !self.enable {
+            return;
+        }
         if self.wave.write_freq_high(value) {
             self.mixer.restart_wave(self.wave.clone());
         }
     }
 
-    pub fn write_noise_start(&mut self, value: u8) {
+    /// Read wave pattern buffer
+    pub fn read_wave_buf(&self, offset: u16) -> u8 {
+        self.wave.read_wave_buf(offset)
+    }
+
+    /// Write wave pattern buffer
+    pub fn write_wave_buf(&mut self, offset: u16, value: u8) {
+        if !self.enable {
+            return;
+        }
+        self.wave.write_wave_buf(offset, value)
+    }
+
+    /// Read NR41 register (0xff20)
+    pub fn read_noise_len(&self) -> u8 {
+        self.noise.read_len()
+    }
+
+    /// Write NR41 register (0xff20)
+    pub fn write_noise_len(&mut self, value: u8) {
+        if !self.enable {
+            return;
+        }
+        self.noise.write_len(value)
+    }
+
+    /// Read NR42 register (0xff21)
+    pub fn read_noise_envelop(&self) -> u8 {
+        self.noise.read_envelop()
+    }
+
+    /// Write NR42 register (0xff21)
+    pub fn write_noise_envelop(&mut self, value: u8) {
+        if !self.enable {
+            return;
+        }
+        self.noise.write_envelop(value)
+    }
+
+    /// Read NR43 register (0xff22)
+    pub fn read_noise_poly_counter(&self) -> u8 {
+        self.noise.read_poly_counter()
+    }
+
+    /// Write NR43 register (0xff22)
+    pub fn write_noise_poly_counter(&mut self, value: u8) {
+        if !self.enable {
+            return;
+        }
+        self.noise.write_poly_counter(value)
+    }
+
+    /// Read NR44 register (0xff23)
+    pub fn read_noise_select(&self) -> u8 {
+        self.noise.read_select()
+    }
+
+    /// Write NR44 register (0xff23)
+    pub fn write_noise_select(&mut self, value: u8) {
+        if !self.enable {
+            return;
+        }
         if self.noise.write_select(value) {
             self.mixer.restart_noise(self.noise.clone());
+        }
+    }
+
+    /// Read NR50 register (0xff24)
+    pub fn read_ctrl(&self) -> u8 {
+        let ctrl = self.mixer.read_ctrl();
+        debug!("Read NR50: {:02x}", ctrl);
+        ctrl
+    }
+
+    /// Write NR50 register (0xff24)
+    pub fn write_ctrl(&mut self, value: u8) {
+        if !self.enable {
+            return;
+        }
+        self.mixer.write_ctrl(value)
+    }
+
+    /// Read NR51 register (0xff25)
+    pub fn read_so_mask(&self) -> u8 {
+        let mask = self.mixer.read_so_mask();
+        debug!("Read NR51: {:02x}", mask);
+        mask
+    }
+
+    /// Write NR51 register (0xff25)
+    pub fn write_so_mask(&mut self, value: u8) {
+        if !self.enable {
+            return;
+        }
+        self.mixer.write_so_mask(value)
+    }
+
+    /// Read NR52 register (0xff26)
+    pub fn read_enable(&self) -> u8 {
+        let enabled = self.mixer.read_enable();
+        debug!("Read NR52: {:02x}", enabled);
+        enabled
+    }
+
+    /// Write NR52 register (0xff26)
+    pub fn write_enable(&mut self, value: u8) {
+        self.enable = self.mixer.write_enable(value);
+
+        if !self.enable {
+            // If disabled, clear all registers
+            for tone in &mut self.tones {
+                tone.clear();
+            }
+            self.wave.clear();
+            self.noise.clear();
+            self.mixer.clear();
         }
     }
 }
