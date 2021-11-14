@@ -109,6 +109,7 @@
 extern crate alloc;
 
 mod alu;
+mod apu;
 mod cgb;
 mod dma;
 mod fc;
@@ -118,7 +119,6 @@ mod ic;
 mod joypad;
 mod mbc;
 mod serial;
-mod sound;
 mod system;
 mod timer;
 mod wram;
