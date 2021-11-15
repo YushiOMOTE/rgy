@@ -6,6 +6,7 @@ mod wave;
 
 use self::{mixer::Mixer, noise::Noise, tone::Tone, wave::Wave};
 use crate::hardware::HardwareHandle;
+use alloc::boxed::Box;
 use log::*;
 
 pub struct Apu {
@@ -20,10 +21,12 @@ impl Apu {
     pub fn new(hw: HardwareHandle) -> Self {
         let mixer = Mixer::new();
 
-        mixer.setup_stream(&hw);
+        hw.get()
+            .borrow_mut()
+            .sound_play(Box::new(mixer.create_stream()));
 
         Self {
-            tones: [Tone::new(), Tone::new()],
+            tones: [Tone::new(true), Tone::new(false)],
             wave: Wave::new(),
             noise: Noise::new(),
             mixer,
@@ -272,6 +275,8 @@ impl Apu {
 
     /// Write NR52 register (0xff26)
     pub fn write_enable(&mut self, value: u8) {
+        debug!("Write NR52: {:02x}", value);
+
         self.enable = self.mixer.write_enable(value);
 
         if !self.enable {

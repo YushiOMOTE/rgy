@@ -4,8 +4,7 @@ use super::{
     util::AtomicHelper,
     wave::{Wave, WaveStream},
 };
-use crate::hardware::{HardwareHandle, Stream};
-use alloc::boxed::Box;
+use crate::hardware::Stream;
 use alloc::sync::Arc;
 use core::sync::atomic::{AtomicBool, AtomicUsize};
 use log::*;
@@ -30,12 +29,6 @@ impl Mixer {
             enable: false,
             stream: MixerStream::new(),
         }
-    }
-
-    pub fn setup_stream(&self, hw: &HardwareHandle) {
-        hw.get()
-            .borrow_mut()
-            .sound_play(Box::new(self.stream.clone()))
     }
 
     /// Read NR50 register (0xff24)
@@ -97,17 +90,20 @@ impl Mixer {
         self.enable
     }
 
-    pub fn restart_tone(&self, tone: usize, tone_value: Tone) {
-        let sweep = tone == 0;
-        self.stream.tones[tone].update(Some(ToneStream::new(tone_value, sweep)));
+    pub fn restart_tone(&self, index: usize, tone: Tone) {
+        self.stream.tones[index].update(Some(tone.create_stream()));
     }
 
-    pub fn restart_wave(&self, w: Wave) {
-        self.stream.wave.update(Some(WaveStream::new(w)));
+    pub fn restart_wave(&self, wave: Wave) {
+        self.stream.wave.update(Some(wave.create_stream()));
     }
 
-    pub fn restart_noise(&self, n: Noise) {
-        self.stream.noise.update(Some(NoiseStream::new(n)));
+    pub fn restart_noise(&self, noise: Noise) {
+        self.stream.noise.update(Some(noise.create_stream()));
+    }
+
+    pub fn create_stream(&self) -> MixerStream {
+        self.stream.clone()
     }
 
     // Update streams based on register settings
@@ -199,7 +195,7 @@ impl<T: Stream> Unit<T> {
 }
 
 #[derive(Clone)]
-struct MixerStream {
+pub struct MixerStream {
     tones: [Unit<ToneStream>; 2],
     wave: Unit<WaveStream>,
     noise: Unit<NoiseStream>,

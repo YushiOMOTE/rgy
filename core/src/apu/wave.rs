@@ -53,6 +53,7 @@ impl Wave {
     /// Write NR31 register (0xff1b)
     pub fn write_len(&mut self, value: u8) {
         self.sound_len = value as usize;
+        debug!("Wave: length = {}", self.sound_len);
     }
 
     /// Read NR32 register (0xff1c)
@@ -103,6 +104,11 @@ impl Wave {
         self.wavebuf[offset as usize - 0xff30] = value;
     }
 
+    /// Create stream from the current data
+    pub fn create_stream(&self) -> WaveStream {
+        WaveStream::new(self.clone())
+    }
+
     pub fn clear(&mut self) {
         let mut wave = Wave::new();
         core::mem::swap(&mut wave.wavebuf, &mut self.wavebuf);
@@ -117,7 +123,7 @@ pub struct WaveStream {
 }
 
 impl WaveStream {
-    pub fn new(wave: Wave) -> Self {
+    fn new(wave: Wave) -> Self {
         let counter = Counter::new(wave.counter, wave.sound_len, 256);
 
         Self {

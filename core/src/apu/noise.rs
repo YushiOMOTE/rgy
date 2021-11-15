@@ -1,5 +1,6 @@
 use super::util::{Counter, Envelop};
 use crate::hardware::Stream;
+use log::*;
 
 #[derive(Debug, Clone)]
 pub struct Noise {
@@ -50,6 +51,7 @@ impl Noise {
     /// Write NR41 register (0xff20)
     pub fn write_len(&mut self, value: u8) {
         self.sound_len = (value & 0x1f) as usize;
+        debug!("Noise: length = {}", self.sound_len);
     }
 
     /// Read NR42 register (0xff21)
@@ -88,6 +90,11 @@ impl Noise {
         self.select = value;
         self.counter = value & 0x40 != 0;
         value & 0x80 != 0
+    }
+
+    /// Create stream from the current data
+    pub fn create_stream(&self) -> NoiseStream {
+        NoiseStream::new(self.clone())
     }
 
     pub fn clear(&mut self) {

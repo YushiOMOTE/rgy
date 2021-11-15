@@ -65,7 +65,18 @@ fn set_affinity() {
 fn main() {
     let opt = Opt::from_args();
 
-    env_logger::init();
+    use std::io::Write;
+
+    let mut builder = env_logger::Builder::from_default_env();
+
+    builder
+        .format(|buf, record| {
+            let ts = buf.timestamp_millis();
+
+            writeln!(buf, "{}: {}: {}", ts, record.level(), record.args())
+        })
+        .init();
+    // env_logger::init();
 
     let hw = Hardware::new(opt.ram.clone(), opt.color);
     let hw1 = hw.clone();

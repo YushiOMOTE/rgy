@@ -1,8 +1,10 @@
 use super::util::{Counter, Envelop, WaveIndex};
 use crate::hardware::Stream;
+use log::*;
 
 #[derive(Debug, Clone)]
 pub struct Tone {
+    with_sweep: bool,
     sweep: u8,
     sweep_time: usize,
     sweep_sub: bool,
@@ -20,8 +22,9 @@ pub struct Tone {
 }
 
 impl Tone {
-    pub fn new() -> Self {
+    pub fn new(with_sweep: bool) -> Self {
         Self {
+            with_sweep,
             sweep: 0,
             sweep_time: 0,
             sweep_sub: false,
@@ -62,6 +65,7 @@ impl Tone {
         self.wave = value;
         self.wave_duty = (value >> 6).into();
         self.sound_len = (value & 0x1f) as usize;
+        debug!("Tone({}): length = {}", self.index(), self.sound_len);
     }
 
     /// Read NR12/NR22 register (0xff12/0xff17)
@@ -102,8 +106,21 @@ impl Tone {
         value & 0x80 != 0
     }
 
+    /// Create stream from the current data
+    pub fn create_stream(&self) -> ToneStream {
+        ToneStream::new(self.clone(), self.index() == 0)
+    }
+
     pub fn clear(&mut self) {
-        core::mem::swap(self, &mut Tone::new());
+        core::mem::swap(self, &mut Tone::new(self.with_sweep));
+    }
+
+    fn index(&self) -> usize {
+        if self.with_sweep {
+            1
+        } else {
+            2
+        }
     }
 }
 
@@ -166,7 +183,7 @@ pub struct ToneStream {
 }
 
 impl ToneStream {
-    pub fn new(tone: Tone, sweep: bool) -> Self {
+    fn new(tone: Tone, sweep: bool) -> Self {
         let freq = 131072 / (2048 - tone.freq);
         let sweep = Sweep::new(
             sweep,
