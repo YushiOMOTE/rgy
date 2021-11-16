@@ -244,6 +244,7 @@ impl Sys for Mmu {
         for req in self.gpu.step(cycles) {
             self.run_dma(req);
         }
+        self.apu.step(cycles);
         self.timer.step(cycles);
         self.serial.step(cycles);
         self.joypad.poll();

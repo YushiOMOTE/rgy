@@ -289,4 +289,8 @@ impl Apu {
             self.mixer.clear();
         }
     }
+
+    pub fn step(&mut self, cycles: usize) {
+        self.mixer.step(cycles);
+    }
 }

@@ -40,6 +40,16 @@ pub struct Counter {
 }
 
 impl Counter {
+    pub fn expired() -> Self {
+        Self {
+            can_expire: false,
+            count: 0,
+            base: 0,
+            clock: 0,
+            expired: true,
+        }
+    }
+
     pub fn new(can_expire: bool, count: usize, base: usize) -> Self {
         Self {
             can_expire,
@@ -51,6 +61,10 @@ impl Counter {
     }
 
     pub fn proceed(&mut self, rate: usize) {
+        self.proceed_by(rate, 1);
+    }
+
+    pub fn proceed_by(&mut self, rate: usize, count: usize) {
         if !self.can_expire || self.expired {
             return;
         }
@@ -60,7 +74,7 @@ impl Counter {
         if self.clock >= deadline {
             self.expired = true;
         } else {
-            self.clock += 1;
+            self.clock += count;
         }
     }
 

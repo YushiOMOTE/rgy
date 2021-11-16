@@ -111,6 +111,11 @@ impl Tone {
         ToneStream::new(self.clone(), self.index() == 0)
     }
 
+    /// Create counter
+    pub fn create_counter(&self) -> Counter {
+        Counter::new(self.counter, self.sound_len, 64)
+    }
+
     pub fn clear(&mut self) {
         core::mem::swap(self, &mut Tone::new(self.with_sweep));
     }
@@ -193,7 +198,7 @@ impl ToneStream {
             tone.sweep_shift,
         );
         let env = Envelop::new(tone.env_init, tone.env_count, tone.env_inc);
-        let counter = Counter::new(tone.counter, tone.sound_len, 64);
+        let counter = tone.create_counter();
 
         Self {
             tone,

@@ -97,6 +97,11 @@ impl Noise {
         NoiseStream::new(self.clone())
     }
 
+    /// Create counter
+    pub fn create_counter(&self) -> Counter {
+        Counter::new(self.counter, self.sound_len, 64)
+    }
+
     pub fn clear(&mut self) {
         core::mem::swap(self, &mut Noise::new());
     }
@@ -112,7 +117,7 @@ pub struct NoiseStream {
 impl NoiseStream {
     pub fn new(noise: Noise) -> Self {
         let env = Envelop::new(noise.env_init, noise.env_count, noise.env_inc);
-        let counter = Counter::new(noise.counter, noise.sound_len, 64);
+        let counter = noise.create_counter();
         let wave = RandomWave::new(noise.step);
 
         Self {

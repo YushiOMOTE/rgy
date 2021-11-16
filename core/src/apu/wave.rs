@@ -109,6 +109,11 @@ impl Wave {
         WaveStream::new(self.clone())
     }
 
+    /// Create counter
+    pub fn create_counter(&self) -> Counter {
+        Counter::new(self.counter, self.sound_len, 256)
+    }
+
     pub fn clear(&mut self) {
         let mut wave = Wave::new();
         core::mem::swap(&mut wave.wavebuf, &mut self.wavebuf);
@@ -124,7 +129,7 @@ pub struct WaveStream {
 
 impl WaveStream {
     fn new(wave: Wave) -> Self {
-        let counter = Counter::new(wave.counter, wave.sound_len, 256);
+        let counter = wave.create_counter();
 
         Self {
             wave,

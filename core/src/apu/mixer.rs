@@ -1,7 +1,7 @@
 use super::{
     noise::{Noise, NoiseStream},
     tone::{Tone, ToneStream},
-    util::AtomicHelper,
+    util::{AtomicHelper, Counter},
     wave::{Wave, WaveStream},
 };
 use crate::hardware::Stream;
@@ -17,6 +17,7 @@ pub struct Mixer {
     so_mask: usize,
     enable: bool,
     stream: MixerStream,
+    counters: [Counter; 4],
 }
 
 impl Mixer {
@@ -28,6 +29,12 @@ impl Mixer {
             so_mask: 0,
             enable: false,
             stream: MixerStream::new(),
+            counters: [
+                Counter::expired(),
+                Counter::expired(),
+                Counter::expired(),
+                Counter::expired(),
+            ],
         }
     }
 
@@ -59,18 +66,26 @@ impl Mixer {
     pub fn read_enable(&self) -> u8 {
         let mut v = 0x70;
         v |= if self.enable { 0x80 } else { 0x00 };
-        v |= if self.stream.tones[0].on() {
+        v |= if self.counters[0].is_expired() {
+            0x00
+        } else {
             0x01
-        } else {
-            0x00
         };
-        v |= if self.stream.tones[1].on() {
+        v |= if self.counters[1].is_expired() {
+            0x00
+        } else {
             0x02
-        } else {
-            0x00
         };
-        v |= if self.stream.wave.on() { 0x04 } else { 0x00 };
-        v |= if self.stream.noise.on() { 0x08 } else { 0x00 };
+        v |= if self.counters[2].is_expired() {
+            0x00
+        } else {
+            0x04
+        };
+        v |= if self.counters[3].is_expired() {
+            0x00
+        } else {
+            0x08
+        };
         v
     }
 
@@ -85,21 +100,33 @@ impl Mixer {
             self.so1_volume = 0;
             self.so2_volume = 0;
             self.so_mask = 0;
+            for c in &mut self.counters {
+                *c = Counter::expired();
+            }
         }
         self.update_stream();
         self.enable
     }
 
-    pub fn restart_tone(&self, index: usize, tone: Tone) {
+    pub fn restart_tone(&mut self, index: usize, tone: Tone) {
+        self.counters[index] = tone.create_counter();
         self.stream.tones[index].update(Some(tone.create_stream()));
     }
 
-    pub fn restart_wave(&self, wave: Wave) {
+    pub fn restart_wave(&mut self, wave: Wave) {
+        self.counters[2] = wave.create_counter();
         self.stream.wave.update(Some(wave.create_stream()));
     }
 
-    pub fn restart_noise(&self, noise: Noise) {
+    pub fn restart_noise(&mut self, noise: Noise) {
+        self.counters[3] = noise.create_counter();
         self.stream.noise.update(Some(noise.create_stream()));
+    }
+
+    pub fn step(&mut self, cycles: usize) {
+        for c in &mut self.counters {
+            c.proceed_by(4_000_000, cycles);
+        }
     }
 
     pub fn create_stream(&self) -> MixerStream {
