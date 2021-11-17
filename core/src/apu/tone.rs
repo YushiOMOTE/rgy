@@ -64,7 +64,7 @@ impl Tone {
     pub fn write_wave(&mut self, value: u8) {
         self.wave = value;
         self.wave_duty = (value >> 6).into();
-        self.sound_len = (value & 0x1f) as usize;
+        self.sound_len = (value & 0x3f) as usize;
         debug!("Tone({}): length = {}", self.index(), self.sound_len);
     }
 

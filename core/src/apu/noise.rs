@@ -50,7 +50,7 @@ impl Noise {
 
     /// Write NR41 register (0xff20)
     pub fn write_len(&mut self, value: u8) {
-        self.sound_len = (value & 0x1f) as usize;
+        self.sound_len = (value & 0x3f) as usize;
         debug!("Noise: length = {}", self.sound_len);
     }
 
