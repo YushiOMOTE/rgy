@@ -208,21 +208,21 @@ impl<T: Sys> Cpu<T> {
         info!("Interrupted: {:02x}", value);
 
         self.interrupted(value);
-
-        if self.halt {
-            self.step(24);
-        } else {
-            self.step(20);
-        }
-
-        self.halt = false;
     }
 
     fn interrupted(&mut self, vector_addr: u8) {
+        if self.halt {
+            self.halt = false;
+            self.step(4);
+        }
+
         self.disable_interrupt();
 
+        // wait state
+        self.step(8);
+
         self.push(self.get_pc());
-        self.set_pc(vector_addr as u16);
+        self.jump(vector_addr as u16);
     }
 
     /// Stop the CPU.
