@@ -1,11 +1,8 @@
 use super::util::{Counter, Envelop};
 use crate::hardware::Stream;
-use log::*;
 
 #[derive(Debug, Clone)]
 pub struct Noise {
-    sound_len: usize,
-
     envelop: u8,
     env_init: usize,
     env_inc: bool,
@@ -17,15 +14,15 @@ pub struct Noise {
     div_freq: usize,
 
     select: u8,
-    counter: bool,
+    counter: Counter,
     freq: usize,
+
+    dac: bool,
 }
 
 impl Noise {
     pub fn new() -> Self {
         Self {
-            sound_len: 0,
-
             envelop: 0,
             env_init: 0,
             env_inc: false,
@@ -37,8 +34,10 @@ impl Noise {
             div_freq: 0,
 
             select: 0,
-            counter: false,
+            counter: Counter::new(false, 0, 64),
             freq: 0,
+
+            dac: false,
         }
     }
 
@@ -50,8 +49,7 @@ impl Noise {
 
     /// Write NR41 register (0xff20)
     pub fn write_len(&mut self, value: u8) {
-        self.sound_len = (value & 0x3f) as usize;
-        debug!("Noise: length = {}", self.sound_len);
+        self.counter.load((value & 0x3f) as usize);
     }
 
     /// Read NR42 register (0xff21)
@@ -65,6 +63,10 @@ impl Noise {
         self.env_init = (value >> 4) as usize;
         self.env_inc = value & 0x08 != 0;
         self.env_count = (value & 0x7) as usize;
+        self.dac = value & 0xf8 != 0;
+        if !self.dac {
+            self.counter.deactivate();
+        }
     }
 
     /// Read NR43 register (0xff22)
@@ -88,8 +90,12 @@ impl Noise {
     /// Write NR44 register (0xff23)
     pub fn write_select(&mut self, value: u8) -> bool {
         self.select = value;
-        self.counter = value & 0x40 != 0;
-        value & 0x80 != 0
+        self.counter.enable(value & 0x40 != 0);
+        let start = value & 0x80 != 0;
+        if start {
+            self.counter.trigger();
+        }
+        start
     }
 
     /// Create stream from the current data
@@ -97,9 +103,12 @@ impl Noise {
         NoiseStream::new(self.clone())
     }
 
-    /// Create counter
-    pub fn create_counter(&self) -> Counter {
-        Counter::new(self.counter, self.sound_len, 64)
+    pub fn proceed(&mut self, rate: usize, cycles: usize) {
+        self.counter.proceed(rate, cycles);
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.counter.is_active() && self.dac
     }
 
     pub fn clear(&mut self) {
@@ -117,7 +126,7 @@ pub struct NoiseStream {
 impl NoiseStream {
     pub fn new(noise: Noise) -> Self {
         let env = Envelop::new(noise.env_init, noise.env_count, noise.env_inc);
-        let counter = noise.create_counter();
+        let counter = noise.counter.clone();
         let wave = RandomWave::new(noise.step);
 
         Self {
@@ -137,9 +146,9 @@ impl Stream for NoiseStream {
     fn next(&mut self, rate: u32) -> u16 {
         let rate = rate as usize;
 
-        self.counter.proceed(rate);
+        self.counter.proceed(rate, 1);
 
-        if self.counter.is_expired() {
+        if !self.counter.is_active() {
             return 0;
         }
 
@@ -164,7 +173,7 @@ impl Stream for NoiseStream {
     }
 
     fn on(&self) -> bool {
-        !self.counter.is_expired()
+        self.counter.is_active()
     }
 }
 

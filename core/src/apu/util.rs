@@ -31,8 +31,10 @@ impl AtomicHelper for AtomicBool {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Counter {
-    can_expire: bool,
+    enable: bool,
+    active: bool,
     count: usize,
     base: usize,
     clock: usize,
@@ -40,19 +42,10 @@ pub struct Counter {
 }
 
 impl Counter {
-    pub fn expired() -> Self {
+    pub fn new(enable: bool, count: usize, base: usize) -> Self {
         Self {
-            can_expire: false,
-            count: 0,
-            base: 0,
-            clock: 0,
-            expired: true,
-        }
-    }
-
-    pub fn new(can_expire: bool, count: usize, base: usize) -> Self {
-        Self {
-            can_expire,
+            enable,
+            active: false,
             expired: false,
             count,
             base,
@@ -60,26 +53,49 @@ impl Counter {
         }
     }
 
-    pub fn proceed(&mut self, rate: usize) {
-        self.proceed_by(rate, 1);
+    pub fn trigger(&mut self) {
+        if self.expired {
+            // If expired, set the count back to maximum
+            self.count = 0;
+            self.clock = 0;
+        }
+        self.active = true;
+        self.expired = false;
     }
 
-    pub fn proceed_by(&mut self, rate: usize, count: usize) {
-        if !self.can_expire || self.expired {
+    pub fn deactivate(&mut self) {
+        self.active = false;
+    }
+
+    pub fn enable(&mut self, enable: bool) {
+        self.enable = enable;
+    }
+
+    pub fn load(&mut self, count: usize) {
+        self.count = count;
+        self.clock = 0;
+        self.expired = false;
+    }
+
+    pub fn proceed(&mut self, rate: usize, count: usize) {
+        if !self.enable || self.expired {
             return;
         }
 
         let deadline = rate * (self.base - self.count) / 256;
 
+        self.clock += count;
         if self.clock >= deadline {
+            self.clock = deadline;
             self.expired = true;
-        } else {
-            self.clock += count;
+
+            // Timeout de-activates the channel
+            self.active = false;
         }
     }
 
-    pub fn is_expired(&self) -> bool {
-        self.expired
+    pub fn is_active(&self) -> bool {
+        self.active
     }
 }
 

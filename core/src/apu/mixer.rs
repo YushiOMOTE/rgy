@@ -1,13 +1,12 @@
 use super::{
     noise::{Noise, NoiseStream},
     tone::{Tone, ToneStream},
-    util::{AtomicHelper, Counter},
+    util::AtomicHelper,
     wave::{Wave, WaveStream},
 };
 use crate::hardware::Stream;
 use alloc::sync::Arc;
 use core::sync::atomic::{AtomicBool, AtomicUsize};
-use log::*;
 use spin::Mutex;
 
 pub struct Mixer {
@@ -17,7 +16,6 @@ pub struct Mixer {
     so_mask: usize,
     enable: bool,
     stream: MixerStream,
-    counters: [Counter; 4],
 }
 
 impl Mixer {
@@ -29,12 +27,6 @@ impl Mixer {
             so_mask: 0,
             enable: false,
             stream: MixerStream::new(),
-            counters: [
-                Counter::expired(),
-                Counter::expired(),
-                Counter::expired(),
-                Counter::expired(),
-            ],
         }
     }
 
@@ -62,75 +54,27 @@ impl Mixer {
         self.update_stream();
     }
 
-    /// Read NR52 register (0xff26)
-    pub fn read_enable(&self) -> u8 {
-        let mut v = 0x70;
-        v |= if self.enable { 0x80 } else { 0x00 };
-        v |= if self.counters[0].is_expired() {
-            0x00
-        } else {
-            0x01
-        };
-        v |= if self.counters[1].is_expired() {
-            0x00
-        } else {
-            0x02
-        };
-        v |= if self.counters[2].is_expired() {
-            0x00
-        } else {
-            0x04
-        };
-        v |= if self.counters[3].is_expired() {
-            0x00
-        } else {
-            0x08
-        };
-        v
-    }
-
-    /// Write NR52 register (0xff26)
-    pub fn write_enable(&mut self, value: u8) -> bool {
-        self.enable = value & 0x80 != 0;
-        if self.enable {
-            info!("Sound master enabled");
-        } else {
-            info!("Sound master disabled");
-            self.ctrl = 0;
-            self.so1_volume = 0;
-            self.so2_volume = 0;
-            self.so_mask = 0;
-            for c in &mut self.counters {
-                *c = Counter::expired();
-            }
-        }
-        self.update_stream();
-        self.enable
-    }
-
-    pub fn restart_tone(&mut self, index: usize, tone: Tone) {
-        self.counters[index] = tone.create_counter();
+    pub fn sync_tone(&mut self, index: usize, tone: Tone) {
         self.stream.tones[index].update(Some(tone.create_stream()));
     }
 
-    pub fn restart_wave(&mut self, wave: Wave) {
-        self.counters[2] = wave.create_counter();
+    pub fn sync_wave(&mut self, wave: Wave) {
         self.stream.wave.update(Some(wave.create_stream()));
     }
 
-    pub fn restart_noise(&mut self, noise: Noise) {
-        self.counters[3] = noise.create_counter();
+    pub fn sync_noise(&mut self, noise: Noise) {
         self.stream.noise.update(Some(noise.create_stream()));
     }
 
-    pub fn step(&mut self, cycles: usize) {
-        for c in &mut self.counters {
-            c.proceed_by(4_000_000, cycles);
-        }
-    }
+    pub fn proceed(&mut self, _rate: usize, _cycles: usize) {}
 
     pub fn create_stream(&self) -> MixerStream {
         self.stream.clone()
+    }
+
+    pub fn enable(&mut self, enable: bool) {
+        self.enable = enable;
+        self.update_stream();
     }
 
     // Update streams based on register settings
@@ -162,6 +106,10 @@ impl Mixer {
     }
 
     pub fn clear(&mut self) {
+        self.ctrl = 0;
+        self.so1_volume = 0;
+        self.so2_volume = 0;
+        self.so_mask = 0;
         for tone in &mut self.stream.tones {
             tone.clear();
         }
@@ -194,13 +142,6 @@ impl<T> Unit<T> {
 }
 
 impl<T: Stream> Unit<T> {
-    fn on(&self) -> bool {
-        match self.stream.lock().as_ref() {
-            Some(stream) => stream.on(),
-            _ => false,
-        }
-    }
-
     fn update(&self, s: Option<T>) {
         *self.stream.lock() = s;
     }

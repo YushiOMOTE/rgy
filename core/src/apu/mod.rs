@@ -97,7 +97,7 @@ impl Apu {
             return;
         }
         if self.tones[tone].write_freq_high(value) {
-            self.mixer.restart_tone(tone, self.tones[tone].clone());
+            self.mixer.sync_tone(tone, self.tones[tone].clone());
         }
     }
 
@@ -112,7 +112,7 @@ impl Apu {
             return;
         }
         self.wave.write_enable(value);
-        self.mixer.restart_wave(self.wave.clone());
+        self.mixer.sync_wave(self.wave.clone());
     }
 
     /// Read NR31 register (0xff1b)
@@ -165,7 +165,7 @@ impl Apu {
             return;
         }
         if self.wave.write_freq_high(value) {
-            self.mixer.restart_wave(self.wave.clone());
+            self.mixer.sync_wave(self.wave.clone());
         }
     }
 
@@ -232,7 +232,7 @@ impl Apu {
             return;
         }
         if self.noise.write_select(value) {
-            self.mixer.restart_noise(self.noise.clone());
+            self.mixer.sync_noise(self.noise.clone());
         }
     }
 
@@ -268,18 +268,36 @@ impl Apu {
 
     /// Read NR52 register (0xff26)
     pub fn read_enable(&self) -> u8 {
-        let enabled = self.mixer.read_enable();
-        debug!("Read NR52: {:02x}", enabled);
-        enabled
+        let mut v = 0x70;
+        v |= if self.enable { 0x80 } else { 0x00 };
+        v |= if self.tones[0].is_active() {
+            0x01
+        } else {
+            0x00
+        };
+        v |= if self.tones[1].is_active() {
+            0x02
+        } else {
+            0x00
+        };
+        v |= if self.wave.is_active() { 0x04 } else { 0x00 };
+        v |= if self.noise.is_active() { 0x08 } else { 0x00 };
+        debug!("Read NR52: {:02x}", v);
+        v
     }
 
     /// Write NR52 register (0xff26)
     pub fn write_enable(&mut self, value: u8) {
         debug!("Write NR52: {:02x}", value);
 
-        self.enable = self.mixer.write_enable(value);
+        self.enable = value & 0x80 != 0;
 
-        if !self.enable {
+        self.mixer.enable(self.enable);
+
+        if self.enable {
+            info!("Sound master enabled");
+        } else {
+            info!("Sound master disabled");
             // If disabled, clear all registers
             for tone in &mut self.tones {
                 tone.clear();
@@ -291,6 +309,12 @@ impl Apu {
     }
 
     pub fn step(&mut self, cycles: usize) {
-        self.mixer.step(cycles);
+        let rate = 4_194_304;
+        for tone in &mut self.tones {
+            tone.proceed(rate, cycles);
+        }
+        self.wave.proceed(rate, cycles);
+        self.noise.proceed(rate, cycles);
+        self.mixer.proceed(rate, cycles);
     }
 }

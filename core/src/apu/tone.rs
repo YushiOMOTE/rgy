@@ -1,6 +1,5 @@
 use super::util::{Counter, Envelop, WaveIndex};
 use crate::hardware::Stream;
-use log::*;
 
 #[derive(Debug, Clone)]
 pub struct Tone {
@@ -10,15 +9,15 @@ pub struct Tone {
     sweep_sub: bool,
     sweep_shift: usize,
     wave: u8,
-    sound_len: usize,
     wave_duty: usize,
     envelop: u8,
     env_init: usize,
     env_inc: bool,
     env_count: usize,
-    counter: bool,
+    counter: Counter,
     freq: usize,
     freq_high: u8,
+    dac: bool,
 }
 
 impl Tone {
@@ -30,15 +29,15 @@ impl Tone {
             sweep_sub: false,
             sweep_shift: 0,
             wave: 0,
-            sound_len: 0,
             wave_duty: 0,
             envelop: 0,
             env_init: 0,
             env_inc: false,
             env_count: 0,
-            counter: false,
+            counter: Counter::new(false, 0, 64),
             freq: 0,
             freq_high: 0,
+            dac: false,
         }
     }
 
@@ -64,8 +63,7 @@ impl Tone {
     pub fn write_wave(&mut self, value: u8) {
         self.wave = value;
         self.wave_duty = (value >> 6).into();
-        self.sound_len = (value & 0x3f) as usize;
-        debug!("Tone({}): length = {}", self.index(), self.sound_len);
+        self.counter.load((value & 0x3f) as usize);
     }
 
     /// Read NR12/NR22 register (0xff12/0xff17)
@@ -79,6 +77,10 @@ impl Tone {
         self.env_init = (value >> 4) as usize;
         self.env_inc = value & 0x08 != 0;
         self.env_count = (value & 0x7) as usize;
+        self.dac = value & 0xf8 != 0;
+        if !self.dac {
+            self.counter.deactivate();
+        }
     }
 
     /// Read NR13/NR23 register (0xff13/0xff18)
@@ -101,9 +103,13 @@ impl Tone {
     /// Write NR14/NR24 register (0xff14/0xff19)
     pub fn write_freq_high(&mut self, value: u8) -> bool {
         self.freq_high = value;
-        self.counter = value & 0x40 != 0;
+        self.counter.enable(value & 0x40 != 0);
         self.freq = (self.freq & !0x700) | (((value & 0x7) as usize) << 8);
-        value & 0x80 != 0
+        let start = value & 0x80 != 0;
+        if start {
+            self.counter.trigger();
+        }
+        start
     }
 
     /// Create stream from the current data
@@ -111,13 +117,16 @@ impl Tone {
         ToneStream::new(self.clone(), self.index() == 0)
     }
 
-    /// Create counter
-    pub fn create_counter(&self) -> Counter {
-        Counter::new(self.counter, self.sound_len, 64)
-    }
-
     pub fn clear(&mut self) {
         core::mem::swap(self, &mut Tone::new(self.with_sweep));
+    }
+
+    pub fn proceed(&mut self, rate: usize, cycles: usize) {
+        self.counter.proceed(rate, cycles);
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.counter.is_active() && self.dac
     }
 
     fn index(&self) -> usize {
@@ -198,7 +207,7 @@ impl ToneStream {
             tone.sweep_shift,
         );
         let env = Envelop::new(tone.env_init, tone.env_count, tone.env_inc);
-        let counter = tone.create_counter();
+        let counter = tone.counter.clone();
 
         Self {
             tone,
@@ -218,9 +227,9 @@ impl Stream for ToneStream {
     fn next(&mut self, rate: u32) -> u16 {
         let rate = rate as usize;
 
-        self.counter.proceed(rate);
+        self.counter.proceed(rate, 1);
 
-        if self.counter.is_expired() {
+        if !self.counter.is_active() {
             return 0;
         }
 
@@ -248,6 +257,6 @@ impl Stream for ToneStream {
     }
 
     fn on(&self) -> bool {
-        !self.counter.is_expired()
+        self.counter.is_active()
     }
 }
