@@ -1,5 +1,6 @@
-use super::util::{Counter, Envelop};
 use crate::hardware::Stream;
+
+use super::util::{Counter, Envelop};
 
 #[derive(Debug, Clone)]
 pub struct Noise {
@@ -34,7 +35,7 @@ impl Noise {
             div_freq: 0,
 
             select: 0,
-            counter: Counter::new(false, 0, 64),
+            counter: Counter::type64(),
             freq: 0,
 
             dac: false,
@@ -90,12 +91,10 @@ impl Noise {
     /// Write NR44 register (0xff23)
     pub fn write_select(&mut self, value: u8) -> bool {
         self.select = value;
-        self.counter.enable(value & 0x40 != 0);
-        let start = value & 0x80 != 0;
-        if start {
-            self.counter.trigger();
-        }
-        start
+        let trigger = value & 0x80 != 0;
+        let enable = value & 0x40 != 0;
+        self.counter.update(trigger, enable);
+        trigger
     }
 
     /// Create stream from the current data
@@ -103,8 +102,8 @@ impl Noise {
         NoiseStream::new(self.clone())
     }
 
-    pub fn proceed(&mut self, rate: usize, cycles: usize) {
-        self.counter.proceed(rate, cycles);
+    pub fn step(&mut self, cycles: usize) {
+        self.counter.step(cycles);
     }
 
     pub fn is_active(&self) -> bool {
@@ -146,7 +145,7 @@ impl Stream for NoiseStream {
     fn next(&mut self, rate: u32) -> u16 {
         let rate = rate as usize;
 
-        self.counter.proceed(rate, 1);
+        self.counter.step_with_rate(rate);
 
         if !self.counter.is_active() {
             return 0;

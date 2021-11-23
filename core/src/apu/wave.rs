@@ -1,8 +1,11 @@
-use super::util::{AtomicHelper, Counter, WaveIndex};
-use crate::hardware::Stream;
 use alloc::sync::Arc;
 use core::sync::atomic::AtomicUsize;
+
 use log::*;
+
+use crate::hardware::Stream;
+
+use super::util::{AtomicHelper, Counter, WaveIndex};
 
 #[derive(Debug, Clone)]
 pub struct Wave {
@@ -22,7 +25,7 @@ impl Wave {
             enable: false,
             amp: 0,
             amp_shift: Arc::new(AtomicUsize::new(0)),
-            counter: Counter::new(false, 0, 256),
+            counter: Counter::type256(),
             freq: Arc::new(AtomicUsize::new(0)),
             freq_high: 0,
             wavebuf: [0; 16],
@@ -91,14 +94,12 @@ impl Wave {
     /// Write NR34 register (0xff1e)
     pub fn write_freq_high(&mut self, value: u8) -> bool {
         self.freq_high = value;
-        self.counter.enable(value & 0x40 != 0);
         self.freq
             .set((self.freq.get() & !0x700) | (((value & 0x7) as usize) << 8));
-        let start = value & 0x80 != 0;
-        if start {
-            self.counter.trigger();
-        }
-        start
+        let trigger = value & 0x80 != 0;
+        let enable = value & 0x40 != 0;
+        self.counter.update(trigger, enable);
+        trigger
     }
 
     /// Read wave pattern buffer
@@ -116,8 +117,8 @@ impl Wave {
         WaveStream::new(self.clone())
     }
 
-    pub fn proceed(&mut self, rate: usize, cycles: usize) {
-        self.counter.proceed(rate, cycles);
+    pub fn step(&mut self, cycles: usize) {
+        self.counter.step(cycles);
     }
 
     pub fn is_active(&self) -> bool {
@@ -161,7 +162,7 @@ impl Stream for WaveStream {
 
         let rate = rate as usize;
 
-        self.counter.proceed(rate, 1);
+        self.counter.step_with_rate(rate);
 
         if !self.counter.is_active() {
             return 0;

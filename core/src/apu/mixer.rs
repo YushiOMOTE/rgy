@@ -66,7 +66,7 @@ impl Mixer {
         self.stream.noise.update(Some(noise.create_stream()));
     }
 
-    pub fn proceed(&mut self, _rate: usize, _cycles: usize) {}
+    pub fn step(&mut self, _cycles: usize) {}
 
     pub fn create_stream(&self) -> MixerStream {
         self.stream.clone()

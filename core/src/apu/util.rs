@@ -1,5 +1,7 @@
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
+use log::*;
+
 pub trait AtomicHelper {
     type Item;
 
@@ -35,67 +37,131 @@ impl AtomicHelper for AtomicBool {
 pub struct Counter {
     enable: bool,
     active: bool,
-    count: usize,
+    length: usize,
+    rate: usize,
     base: usize,
-    clock: usize,
-    expired: bool,
+    count: usize,
+    freeze: bool,
 }
 
 impl Counter {
-    pub fn new(enable: bool, count: usize, base: usize) -> Self {
+    fn new(base: usize) -> Self {
         Self {
-            enable,
+            enable: false,
             active: false,
-            expired: false,
-            count,
+            length: 0,
+            rate: 4_194_304,
             base,
-            clock: 0,
+            count: 0,
+            freeze: false,
         }
     }
 
-    pub fn trigger(&mut self) {
-        if self.expired {
-            // If expired, set the count back to maximum
-            self.count = 0;
-            self.clock = 0;
+    pub fn type64() -> Self {
+        Self::new(64)
+    }
+
+    pub fn type256() -> Self {
+        Self::new(256)
+    }
+
+    // trigger, enable, freeze
+
+    pub fn update(&mut self, trigger: bool, enable: bool) {
+        debug!("trigger={}, enable={}: {:p}: {:?}", trigger, enable, self, self);
+
+        // Conditions to clock when enabled.
+        let in_first_half = self.count <= self.length_period() / 2; // First half
+        let disabled_to_enabled = !self.enable && enable; // TODO: GB only. CGB has a different condition.
+        let clock_by_enable = disabled_to_enabled && in_first_half;
+        let freeze_by_enable = if clock_by_enable {
+            self.length == 1
+        } else {
+            false
+        };
+
+        if clock_by_enable {
+            debug!("clock by enable");
+            self.clock();
         }
-        self.active = true;
-        self.expired = false;
+
+        if freeze_by_enable {
+            debug!("freeze by enable");
+            self.freeze = true;
+        } else if !trigger && enable {
+            debug!("unfreeze by enable");
+            self.freeze = false;
+        }
+
+        if trigger && self.length == 0 {
+            self.length = self.base;
+        }
+
+        if trigger {
+            if self.freeze && enable {
+                debug!("clock by trigger");
+                self.clock();
+            }
+            self.freeze = false;
+        }
+
+        // Trigger activates counting.
+        if trigger {
+            self.active = true;
+        }
+
+        self.enable = enable;
+
+        if self.length == 0 {
+            // If the clock makes length zero, should deactivate
+            self.active = false;
+        }
     }
 
     pub fn deactivate(&mut self) {
         self.active = false;
     }
 
-    pub fn enable(&mut self, enable: bool) {
-        self.enable = enable;
+    pub fn load(&mut self, value: usize) {
+        self.length = self.base - value;
     }
 
-    pub fn load(&mut self, count: usize) {
-        self.count = count;
-        self.clock = 0;
-        self.expired = false;
+    /// Called in the OS thread with sampling rate
+    pub fn step_with_rate(&mut self, rate: usize) {
+        self.rate = rate;
+        self.step(1);
     }
 
-    pub fn proceed(&mut self, rate: usize, count: usize) {
-        if !self.enable || self.expired {
-            return;
-        }
+    pub fn step(&mut self, count: usize) {
+        let period = self.length_period();
 
-        let deadline = rate * (self.base - self.count) / 256;
+        self.count += count;
 
-        self.clock += count;
-        if self.clock >= deadline {
-            self.clock = deadline;
-            self.expired = true;
+        if self.count >= period {
+            self.count = self.count - period;
 
-            // Timeout de-activates the channel
-            self.active = false;
+            if self.enable {
+                // Disabling length should stop length clocking
+                self.clock();
+
+                if self.length == 0 {
+                    // Timeout de-activates the channel
+                    self.active = false;
+                }
+            }
         }
     }
 
     pub fn is_active(&self) -> bool {
         self.active
+    }
+
+    fn clock(&mut self) {
+        self.length = self.length.saturating_sub(1);
+    }
+
+    fn length_period(&self) -> usize {
+        self.rate / 256
     }
 }
 

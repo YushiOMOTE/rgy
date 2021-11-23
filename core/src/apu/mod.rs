@@ -309,12 +309,11 @@ impl Apu {
     }
 
     pub fn step(&mut self, cycles: usize) {
-        let rate = 4_194_304;
         for tone in &mut self.tones {
-            tone.proceed(rate, cycles);
+            tone.step(cycles);
         }
-        self.wave.proceed(rate, cycles);
-        self.noise.proceed(rate, cycles);
-        self.mixer.proceed(rate, cycles);
+        self.wave.step(cycles);
+        self.noise.step(cycles);
+        self.mixer.step(cycles);
     }
 }

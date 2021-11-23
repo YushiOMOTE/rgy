@@ -1,5 +1,6 @@
-use super::util::{Counter, Envelop, WaveIndex};
 use crate::hardware::Stream;
+
+use super::util::{Counter, Envelop, WaveIndex};
 
 #[derive(Debug, Clone)]
 pub struct Tone {
@@ -34,7 +35,7 @@ impl Tone {
             env_init: 0,
             env_inc: false,
             env_count: 0,
-            counter: Counter::new(false, 0, 64),
+            counter: Counter::type64(),
             freq: 0,
             freq_high: 0,
             dac: false,
@@ -103,13 +104,11 @@ impl Tone {
     /// Write NR14/NR24 register (0xff14/0xff19)
     pub fn write_freq_high(&mut self, value: u8) -> bool {
         self.freq_high = value;
-        self.counter.enable(value & 0x40 != 0);
         self.freq = (self.freq & !0x700) | (((value & 0x7) as usize) << 8);
-        let start = value & 0x80 != 0;
-        if start {
-            self.counter.trigger();
-        }
-        start
+        let trigger = value & 0x80 != 0;
+        let enable = value & 0x40 != 0;
+        self.counter.update(trigger, enable);
+        trigger
     }
 
     /// Create stream from the current data
@@ -121,8 +120,8 @@ impl Tone {
         core::mem::swap(self, &mut Tone::new(self.with_sweep));
     }
 
-    pub fn proceed(&mut self, rate: usize, cycles: usize) {
-        self.counter.proceed(rate, cycles);
+    pub fn step(&mut self, cycles: usize) {
+        self.counter.step(cycles);
     }
 
     pub fn is_active(&self) -> bool {
@@ -227,7 +226,7 @@ impl Stream for ToneStream {
     fn next(&mut self, rate: u32) -> u16 {
         let rate = rate as usize;
 
-        self.counter.proceed(rate, 1);
+        self.counter.step_with_rate(rate);
 
         if !self.counter.is_active() {
             return 0;
