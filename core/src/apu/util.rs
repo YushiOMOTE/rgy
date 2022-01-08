@@ -133,10 +133,9 @@ impl Counter {
     }
 
     pub fn step(&mut self, count: usize) {
-        let period = self.length_period();
-
         self.count += count;
 
+        let period = self.length_period();
         if self.count >= period {
             self.count = self.count - period;
 

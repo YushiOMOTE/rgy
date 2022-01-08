@@ -1,15 +1,17 @@
+use log::*;
+
 use crate::hardware::Stream;
 
 use super::util::{Counter, Envelop, WaveIndex};
 
 #[derive(Debug, Clone)]
 pub struct Tone {
-    with_sweep: bool,
-    sweep: u8,
+    sweep: Option<Sweep>,
+    sweep_raw: u8,
     sweep_time: usize,
     sweep_sub: bool,
     sweep_shift: usize,
-    wave: u8,
+    wave_raw: u8,
     wave_duty: usize,
     envelop: u8,
     env_init: usize,
@@ -24,12 +26,12 @@ pub struct Tone {
 impl Tone {
     pub fn new(with_sweep: bool) -> Self {
         Self {
-            with_sweep,
-            sweep: 0,
+            sweep: if with_sweep { Some(Sweep::new()) } else { None },
+            sweep_raw: 0,
             sweep_time: 0,
             sweep_sub: false,
             sweep_shift: 0,
-            wave: 0,
+            wave_raw: 0,
             wave_duty: 0,
             envelop: 0,
             env_init: 0,
@@ -44,25 +46,29 @@ impl Tone {
 
     /// Read NR10 register (0xff10)
     pub fn read_sweep(&self) -> u8 {
-        self.sweep | 0x80
+        self.sweep_raw | 0x80
     }
 
     /// Write NR10 register (0xff10)
     pub fn write_sweep(&mut self, value: u8) {
-        self.sweep = value;
+        debug!("write NR10: {:02x}", value);
+        self.sweep_raw = value;
         self.sweep_time = ((value >> 4) & 0x7) as usize;
         self.sweep_sub = value & 0x08 != 0;
         self.sweep_shift = (value & 0x07) as usize;
+        if let Some(sweep) = &mut self.sweep {
+            sweep.update_time_shift(self.sweep_time, self.sweep_shift);
+        }
     }
 
     /// Read NR11/NR21 register (0xff11/0xff16)
     pub fn read_wave(&self) -> u8 {
-        self.wave | 0x3f
+        self.wave_raw | 0x3f
     }
 
     /// Write NR11/NR21 register (0xff11/0xff16)
     pub fn write_wave(&mut self, value: u8) {
-        self.wave = value;
+        self.wave_raw = value;
         self.wave_duty = (value >> 6).into();
         self.counter.load((value & 0x3f) as usize);
     }
@@ -108,112 +114,207 @@ impl Tone {
         let trigger = value & 0x80 != 0;
         let enable = value & 0x40 != 0;
         self.counter.update(trigger, enable);
+        if let Some(sweep) = self.sweep.as_mut() {
+            sweep.trigger(self.freq, self.sweep_time, self.sweep_sub, self.sweep_shift);
+        }
         trigger
     }
 
     /// Create stream from the current data
     pub fn create_stream(&self) -> ToneStream {
-        ToneStream::new(self.clone(), self.index() == 0)
+        ToneStream::new(self.clone())
     }
 
     pub fn clear(&mut self) {
-        core::mem::swap(self, &mut Tone::new(self.with_sweep));
+        core::mem::swap(self, &mut Tone::new(self.sweep.is_some()));
     }
 
     pub fn step(&mut self, cycles: usize) {
+        if let Some(sweep) = self.sweep.as_mut() {
+            sweep.step(cycles);
+        }
         self.counter.step(cycles);
     }
 
     pub fn is_active(&self) -> bool {
-        self.counter.is_active() && self.dac
+        let sweep_active = if let Some(sweep) = self.sweep.as_ref() {
+            sweep.is_active()
+        } else {
+            true
+        };
+
+        self.counter.is_active() && self.dac && sweep_active
     }
 
-    fn index(&self) -> usize {
-        if self.with_sweep {
-            1
-        } else {
-            2
-        }
+    fn real_freq(&self) -> usize {
+        let raw_freq = match &self.sweep {
+            Some(sweep) => sweep.freq(),
+            None => self.freq,
+        };
+        131072 / (2048 - raw_freq)
     }
 }
 
+#[derive(Clone, Debug)]
 struct Sweep {
     enable: bool,
+    active: bool,
+    rate: usize,
+    cycles: usize,
     freq: usize,
-    time: usize,
-    sub: bool,
+    shadow_freq: usize,
+    count: usize,
+    timer: usize,
+    subtract: bool,
+    period: usize,
     shift: usize,
-    clock: usize,
 }
 
 impl Sweep {
-    fn new(enable: bool, freq: usize, time: usize, sub: bool, shift: usize) -> Self {
+    fn new() -> Self {
         Self {
-            enable,
-            freq,
-            time,
-            sub,
-            shift,
-            clock: 0,
+            enable: false,
+            active: false,
+            rate: 4_194_304,
+            cycles: 0,
+            freq: 0,
+            shadow_freq: 0,
+            count: 0,
+            timer: 0,
+            subtract: false,
+            period: 0,
+            shift: 0,
         }
     }
 
-    fn freq(&mut self, rate: usize) -> usize {
-        if !self.enable || self.time == 0 || self.shift == 0 {
-            return self.freq;
+    fn trigger(&mut self, freq: usize, period: usize, subtract: bool, shift: usize) {
+        self.freq = freq;
+        self.shadow_freq = freq;
+        self.timer = if period == 0 { 8 } else { period };
+        self.enable = period > 0 || shift > 0;
+        self.period = period;
+        self.shift = shift;
+        self.subtract = subtract;
+        self.active = true;
+
+        debug!("trigger: {:?}", self);
+
+        if self.shift > 0 && self.overflow() {
+            debug!("disabled immediately: {:?}", self);
+            self.disable();
+        }
+    }
+
+    fn update_time_shift(&mut self, period: usize, shift: usize) {
+        debug!("update period/shift {}/{}, {:?}", period, shift, self);
+        self.period = period;
+        self.shift = shift;
+    }
+
+    fn is_active(&self) -> bool {
+        self.active
+    }
+
+    fn step_with_rate(&mut self, rate: usize) {
+        self.rate = rate;
+        self.step(1);
+    }
+
+    fn step(&mut self, cycles: usize) {
+        self.cycles += cycles;
+        if self.cycles < self.interval() {
+            return;
+        }
+        self.cycles -= self.interval();
+
+        if !self.enable {
+            return;
         }
 
-        let interval = rate * self.time / 128;
+        self.count += 1;
+        if self.count < self.timer {
+            return;
+        }
+        self.count -= self.timer;
 
-        self.clock += 1;
-        if self.clock >= interval {
-            self.clock -= interval;
+        self.tick();
+    }
 
-            let p = self.freq / 2usize.pow(self.shift as u32);
+    fn tick(&mut self) {
+        if !self.enable || self.period == 0 {
+            return;
+        }
 
-            self.freq = if self.sub {
-                self.freq.saturating_sub(p)
-            } else {
-                self.freq.saturating_add(p)
-            };
+        if self.overflow() {
+            self.disable();
+            return;
+        }
 
-            if self.freq >= 2048 || self.freq == 0 {
-                self.enable = false;
-                self.freq = 0;
+        let new_freq = self.calculate();
+
+        if self.shift > 0 {
+            debug!("update freq={}", self.freq);
+            self.freq = new_freq;
+            self.shadow_freq = new_freq;
+            if self.overflow() {
+                self.disable();
             }
         }
+    }
 
+    fn calculate(&self) -> usize {
+        let p = self.shadow_freq >> self.shift;
+
+        let new_freq = if self.subtract {
+            self.shadow_freq.saturating_sub(p)
+        } else {
+            self.shadow_freq.saturating_add(p)
+        };
+
+        new_freq
+    }
+
+    fn overflow(&self) -> bool {
+        self.calculate() >= 2048
+    }
+
+    fn disable(&mut self) {
+        if self.enable {
+            self.active = false;
+        }
+        self.enable = false;
+    }
+
+    fn freq(&self) -> usize {
         self.freq
+    }
+
+    fn interval(&self) -> usize {
+        self.rate / 128
     }
 }
 
 pub struct ToneStream {
     tone: Tone,
-    sweep: Sweep,
     env: Envelop,
-    counter: Counter,
     index: WaveIndex,
 }
 
 impl ToneStream {
-    fn new(tone: Tone, sweep: bool) -> Self {
-        let freq = 131072 / (2048 - tone.freq);
-        let sweep = Sweep::new(
-            sweep,
-            freq,
-            tone.sweep_time,
-            tone.sweep_sub,
-            tone.sweep_shift,
-        );
+    fn new(tone: Tone) -> Self {
         let env = Envelop::new(tone.env_init, tone.env_count, tone.env_inc);
-        let counter = tone.counter.clone();
 
         Self {
             tone,
-            sweep,
             env,
-            counter,
             index: WaveIndex::new(),
+        }
+    }
+
+    fn step(&mut self, rate: usize) {
+        self.tone.counter.step_with_rate(rate);
+        if let Some(sweep) = &mut self.tone.sweep {
+            sweep.step_with_rate(rate);
         }
     }
 }
@@ -226,9 +327,9 @@ impl Stream for ToneStream {
     fn next(&mut self, rate: u32) -> u16 {
         let rate = rate as usize;
 
-        self.counter.step_with_rate(rate);
+        self.step(rate);
 
-        if !self.counter.is_active() {
+        if !self.tone.counter.is_active() {
             return 0;
         }
 
@@ -236,7 +337,7 @@ impl Stream for ToneStream {
         let amp = self.env.amp(rate);
 
         // Sweep
-        let freq = self.sweep.freq(rate);
+        let freq = self.tone.real_freq();
 
         // Square wave generation
         let duty = match self.tone.wave_duty {
@@ -256,6 +357,6 @@ impl Stream for ToneStream {
     }
 
     fn on(&self) -> bool {
-        self.counter.is_active()
+        self.tone.counter.is_active()
     }
 }

@@ -1,13 +1,16 @@
+use alloc::boxed::Box;
+
+use log::*;
+
+use crate::hardware::HardwareHandle;
+
+use self::{mixer::Mixer, noise::Noise, tone::Tone, wave::Wave};
+
 mod mixer;
 mod noise;
 mod tone;
 mod util;
 mod wave;
-
-use self::{mixer::Mixer, noise::Noise, tone::Tone, wave::Wave};
-use crate::hardware::HardwareHandle;
-use alloc::boxed::Box;
-use log::*;
 
 pub struct Apu {
     tones: [Tone; 2],
