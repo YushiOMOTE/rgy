@@ -1,42 +1,76 @@
-use crate::device::IoHandler;
-use crate::mmu::{MemRead, MemWrite, Mmu};
 use log::*;
 
+pub struct DmaRequest {
+    src: u16,
+    dst: u16,
+    len: u16,
+}
+
+impl DmaRequest {
+    pub fn new(src: u16, dst: u16, len: u16) -> Self {
+        Self { src, dst, len }
+    }
+
+    pub fn src(&self) -> u16 {
+        self.src
+    }
+
+    pub fn dst(&self) -> u16 {
+        self.dst
+    }
+
+    pub fn len(&self) -> u16 {
+        self.len
+    }
+}
+
 pub struct Dma {
-    on: bool,
-    src: u8,
+    src: u16,
+    dst: u16,
+    cycles: usize,
 }
 
 impl Dma {
     pub fn new() -> Self {
-        Self { on: false, src: 0 }
-    }
-
-    pub fn step(&mut self, mmu: &mut Mmu) {
-        if self.on {
-            assert!(self.src <= 0x80 || self.src >= 0x9f);
-            debug!("Perform DMA transfer: {:02x}", self.src);
-
-            let src = (self.src as u16) << 8;
-            for i in 0..0xa0 {
-                mmu.set8(0xfe00 + i, mmu.get8(src + i));
-            }
-
-            self.on = false;
+        Self {
+            src: 0,
+            dst: 0,
+            cycles: 0,
         }
     }
-}
 
-impl IoHandler for Dma {
-    fn on_write(&mut self, _mmu: &Mmu, addr: u16, value: u8) -> MemWrite {
-        assert_eq!(addr, 0xff46);
-        debug!("Start DMA transfer: {:02x}", self.src);
-        self.on = true;
-        self.src = value;
-        MemWrite::Block
+    pub fn step(&mut self, cycles: usize) -> Option<DmaRequest> {
+        if self.cycles == 0 {
+            return None;
+        }
+
+        // Ensure cpu cycles = machine cycles * 4
+        assert!(cycles % 4 == 0);
+        assert!(self.cycles % 4 == 0);
+
+        // Copy 1 byte per a machine cycle
+        let len = (cycles / 4).min(self.cycles / 4) as u16;
+        let req = DmaRequest::new(self.src, self.dst, len);
+
+        self.src += len;
+        self.dst += len;
+        self.cycles = self.cycles.saturating_sub(cycles);
+
+        Some(req)
     }
 
-    fn on_read(&mut self, _mmu: &Mmu, _addr: u16) -> MemRead {
-        MemRead::Replace(0)
+    /// Write DMA register (0xff46)
+    pub fn start(&mut self, value: u8) {
+        assert!(value <= 0xdf);
+        self.cycles = 160 * 4; // 160 machine cycles (* 4 for cpu cycles)
+        self.src = (value as u16) << 8;
+        self.dst = 0xfe00;
+        debug!("Start DMA transfer: {:02x} to {:02x}", self.src, self.dst);
+    }
+
+    /// Read DMA register (0xff46)
+    pub fn read(&self) -> u8 {
+        // Write only
+        0xff
     }
 }

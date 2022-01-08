@@ -20,6 +20,7 @@ pub struct Hardware {
     pcm: SpeakerHandle,
     keystate: Arc<Mutex<HashMap<Key, bool>>>,
     escape: Arc<AtomicBool>,
+    color: bool,
 }
 
 struct Gui {
@@ -34,12 +35,9 @@ impl Gui {
         vram: Arc<Mutex<Vec<u32>>>,
         keystate: Arc<Mutex<HashMap<Key, bool>>>,
         escape: Arc<AtomicBool>,
+        color: bool,
     ) -> Self {
-        let title = if cfg!(feature = "color") {
-            "Gay Boy Color"
-        } else {
-            "Gay Boy"
-        };
+        let title = if color { "Gay Boy Color" } else { "Gay Boy" };
         let window = match Window::new(
             title,
             VRAM_WIDTH,
@@ -114,7 +112,7 @@ impl Gui {
 }
 
 impl Hardware {
-    pub fn new(rampath: Option<String>) -> Self {
+    pub fn new(rampath: Option<String>, color: bool) -> Self {
         let vram = Arc::new(Mutex::new(vec![0; VRAM_WIDTH * VRAM_HEIGHT]));
 
         let pcm = Pcm::new();
@@ -135,6 +133,7 @@ impl Hardware {
         let escape = Arc::new(AtomicBool::new(false));
 
         Self {
+            color,
             rampath,
             vram,
             pcm: handle,
@@ -148,6 +147,7 @@ impl Hardware {
             self.vram.clone(),
             self.keystate.clone(),
             self.escape.clone(),
+            self.color,
         );
         bg.run();
     }
@@ -176,7 +176,8 @@ impl rgy::Hardware for Hardware {
     }
 
     fn send_byte(&mut self, b: u8) {
-        info!("Send byte: {:02x}", b);
+        print!("{}", b as char);
+        std::io::stdout().flush().unwrap();
     }
 
     fn recv_byte(&mut self) -> Option<u8> {
@@ -283,7 +284,7 @@ impl Pcm {
                     for sample in buffer.chunks_mut(format.channels as usize) {
                         let value = match &mut stream {
                             Some(s) => {
-                                ((s.next(sample_rate) as u64 * 100 / s.max() as u64) as f32 / 100.0)
+                                (s.next(sample_rate) as u64 * 100 / s.max() as u64) as f32 / 100.0
                             }
                             None => 0.0,
                         };

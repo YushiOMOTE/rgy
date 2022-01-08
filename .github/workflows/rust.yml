@@ -8,7 +8,9 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: Prepare
-        run: sudo apt install libasound2-dev libxcursor-dev
+        run: |
+          sudo apt update
+          sudo apt install libasound2-dev libxcursor-dev
       - name: Build (stable)
         run: cargo build --verbose
       - name: Build examples (stable)

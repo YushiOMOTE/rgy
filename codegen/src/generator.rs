@@ -1,11 +1,11 @@
 use crate::{Error, Generate, Result};
 
 use serde_yaml;
-use tera::{to_value, Context, Value};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
-use std::collections::HashMap;
 use std::process::{Command, Stdio};
+use tera::{to_value, Context, Value};
 
 use crate::format::Instruction;
 
@@ -22,27 +22,27 @@ fn setflag(value: Value, map: HashMap<String, Value>) -> tera::Result<Value> {
     if v == "-" {
         Ok(to_value("").unwrap())
     } else if v == "0" {
-        Ok(to_value(format!("cpu.set_{}f(false);", f)).unwrap())
+        Ok(to_value(format!("self.set_{}f(false);", f)).unwrap())
     } else if v == "1" {
-        Ok(to_value(format!("cpu.set_{}f(true);", f)).unwrap())
+        Ok(to_value(format!("self.set_{}f(true);", f)).unwrap())
     } else {
-        Ok(to_value(format!("cpu.set_{}f({});", f, v.to_lowercase())).unwrap())
+        Ok(to_value(format!("self.set_{}f({});", f, v.to_lowercase())).unwrap())
     }
 }
 
 fn eval_getter(s: &str, b: usize) -> String {
     if s == "nz" {
-        format!("!cpu.get_zf()")
+        format!("!self.get_zf()")
     } else if s == "nc" {
-        format!("!cpu.get_cf()")
+        format!("!self.get_cf()")
     } else if s == "z" {
-        format!("cpu.get_zf()")
+        format!("self.get_zf()")
     } else if s == "cf" {
-        format!("cpu.get_cf()")
+        format!("self.get_cf()")
     } else if s == "d8" || s == "a8" || s == "r8" {
-        format!("mmu.get8(cpu.get_pc().wrapping_add(arg))")
+        "self.fetch8()".into()
     } else if s == "d16" || s == "a16" {
-        format!("mmu.get16(cpu.get_pc().wrapping_add(arg))")
+        "self.fetch16()".into()
     } else if s.starts_with("0x") {
         let mut expr = s.split("+");
         let offset = expr.next().expect("No offset");
@@ -51,9 +51,13 @@ fn eval_getter(s: &str, b: usize) -> String {
     } else if is_num(s) {
         format!("{}", s)
     } else if s.starts_with("(") {
-        format!("mmu.get{}({})", b, eval_getter(&s[1..s.len() - 1], b))
+        format!(
+            "{{ let x = {}; self.get{}(x) }}",
+            eval_getter(&s[1..s.len() - 1], b),
+            b,
+        )
     } else {
-        format!("cpu.get_{}()", s)
+        format!("self.get_{}()", s)
     }
 }
 
@@ -65,9 +69,13 @@ pub fn getter(value: Value, map: HashMap<String, Value>) -> tera::Result<Value> 
 
 fn eval_setter(s: &str, b: usize) -> String {
     if s.starts_with("(") {
-        format!("mmu.set{}({}, ", b, eval_getter(&s[1..s.len() - 1], b))
+        format!(
+            "let x = {}; self.set{}(x, ",
+            eval_getter(&s[1..s.len() - 1], b),
+            b,
+        )
     } else {
-        format!("cpu.set_{}(", s)
+        format!("self.set_{}(", s)
     }
 }
 
