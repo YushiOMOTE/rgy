@@ -1,6 +1,6 @@
 use std::{
     io::Write,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use rgy::{VRAM_HEIGHT, VRAM_WIDTH};
@@ -127,7 +127,13 @@ fn test_rom(expected: Expected, path: &str) {
         hw,
         rgy::debug::NullDebugger,
     );
-    while sys.poll() {}
+    const TIMEOUT: Duration = Duration::from_secs(60);
+    let now = Instant::now();
+    while sys.poll() {
+        if now.elapsed() >= TIMEOUT {
+            panic!("timeout")
+        }
+    }
 }
 
 #[test]

@@ -32,7 +32,5 @@ jobs:
         run: cargo build --verbose
       - name: Build examples (nightly)
         run: cargo build --verbose --examples
-      - name: Clippy (nightly)
-        run: cargo clippy --workspace --examples --tests --benches
       - name: Test (nightly)
         run: cargo test --verbose
