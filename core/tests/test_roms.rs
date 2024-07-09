@@ -67,11 +67,9 @@ impl rgy::Hardware for TestHardware {
     }
 }
 
-#[test]
-fn cpu_instrs() {
-    const EXPECTED: &str = "cpu_instrs\n\n01:ok  02:ok  03:ok  04:ok  05:ok  06:ok  07:ok  08:ok  09:ok  10:ok  11:ok  \n\nPassed all tests";
-    let rom = std::fs::read("../roms/cpu_instrs/cpu_instrs.gb").unwrap();
-    let hw = TestHardware::new(EXPECTED);
+fn test_rom(expected: &'static str, path: &str) {
+    let rom = std::fs::read(path).unwrap();
+    let hw = TestHardware::new(expected);
     let mut sys = rgy::System::new(
         rgy::Config::new().native_speed(true),
         &rom,
@@ -79,4 +77,16 @@ fn cpu_instrs() {
         rgy::debug::NullDebugger,
     );
     while sys.poll() {}
+}
+
+#[test]
+fn cpu_instrs() {
+    const EXPECTED: &str = "cpu_instrs\n\n01:ok  02:ok  03:ok  04:ok  05:ok  06:ok  07:ok  08:ok  09:ok  10:ok  11:ok  \n\nPassed all tests";
+    test_rom(EXPECTED, "../roms/cpu_instrs/cpu_instrs.gb");
+}
+
+#[test]
+fn instr_timing() {
+    const EXPECTED: &str = "instr_timing\n\n\nPassed";
+    test_rom(EXPECTED, "../roms/instr_timing/instr_timing.gb");
 }
