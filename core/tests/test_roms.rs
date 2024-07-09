@@ -57,6 +57,7 @@ impl rgy::Hardware for TestHardware {
 
         // // print display to console
         // if ly == VRAM_HEIGHT - 1 {
+        //     println!();
         //     for (index, color) in self.display.iter().enumerate() {
         //         if *color == 0xdddddd {
         //             print!(".")
@@ -164,9 +165,17 @@ fn mem_timing() {
 }
 
 #[test]
+fn mem_timing2() {
+    test_rom(
+        Expected::from_file("tests/mem_timing2.txt"),
+        "../roms/mem_timing-2/mem_timing.gb",
+    );
+}
+
+#[test]
 fn halt_bug() {
     test_rom(
-        Expected::from_file("tests/halt_bug_success_image.txt"),
+        Expected::from_file("tests/halt_bug.txt"),
         "../roms/halt_bug.gb",
     );
 }
