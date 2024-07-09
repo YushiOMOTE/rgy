@@ -11,10 +11,14 @@ jobs:
         run: |
           sudo apt update
           sudo apt install libasound2-dev libxcursor-dev
+      - name: fmt (stable)
+        run: cargo fmt --check
       - name: Build (stable)
         run: cargo build --verbose
       - name: Build examples (stable)
         run: cargo build --verbose --examples
+      - name: Clippy (stable)
+        run: cargo clippy --workspace --examples --tests --benches
       - name: Test (stable)
         run: cargo test --verbose
       - name: Install nightly
@@ -22,9 +26,13 @@ jobs:
         with:
           toolchain: nightly
           override: true
+      - name: fmt (nightly)
+        run: cargo fmt --check
       - name: Build (nightly)
         run: cargo build --verbose
       - name: Build examples (nightly)
         run: cargo build --verbose --examples
+      - name: Clippy (nightly)
+        run: cargo clippy --workspace --examples --tests --benches
       - name: Test (nightly)
         run: cargo test --verbose
