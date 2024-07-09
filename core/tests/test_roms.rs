@@ -90,3 +90,9 @@ fn instr_timing() {
     const EXPECTED: &str = "instr_timing\n\n\nPassed";
     test_rom(EXPECTED, "../roms/instr_timing/instr_timing.gb");
 }
+
+#[test]
+fn mem_timing() {
+    const EXPECTED: &str = "mem_timing\n\n01:ok  02:ok  03:ok  \n\nPassed all tests";
+    test_rom(EXPECTED, "../roms/mem_timing/mem_timing.gb");
+}
