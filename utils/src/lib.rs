@@ -82,7 +82,9 @@ impl Display {
         for yoff in 0..8 {
             for xoff in 0..VRAM_WIDTH {
                 let index = (x + xoff as u32) + (y + yoff as u32) * (VRAM_WIDTH as u32);
-                self.vram.get_mut(index as usize).map(|p| *p = BG);
+                if let Some(p) = self.vram.get_mut(index as usize) {
+                    *p = BG;
+                }
             }
         }
 

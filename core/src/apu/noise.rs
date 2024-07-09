@@ -16,7 +16,7 @@ pub struct Noise {
 
     select: u8,
     counter: Counter,
-    freq: usize,
+    _freq: usize,
 
     dac: bool,
 }
@@ -36,7 +36,7 @@ impl Noise {
 
             select: 0,
             counter: Counter::type64(),
-            freq: 0,
+            _freq: 0,
 
             dac: false,
         }
@@ -176,12 +176,12 @@ impl Stream for NoiseStream {
     }
 }
 
-struct LFSR {
+struct Lfsr {
     value: u16,
     short: bool,
 }
 
-impl LFSR {
+impl Lfsr {
     fn new(short: bool) -> Self {
         Self {
             value: 0xdead,
@@ -212,14 +212,14 @@ impl LFSR {
 }
 
 struct RandomWave {
-    lfsr: LFSR,
+    lfsr: Lfsr,
     clock: usize,
 }
 
 impl RandomWave {
     fn new(short: bool) -> Self {
         Self {
-            lfsr: LFSR::new(short),
+            lfsr: Lfsr::new(short),
             clock: 0,
         }
     }

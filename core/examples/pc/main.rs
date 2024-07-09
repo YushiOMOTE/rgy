@@ -56,9 +56,8 @@ fn set_affinity() {
         Some(())
     };
 
-    match set() {
-        None => warn!("Couldn't set CPU affinity"),
-        _ => {}
+    if set().is_none() {
+        warn!("Couldn't set CPU affinity")
     }
 }
 

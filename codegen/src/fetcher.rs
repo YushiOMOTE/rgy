@@ -12,7 +12,7 @@ use crate::format::{Instruction, Time};
 use std::fs::File;
 use std::io::prelude::*;
 
-use crate::{Error, Fetch, Result};
+use crate::Fetch;
 
 lazy_static! {
     static ref ALT: HashMap<&'static str, &'static str> = {
@@ -152,7 +152,7 @@ fn parse_table(table: ElementRef, op_prefix: u16) -> Vec<Instruction> {
     vec
 }
 
-pub fn run(opt: &Fetch) -> Result<()> {
+pub fn run(opt: &Fetch) {
     let doc = reqwest::blocking::get("http://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html")
         .unwrap()
         .text()
@@ -160,7 +160,7 @@ pub fn run(opt: &Fetch) -> Result<()> {
 
     let doc = Html::parse_document(&doc);
 
-    let sel = Selector::parse("table").map_err(|_| Error("Select failed".into()))?;
+    let sel = Selector::parse("table").unwrap();
     let mut it = doc.select(&sel);
 
     let mut insts = Vec::new();
@@ -176,8 +176,6 @@ pub fn run(opt: &Fetch) -> Result<()> {
 
     let insts = serde_yaml::to_string(&insts).expect("Pack error");
 
-    let mut file = File::create(&opt.output)?;
-    file.write_all(insts.as_bytes())?;
-
-    Ok(())
+    let mut file = File::create(&opt.output).unwrap();
+    file.write_all(insts.as_bytes()).unwrap();
 }

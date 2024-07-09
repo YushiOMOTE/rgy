@@ -75,7 +75,7 @@ pub struct System<D> {
     hw: HardwareHandle,
     fc: FreqControl,
     cpu: Cpu,
-    dbg: D,
+    _dbg: D,
 }
 
 impl<D> System<D>
@@ -105,7 +105,7 @@ where
             hw,
             fc,
             cpu,
-            dbg,
+            _dbg: dbg,
         }
     }
 

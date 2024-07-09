@@ -1,4 +1,4 @@
-use crate::{Error, Generate, Result};
+use crate::Generate;
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -111,7 +111,7 @@ pub fn is_cond(value: Value, _: HashMap<String, Value>) -> tera::Result<Value> {
     Ok(to_value(b).unwrap())
 }
 
-pub fn run(opt: &Generate) -> Result<()> {
+pub fn run(opt: &Generate) {
     let mut tera = compile_templates!(&format!(
         "{}/**/*",
         opt.template.to_str().unwrap_or("templates")
@@ -137,7 +137,7 @@ pub fn run(opt: &Generate) -> Result<()> {
             for e in e.iter().skip(1) {
                 println!("Reason: {}", e);
             }
-            return Err(Error("Render error".into()));
+            panic!("Render error")
         }
     };
 
@@ -162,7 +162,5 @@ pub fn run(opt: &Generate) -> Result<()> {
         .expect("Couldn't read rustfmt");
 
     let mut file = File::create(&opt.output).expect("No output");
-    file.write_all(formatted.as_bytes())?;
-
-    Ok(())
+    file.write_all(formatted.as_bytes()).unwrap();
 }

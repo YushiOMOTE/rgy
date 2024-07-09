@@ -6,8 +6,8 @@ use log::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Mode {
-    OAM,
-    VRAM,
+    Oam,
+    Vram,
     HBlank,
     VBlank,
     None,
@@ -18,8 +18,8 @@ impl From<Mode> for u8 {
         match v {
             Mode::HBlank => 0,
             Mode::VBlank => 1,
-            Mode::OAM => 2,
-            Mode::VRAM => 3,
+            Mode::Oam => 2,
+            Mode::Vram => 3,
             Mode::None => 0,
         }
     }
@@ -30,8 +30,8 @@ impl From<u8> for Mode {
         match v {
             0 => Mode::HBlank,
             1 => Mode::VBlank,
-            2 => Mode::OAM,
-            3 => Mode::VRAM,
+            2 => Mode::Oam,
+            3 => Mode::Vram,
             _ => Mode::None,
         }
     }
@@ -408,14 +408,14 @@ impl Gpu {
         let clocks = self.clocks + time;
 
         let (clocks, mode) = match &self.mode {
-            Mode::OAM => {
+            Mode::Oam => {
                 if clocks >= 80 {
-                    (clocks - 80, Mode::VRAM)
+                    (clocks - 80, Mode::Vram)
                 } else {
-                    (clocks, Mode::OAM)
+                    (clocks, Mode::Oam)
                 }
             }
-            Mode::VRAM => {
+            Mode::Vram => {
                 if clocks >= 172 {
                     self.draw();
 
@@ -425,7 +425,7 @@ impl Gpu {
 
                     (clocks - 172, Mode::HBlank)
                 } else {
-                    (clocks, Mode::VRAM)
+                    (clocks, Mode::Vram)
                 }
             }
             Mode::HBlank => {
@@ -446,7 +446,7 @@ impl Gpu {
                             self.irq.lcd(true);
                         }
 
-                        (clocks - 204, Mode::OAM)
+                        (clocks - 204, Mode::Oam)
                     }
                 } else {
                     (clocks, Mode::HBlank)
@@ -463,7 +463,7 @@ impl Gpu {
                             self.irq.lcd(true);
                         }
 
-                        (clocks - 456, Mode::OAM)
+                        (clocks - 456, Mode::Oam)
                     } else {
                         (clocks - 456, Mode::VBlank)
                     }
