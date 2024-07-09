@@ -28,8 +28,6 @@ jobs:
         with:
           toolchain: nightly
           override: true
-      - name: fmt (nightly)
-        run: cargo fmt --check
       - name: Build (nightly)
         run: cargo build --verbose
       - name: Build examples (nightly)
