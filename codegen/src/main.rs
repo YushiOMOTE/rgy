@@ -1,4 +1,3 @@
-extern crate curl;
 extern crate pest;
 extern crate scraper;
 #[macro_use]
@@ -18,8 +17,8 @@ extern crate structopt;
 extern crate tera;
 
 mod fetcher;
-mod generator;
 mod format;
+mod generator;
 
 use std::path::PathBuf;
 use structopt::StructOpt;

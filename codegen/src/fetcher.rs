@@ -3,15 +3,14 @@ use pest::Parser;
 #[grammar = "inst.pest"]
 struct InstParser;
 
-use curl::easy::Easy;
 use regex::Regex;
-use scraper::{Html, Selector};
 use scraper::element_ref::ElementRef;
+use scraper::{Html, Selector};
 use std::collections::HashMap;
 // use std::path::PathBuf;
+use crate::format::{Instruction, Time};
 use std::fs::File;
 use std::io::prelude::*;
-use crate::format::{Instruction, Time};
 
 use crate::{Error, Fetch, Result};
 
@@ -116,7 +115,8 @@ fn parse_table(table: ElementRef, op_prefix: u16) -> Vec<Instruction> {
         let operator = ops.next().expect("No operator").as_str().to_lowercase();
         let operands = ops.map(|p| modify(code, p.as_str())).collect::<Vec<_>>();
 
-        let size: usize = p.next()
+        let size: usize = p
+            .next()
             .expect("No size")
             .as_str()
             .parse()
@@ -153,28 +153,11 @@ fn parse_table(table: ElementRef, op_prefix: u16) -> Vec<Instruction> {
 }
 
 pub fn run(opt: &Fetch) -> Result<()> {
-    let mut buf = Vec::new();
-    let mut handle = Easy::new();
+    let doc = reqwest::blocking::get("http://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html")
+        .unwrap()
+        .text()
+        .unwrap();
 
-    handle
-        .url(
-            opt.url
-                .as_ref()
-                .unwrap_or(&"http://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html".into()),
-        )
-        .map_err(|e| e.to_string())?;
-    {
-        let mut transfer = handle.transfer();
-        transfer
-            .write_function(|d| {
-                buf.extend_from_slice(d);
-                Ok(d.len())
-            })
-            .map_err(|e| e.to_string())?;
-        transfer.perform().map_err(|e| e.to_string())?;
-    }
-
-    let doc = String::from_utf8(buf).map_err(|e| e.to_string())?;
     let doc = Html::parse_document(&doc);
 
     let sel = Selector::parse("table").map_err(|_| Error("Select failed".into()))?;

@@ -68,7 +68,10 @@ impl Counter {
     // trigger, enable, freeze
 
     pub fn update(&mut self, trigger: bool, enable: bool) {
-        debug!("trigger={}, enable={}: {:p}: {:?}", trigger, enable, self, self);
+        debug!(
+            "trigger={}, enable={}: {:p}: {:?}",
+            trigger, enable, self, self
+        );
 
         // Conditions to clock when enabled.
         let in_first_half = self.count <= self.length_period() / 2; // First half
