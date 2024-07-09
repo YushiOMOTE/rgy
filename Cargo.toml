@@ -4,3 +4,7 @@ members = [
   "core",
   "utils",
 ]
+resolver = "2"
+
+[profile.release]
+overflow-checks = true
