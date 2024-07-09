@@ -19,6 +19,12 @@ pub struct Config {
     pub(crate) color: bool,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Config {
     /// Create the default configuration.
     pub fn new() -> Self {

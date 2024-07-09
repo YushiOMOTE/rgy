@@ -40,15 +40,13 @@ impl Serial {
             } else {
                 self.clock -= time;
             }
-        } else {
-            if let Some(data) = self.hw.get().borrow_mut().recv_byte() {
-                self.hw.get().borrow_mut().send_byte(self.data);
-                self.data = data;
+        } else if let Some(data) = self.hw.get().borrow_mut().recv_byte() {
+            self.hw.get().borrow_mut().send_byte(self.data);
+            self.data = data;
 
-                // End of transfer
-                self.ctrl &= !0x80;
-                self.irq.serial(true);
-            }
+            // End of transfer
+            self.ctrl &= !0x80;
+            self.irq.serial(true);
         }
     }
 

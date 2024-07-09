@@ -177,5 +177,5 @@ pub fn select<L: Loader, H: Hardware>(loader: &mut L, mut hardware: H) -> (Vec<u
         }
     }
 
-    (loader.load(&list.selected()), hardware)
+    (loader.load(list.selected()), hardware)
 }

@@ -265,13 +265,11 @@ impl Sweep {
     fn calculate(&self) -> usize {
         let p = self.shadow_freq >> self.shift;
 
-        let new_freq = if self.subtract {
+        if self.subtract {
             self.shadow_freq.saturating_sub(p)
         } else {
             self.shadow_freq.saturating_add(p)
-        };
-
-        new_freq
+        }
     }
 
     fn overflow(&self) -> bool {

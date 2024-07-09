@@ -61,8 +61,8 @@ lazy_static! {
 }
 
 fn parse_time(s: &str) -> Time {
-    if s.contains("/") {
-        let mut nums = s.split("/");
+    if s.contains('/') {
+        let mut nums = s.split('/');
         Time::Two(
             nums.next()
                 .expect("Incomplete time")

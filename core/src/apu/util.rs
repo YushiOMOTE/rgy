@@ -140,7 +140,7 @@ impl Counter {
 
         let period = self.length_period();
         if self.count >= period {
-            self.count = self.count - period;
+            self.count -= period;
 
             if self.enable {
                 // Disabling length should stop length clocking

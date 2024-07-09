@@ -182,8 +182,8 @@ impl Stream for WaveStream {
         let amp = match self.wave.amp_shift.get() {
             0 => 0,
             1 => amp,
-            2 => (amp >> 1),
-            3 => (amp >> 2),
+            2 => amp >> 1,
+            3 => amp >> 2,
             _ => unreachable!(),
         };
 

@@ -83,7 +83,7 @@ pub struct Gpu {
 
 fn to_palette(p: u8) -> Vec<Color> {
     vec![
-        ((p >> 0) & 0x3).into(),
+        (p & 0x3).into(),
         ((p >> 2) & 0x3).into(),
         ((p >> 4) & 0x3).into(),
         ((p >> 6) & 0x3).into(),
@@ -355,7 +355,7 @@ impl Gpu {
     pub fn new(hw: HardwareHandle, irq: Irq, color: bool) -> Self {
         Self {
             color,
-            irq: irq,
+            irq,
             clocks: 0,
             lyc_interrupt: false,
             oam_interrupt: false,
@@ -516,7 +516,7 @@ impl Gpu {
                 let txoff = if tattr.xflip { 7 - txoff } else { txoff };
 
                 if self.color {
-                    assert_eq!(tattr.priority, false);
+                    assert!(!tattr.priority);
                 }
 
                 let coli = self.get_tile_byte(tbase, txoff, tyoff, tattr.vram_bank);
@@ -539,7 +539,7 @@ impl Gpu {
                     if x + 7 < self.wx as u16 {
                         continue;
                     }
-                    let xx = (x + 7 - self.wx as u16) as u16; // x - (wx - 7)
+                    let xx = x + 7 - self.wx as u16; // x - (wx - 7)
                     let tx = xx / 8;
                     let txoff = xx % 8;
 
@@ -567,7 +567,7 @@ impl Gpu {
                     // This sprite doesn't hit the current ly
                     continue;
                 }
-                let tyoff = ly as u16 + 16 - ypos; // ly - (ypos - 16)
+                let tyoff = ly + 16 - ypos; // ly - (ypos - 16)
                 if tyoff >= self.spsize {
                     // This sprite doesn't hit the current ly
                     continue;

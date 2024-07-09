@@ -67,7 +67,7 @@ impl Mbc1 {
     fn on_read(&self, addr: u16) -> u8 {
         if addr <= 0x3fff {
             self.rom[addr as usize]
-        } else if addr >= 0x4000 && addr <= 0x7fff {
+        } else if (0x4000..=0x7fff).contains(&addr) {
             let rom_bank = self.rom_bank.max(1);
 
             // ROM bank 0x20, 0x40, 0x60 are somehow not available
@@ -82,9 +82,9 @@ impl Mbc1 {
             let offset = addr as usize - 0x4000;
             let addr = (base + offset) & (self.rom.len() - 1);
             self.rom[addr]
-        } else if addr >= 0xa000 && addr <= 0xbfff {
+        } else if (0xa000..=0xbfff).contains(&addr) {
             if self.ram_enable {
-                let base = self.ram_bank as usize * 0x2000;
+                let base = self.ram_bank * 0x2000;
                 let offset = addr as usize - 0xa000;
                 let addr = (base + offset) & (self.rom.len() - 1);
                 self.ram[addr]
@@ -107,16 +107,16 @@ impl Mbc1 {
                 self.ram_enable = false;
                 self.hw.get().borrow_mut().save_ram(&self.ram);
             }
-        } else if addr >= 0x2000 && addr <= 0x3fff {
+        } else if (0x2000..=0x3fff).contains(&addr) {
             self.rom_bank = (self.rom_bank & !0x1f) | (value as usize & 0x1f);
             debug!("Switch ROM bank to {:02x}", self.rom_bank);
-        } else if addr >= 0x4000 && addr <= 0x5fff {
+        } else if (0x4000..=0x5fff).contains(&addr) {
             if self.ram_select {
                 self.ram_bank = value as usize & 0x3;
             } else {
                 self.rom_bank = (self.rom_bank & !0x60) | ((value as usize & 0x3) << 5);
             }
-        } else if addr >= 0x6000 && addr <= 0x7fff {
+        } else if (0x6000..=0x7fff).contains(&addr) {
             if value == 0x00 {
                 self.ram_select = false;
             } else if value == 0x01 {
@@ -124,9 +124,9 @@ impl Mbc1 {
             } else {
                 unimplemented!("Invalid ROM/RAM select mode");
             }
-        } else if addr >= 0xa000 && addr <= 0xbfff {
+        } else if (0xa000..=0xbfff).contains(&addr) {
             if self.ram_enable {
-                let base = self.ram_bank as usize * 0x2000;
+                let base = self.ram_bank * 0x2000;
                 let offset = addr as usize - 0xa000;
                 self.ram[base + offset] = value;
             } else {
@@ -162,11 +162,11 @@ impl Mbc2 {
     fn on_read(&self, addr: u16) -> u8 {
         if addr <= 0x3fff {
             self.rom[addr as usize]
-        } else if addr >= 0x4000 && addr <= 0x7fff {
+        } else if (0x4000..=0x7fff).contains(&addr) {
             let base = self.rom_bank.max(1) * 0x4000;
             let offset = addr as usize - 0x4000;
             self.rom[base + offset]
-        } else if addr >= 0xa000 && addr <= 0xa1ff {
+        } else if (0xa000..=0xa1ff).contains(&addr) {
             if self.ram_enable {
                 self.ram[addr as usize - 0xa000] & 0xf
             } else {
@@ -195,14 +195,14 @@ impl Mbc2 {
                     self.hw.get().borrow_mut().save_ram(&self.ram);
                 }
             }
-        } else if addr >= 0x2000 && addr <= 0x3fff {
+        } else if (0x2000..=0x3fff).contains(&addr) {
             if addr & 0x100 != 0 {
                 self.rom_bank = (value as usize & 0xf).max(1);
                 debug!("Switch ROM bank to {:02x}", self.rom_bank);
             }
-        } else if addr >= 0x4000 && addr <= 0x7fff {
+        } else if (0x4000..=0x7fff).contains(&addr) {
             warn!("Writing to read-only range: {:04x} {:02x}", addr, value);
-        } else if addr >= 0xa000 && addr <= 0xa1ff {
+        } else if (0xa000..=0xa1ff).contains(&addr) {
             if self.ram_enable {
                 self.ram[addr as usize - 0xa000] = value & 0xf;
             } else {
@@ -264,18 +264,18 @@ impl Mbc3 {
     }
 
     fn epoch(&self) -> u64 {
-        self.hw.get().borrow_mut().clock() / 1000_000
+        self.hw.get().borrow_mut().clock() / 1_000_000
     }
 
     fn on_read(&self, addr: u16) -> u8 {
         if addr <= 0x3fff {
             self.rom[addr as usize]
-        } else if addr >= 0x4000 && addr <= 0x7fff {
+        } else if (0x4000..=0x7fff).contains(&addr) {
             let rom_bank = self.rom_bank.max(1);
             let base = rom_bank * 0x4000;
             let offset = addr as usize - 0x4000;
             self.rom[base + offset]
-        } else if addr >= 0xa000 && addr <= 0xbfff {
+        } else if (0xa000..=0xbfff).contains(&addr) {
             match self.select {
                 x if x == 0x00 || x == 0x01 || x == 0x02 || x == 0x03 => {
                     let base = x as usize * 0x2000;
@@ -303,25 +303,23 @@ impl Mbc3 {
                 info!("External RAM/RTC enabled");
                 self.enable = true;
             }
-        } else if addr >= 0x2000 && addr <= 0x3fff {
+        } else if (0x2000..=0x3fff).contains(&addr) {
             self.rom_bank = value as usize & 0x7f;
             trace!("Switch ROM bank to {}", self.rom_bank);
-        } else if addr >= 0x4000 && addr <= 0x5fff {
+        } else if (0x4000..=0x5fff).contains(&addr) {
             self.select = value;
             self.save();
             debug!("Select RAM bank/RTC: {:02x}", self.select);
-        } else if addr >= 0x6000 && addr <= 0x7fff {
+        } else if (0x6000..=0x7fff).contains(&addr) {
             if self.prelatch {
                 if value == 0x01 {
                     self.latch();
                 }
                 self.prelatch = false;
-            } else {
-                if value == 0x00 {
-                    self.prelatch = true;
-                }
+            } else if value == 0x00 {
+                self.prelatch = true;
             }
-        } else if addr >= 0xa000 && addr <= 0xbfff {
+        } else if (0xa000..=0xbfff).contains(&addr) {
             match self.select {
                 x if x == 0x00 || x == 0x01 || x == 0x02 || x == 0x03 => {
                     let base = x as usize * 0x2000;
@@ -379,7 +377,7 @@ impl Mbc3 {
         self.rtc_secs = s as u8;
         self.rtc_mins = m as u8;
         self.rtc_hours = h as u8;
-        self.rtc_day_low = d as u8 & 0xff;
+        self.rtc_day_low = d as u8;
         self.rtc_day_high = (self.rtc_day_high & !1) | ((d >> 8) & 1) as u8;
     }
 
@@ -440,11 +438,11 @@ impl Mbc5 {
     fn on_read(&self, addr: u16) -> u8 {
         if addr <= 0x3fff {
             self.rom[addr as usize]
-        } else if addr >= 0x4000 && addr <= 0x7fff {
+        } else if (0x4000..=0x7fff).contains(&addr) {
             let base = self.rom_bank * 0x4000;
             let offset = addr as usize - 0x4000;
             self.rom[base + offset]
-        } else if addr >= 0xa000 && addr <= 0xbfff {
+        } else if (0xa000..=0xbfff).contains(&addr) {
             if self.ram_enable {
                 let base = self.ram_bank * 0x2000;
                 let offset = addr as usize - 0xa000;
@@ -468,15 +466,15 @@ impl Mbc5 {
                 self.ram_enable = false;
                 self.hw.get().borrow_mut().save_ram(&self.ram);
             }
-        } else if addr >= 0x2000 && addr <= 0x2fff {
+        } else if (0x2000..=0x2fff).contains(&addr) {
             self.rom_bank = (self.rom_bank & !0xff) | value as usize;
             debug!("Switch ROM bank to {:02x}", self.rom_bank);
-        } else if addr >= 0x3000 && addr <= 0x3fff {
+        } else if (0x3000..=0x3fff).contains(&addr) {
             self.rom_bank = (self.rom_bank & !0x100) | (value as usize & 1) << 8;
             debug!("Switch ROM bank to {:02x}", self.rom_bank);
-        } else if addr >= 0x4000 && addr <= 0x5fff {
+        } else if (0x4000..=0x5fff).contains(&addr) {
             self.ram_bank = value as usize & 0xf;
-        } else if addr >= 0xa000 && addr <= 0xbfff {
+        } else if (0xa000..=0xbfff).contains(&addr) {
             if self.ram_enable {
                 let base = self.ram_bank * 0x2000;
                 let offset = addr as usize - 0xa000;
@@ -522,13 +520,13 @@ impl MbcType {
     fn new(hw: HardwareHandle, code: u8, rom: Vec<u8>) -> Self {
         match code {
             0x00 => MbcType::None(MbcNone::new(rom)),
-            0x01 | 0x02 | 0x03 => MbcType::Mbc1(Mbc1::new(hw, rom)),
+            0x01..=0x03 => MbcType::Mbc1(Mbc1::new(hw, rom)),
             0x05 | 0x06 => MbcType::Mbc2(Mbc2::new(hw, rom)),
             0x08 | 0x09 => unimplemented!("ROM+RAM: {:02x}", code),
-            0x0b | 0x0c | 0x0d => unimplemented!("MMM01: {:02x}", code),
-            0x0f | 0x10 | 0x11 | 0x12 | 0x13 => MbcType::Mbc3(Mbc3::new(hw, rom)),
-            0x15 | 0x16 | 0x17 => unimplemented!("Mbc4: {:02x}", code),
-            0x19 | 0x1a | 0x1b | 0x1c | 0x1d | 0x1e => MbcType::Mbc5(Mbc5::new(hw, rom)),
+            0x0b..=0x0d => unimplemented!("MMM01: {:02x}", code),
+            0x0f..=0x13 => MbcType::Mbc3(Mbc3::new(hw, rom)),
+            0x15..=0x17 => unimplemented!("Mbc4: {:02x}", code),
+            0x19..=0x1e => MbcType::Mbc5(Mbc5::new(hw, rom)),
             0xfc => unimplemented!("POCKET CAMERA"),
             0xfd => unimplemented!("BANDAI TAMAS"),
             0xfe => unimplemented!("HuC3"),
@@ -715,7 +713,7 @@ impl Mbc {
         if self.color {
             assert_eq!(0x900, BOOT_ROM_COLOR.len());
 
-            addr < 0x100 || (addr >= 0x200 && addr < 0x900)
+            addr < 0x100 || (0x200..0x900).contains(&addr)
         } else {
             assert_eq!(0x100, BOOT_ROM.len());
 

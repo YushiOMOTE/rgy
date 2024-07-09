@@ -1,6 +1,5 @@
 use crate::{Error, Generate, Result};
 
-use serde_yaml;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
@@ -10,10 +9,7 @@ use tera::{to_value, Context, Value};
 use crate::format::Instruction;
 
 fn is_num(s: &str) -> bool {
-    match s.trim().parse::<usize>() {
-        Ok(_) => true,
-        Err(_) => false,
-    }
+    s.trim().parse::<usize>().is_ok()
 }
 
 fn setflag(value: Value, map: HashMap<String, Value>) -> tera::Result<Value> {
@@ -32,25 +28,25 @@ fn setflag(value: Value, map: HashMap<String, Value>) -> tera::Result<Value> {
 
 fn eval_getter(s: &str, b: usize) -> String {
     if s == "nz" {
-        format!("!self.get_zf()")
+        "!self.get_zf()".to_string()
     } else if s == "nc" {
-        format!("!self.get_cf()")
+        "!self.get_cf()".to_string()
     } else if s == "z" {
-        format!("self.get_zf()")
+        "self.get_zf()".to_string()
     } else if s == "cf" {
-        format!("self.get_cf()")
+        "self.get_cf()".to_string()
     } else if s == "d8" || s == "a8" || s == "r8" {
         "self.fetch8()".into()
     } else if s == "d16" || s == "a16" {
         "self.fetch16()".into()
     } else if s.starts_with("0x") {
-        let mut expr = s.split("+");
+        let mut expr = s.split('+');
         let offset = expr.next().expect("No offset");
         let arg = expr.next().expect("No arg");
-        format!("{}+{} as u16", offset, eval_getter(&arg, b))
+        format!("{}+{} as u16", offset, eval_getter(arg, b))
     } else if is_num(s) {
-        format!("{}", s)
-    } else if s.starts_with("(") {
+        s.to_string()
+    } else if s.starts_with('(') {
         format!(
             "{{ let x = {}; self.get{}(x) }}",
             eval_getter(&s[1..s.len() - 1], b),
@@ -64,11 +60,11 @@ fn eval_getter(s: &str, b: usize) -> String {
 pub fn getter(value: Value, map: HashMap<String, Value>) -> tera::Result<Value> {
     let v = try_get_value!("arg", "value", String, value);
     let b = try_get_value!("arg", "bits", usize, map.get("bits").unwrap());
-    Ok(to_value(&eval_getter(&v, b)).unwrap())
+    Ok(to_value(eval_getter(&v, b)).unwrap())
 }
 
 fn eval_setter(s: &str, b: usize) -> String {
-    if s.starts_with("(") {
+    if s.starts_with('(') {
         format!(
             "let x = {}; self.set{}(x, ",
             eval_getter(&s[1..s.len() - 1], b),
@@ -82,12 +78,12 @@ fn eval_setter(s: &str, b: usize) -> String {
 pub fn setter(value: Value, map: HashMap<String, Value>) -> tera::Result<Value> {
     let v = try_get_value!("setter", "value", String, value);
     let b = try_get_value!("setter", "bits", usize, map.get("bits").unwrap());
-    Ok(to_value(&eval_setter(&v, b)).unwrap())
+    Ok(to_value(eval_setter(&v, b)).unwrap())
 }
 
 pub fn hex(value: Value, _: HashMap<String, Value>) -> tera::Result<Value> {
     let v = try_get_value!("hex", "value", u16, value);
-    Ok(to_value(&format!("{:04x}", v)).unwrap())
+    Ok(to_value(format!("{:04x}", v)).unwrap())
 }
 
 pub fn untuple(value: Value, _: HashMap<String, Value>) -> tera::Result<Value> {
@@ -99,10 +95,10 @@ pub fn untuple(value: Value, _: HashMap<String, Value>) -> tera::Result<Value> {
 
     if tuple {
         let v = try_get_value!("untuple", "value", Vec<usize>, value);
-        Ok(to_value(&format!("{}", v[v.len() - 1])).unwrap())
+        Ok(to_value(format!("{}", v[v.len() - 1])).unwrap())
     } else {
         let v = try_get_value!("untuple", "value", usize, value);
-        Ok(to_value(&format!("{}", v)).unwrap())
+        Ok(to_value(format!("{}", v)).unwrap())
     }
 }
 

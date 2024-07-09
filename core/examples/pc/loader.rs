@@ -41,8 +41,8 @@ impl Loader {
 impl utils::Loader for Loader {
     fn roms(&mut self) -> Vec<String> {
         self.roms
-            .iter()
-            .map(|(key, _)| {
+            .keys()
+            .map(|key| {
                 info!("ROM: {}", key);
                 key.clone()
             })

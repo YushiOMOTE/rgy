@@ -48,7 +48,7 @@ impl FreqControl {
             }
 
             // get cycles per second
-            let freq = self.sample * 1000_000 / diff;
+            let freq = self.sample * 1_000_000 / diff;
 
             debug!("Frequency: {}", freq);
 

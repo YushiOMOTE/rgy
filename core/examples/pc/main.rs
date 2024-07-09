@@ -52,7 +52,7 @@ fn to_cfg(opt: Opt) -> rgy::Config {
 fn set_affinity() {
     let set = || {
         let core_ids = core_affinity::get_core_ids()?;
-        core_affinity::set_for_current(*core_ids.get(0)?);
+        core_affinity::set_for_current(*core_ids.first()?);
         Some(())
     };
 
