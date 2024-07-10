@@ -7,12 +7,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
+        with:
+          submodules: true
       - name: Prepare
-        run: sudo apt install libasound2-dev libxcursor-dev
+        run: |
+          sudo apt update
+          sudo apt install libasound2-dev libxcursor-dev
+      - name: fmt (stable)
+        run: cargo fmt --check
       - name: Build (stable)
         run: cargo build --verbose
       - name: Build examples (stable)
         run: cargo build --verbose --examples
+      - name: Clippy (stable)
+        run: cargo clippy --workspace --examples --tests --benches
       - name: Test (stable)
         run: cargo test --verbose
       - name: Install nightly

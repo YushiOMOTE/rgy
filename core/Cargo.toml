@@ -18,15 +18,15 @@ hashbrown = "0.6"
 spin = "0.5"
 
 [dev-dependencies]
-env_logger = "0.6"
-rustyline = "4.1"
-minifb = "0.11"
-structopt = "0.2"
-cpal = "0.8"
-signal-hook = "0.1"
+env_logger = "0.11"
+rustyline = "14"
+minifb = "0.12"
+structopt = "0.3"
+cpal = "0.9"
+signal-hook = "0.3"
 core_affinity = "0.5"
 utils = { path = "../utils" }
 
+
 [features]
 default = []
-color = []

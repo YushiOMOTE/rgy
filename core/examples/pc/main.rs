@@ -1,9 +1,9 @@
-mod debug;
+// mod debug;
 mod hardware;
 mod loader;
 
 use crate::{
-    debug::Debugger,
+    // debug::Debugger,
     hardware::Hardware,
     loader::{load_rom, Loader},
 };
@@ -14,6 +14,9 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 pub struct Opt {
+    /// Emulate Gameboy Color
+    #[structopt(short = "c", long = "color")]
+    color: bool,
     /// Cpu frequency
     #[structopt(short = "f", long = "freq", default_value = "4200000")]
     freq: u64,
@@ -39,6 +42,7 @@ pub struct Opt {
 
 fn to_cfg(opt: Opt) -> rgy::Config {
     rgy::Config::new()
+        .color(opt.color)
         .freq(opt.freq)
         .sample(opt.sample)
         .delay_unit(opt.delay_unit)
@@ -48,22 +52,32 @@ fn to_cfg(opt: Opt) -> rgy::Config {
 fn set_affinity() {
     let set = || {
         let core_ids = core_affinity::get_core_ids()?;
-        core_affinity::set_for_current(*core_ids.get(0)?);
+        core_affinity::set_for_current(*core_ids.first()?);
         Some(())
     };
 
-    match set() {
-        None => warn!("Couldn't set CPU affinity"),
-        _ => {}
+    if set().is_none() {
+        warn!("Couldn't set CPU affinity")
     }
 }
 
 fn main() {
     let opt = Opt::from_args();
 
-    env_logger::init();
+    use std::io::Write;
 
-    let hw = Hardware::new(opt.ram.clone());
+    let mut builder = env_logger::Builder::from_default_env();
+
+    builder
+        .format(|buf, record| {
+            let ts = buf.timestamp_millis();
+
+            writeln!(buf, "{}: {}: {}", ts, record.level(), record.args())
+        })
+        .init();
+    // env_logger::init();
+
+    let hw = Hardware::new(opt.ram.clone(), opt.color);
     let hw1 = hw.clone();
 
     std::thread::spawn(move || {
@@ -78,7 +92,7 @@ fn main() {
         set_affinity();
 
         if opt.debug {
-            rgy::run_debug(to_cfg(opt), &rom, hw1, Debugger::new());
+            // rgy::run_debug(to_cfg(opt), &rom, hw1, Debugger::new());
         } else {
             rgy::run(to_cfg(opt), &rom, hw1);
         }

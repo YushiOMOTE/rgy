@@ -38,6 +38,9 @@ pub trait Stream: Send + 'static {
     /// The argument takes the sample rate, and the return value indicates the amplitude,
     /// whose max value is determined by [`Stream::max`][].
     fn next(&mut self, rate: u32) -> u16;
+
+    /// Indicate the stream is active.
+    fn on(&self) -> bool;
 }
 
 #[derive(Clone)]

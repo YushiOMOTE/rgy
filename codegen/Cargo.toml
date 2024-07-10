@@ -5,16 +5,16 @@ authors = ["Yushi Omote <yushiomote@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-scraper = "0.4"
-curl = "0.4"
+scraper = "0.19"
 pest = "2.0"
 pest_derive = "2.0"
-env_logger = "0.5"
+env_logger = "0.11"
 log = "0.4"
 regex = "1.0"
 lazy_static = "1.2"
 serde = "1.0"
 serde_derive = "1.0"
-serde_yaml = "0.8"
-structopt = "0.2"
+serde_yaml = "0.9"
+structopt = "0.3"
 tera = "0.11"
+reqwest = { version = "0.12.5", default-features = false, features = ["http2", "rustls-tls", "blocking"]}
