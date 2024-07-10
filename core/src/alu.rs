@@ -1,5 +1,4 @@
 fn carry(b: usize, p: usize, q: usize, c: usize) -> bool {
-    let c = c as usize;
     let m = (1 << b) - 1;
     (p & m) + (q & m) + (c & m) > m
 }

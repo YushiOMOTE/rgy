@@ -238,10 +238,10 @@ impl Sys for Mmu {
 
     /// Updates the machine state by the given cycles
     fn step(&mut self, cycles: usize) {
-        for req in self.dma.step(cycles) {
+        if let Some(req) = self.dma.step(cycles) {
             self.run_dma(req);
         }
-        for req in self.gpu.step(cycles) {
+        if let Some(req) = self.gpu.step(cycles) {
             self.run_dma(req);
         }
         self.apu.step(cycles);
@@ -256,6 +256,12 @@ pub struct Ram {
     ram: [u8; 0x10000],
 }
 
+impl Default for Ram {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Ram {
     /// Create a new ram instance.
     pub fn new() -> Self {
@@ -264,8 +270,8 @@ impl Ram {
 
     /// Write a byte array at the beginnig of the memory.
     pub fn write(&mut self, m: &[u8]) {
-        for i in 0..m.len() {
-            self.set8(i as u16, m[i]);
+        for (i, m) in m.iter().enumerate() {
+            self.set8(i as u16, *m);
         }
     }
 }

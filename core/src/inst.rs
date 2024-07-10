@@ -983,7 +983,11 @@ impl<T: Sys> Cpu<T> {
             false
         };
 
-        let v = if self.get_nf() { v - adj } else { v + adj };
+        let v = if self.get_nf() {
+            v.wrapping_sub(adj)
+        } else {
+            v.wrapping_add(adj)
+        };
         let v = (v & 0xff) as u8;
         let z = v == 0;
 

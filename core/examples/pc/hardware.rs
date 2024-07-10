@@ -1,4 +1,3 @@
-use cpal;
 use log::*;
 use minifb::{Scale, Window, WindowOptions};
 use std::collections::HashMap;

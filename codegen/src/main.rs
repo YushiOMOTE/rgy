@@ -1,4 +1,3 @@
-extern crate curl;
 extern crate pest;
 extern crate scraper;
 #[macro_use]
@@ -18,16 +17,14 @@ extern crate structopt;
 extern crate tera;
 
 mod fetcher;
-mod generator;
 mod format;
+mod generator;
 
 use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 pub struct Fetch {
-    #[structopt(short = "u", long = "url")]
-    url: Option<String>,
     #[structopt(name = "OUTPUT", parse(from_os_str))]
     output: PathBuf,
 }
@@ -50,36 +47,7 @@ pub enum Opt {
     Generate(Generate),
 }
 
-#[derive(Debug)]
-pub struct Error(String);
-
-pub type Result<T> = std::result::Result<T, Error>;
-
-impl From<String> for Error {
-    fn from(s: String) -> Error {
-        Error(s)
-    }
-}
-
-impl From<std::num::ParseIntError> for Error {
-    fn from(s: std::num::ParseIntError) -> Error {
-        Error(s.to_string())
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(s: std::io::Error) -> Error {
-        Error(s.to_string())
-    }
-}
-
-impl std::convert::From<tera::Error> for Error {
-    fn from(s: tera::Error) -> Error {
-        Error(s.to_string())
-    }
-}
-
-fn main() -> Result<()> {
+fn main() {
     let opt = Opt::from_args();
 
     env_logger::init();
