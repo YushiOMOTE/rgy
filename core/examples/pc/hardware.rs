@@ -71,7 +71,9 @@ impl Gui {
 
     fn vramupdate(&mut self) {
         let vram = self.vram.lock().unwrap().clone();
-        self.window.update_with_buffer(&vram).unwrap();
+        self.window
+            .update_with_buffer(&vram, VRAM_WIDTH, VRAM_HEIGHT)
+            .unwrap();
     }
 
     fn keyupdate(&mut self) {
@@ -83,28 +85,26 @@ impl Gui {
             *v = false;
         }
 
-        if let Some(keys) = self.window.get_keys() {
-            for k in keys {
-                let gbk = match k {
-                    minifb::Key::Right => Key::Right,
-                    minifb::Key::Left => Key::Left,
-                    minifb::Key::Up => Key::Up,
-                    minifb::Key::Down => Key::Down,
-                    minifb::Key::Z => Key::A,
-                    minifb::Key::X => Key::B,
-                    minifb::Key::Space => Key::Select,
-                    minifb::Key::Enter => Key::Start,
-                    minifb::Key::Escape => {
-                        self.escape.store(true, Ordering::Relaxed);
-                        return;
-                    }
-                    _ => continue,
-                };
-
-                match self.keystate.lock().unwrap().get_mut(&gbk) {
-                    Some(v) => *v = true,
-                    None => unreachable!(),
+        for key in self.window.get_keys() {
+            let gbk = match key {
+                minifb::Key::Right => Key::Right,
+                minifb::Key::Left => Key::Left,
+                minifb::Key::Up => Key::Up,
+                minifb::Key::Down => Key::Down,
+                minifb::Key::Z => Key::A,
+                minifb::Key::X => Key::B,
+                minifb::Key::Space => Key::Select,
+                minifb::Key::Enter => Key::Start,
+                minifb::Key::Escape => {
+                    self.escape.store(true, Ordering::Relaxed);
+                    return;
                 }
+                _ => continue,
+            };
+
+            match self.keystate.lock().unwrap().get_mut(&gbk) {
+                Some(v) => *v = true,
+                None => unreachable!(),
             }
         }
     }
