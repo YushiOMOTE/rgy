@@ -19,6 +19,20 @@ $ cargo run --example pc <a ROM file>
 The example runs the GameBoy emulator in Mac/Linux.
 It depends on `libasound2-dev` and `libxcursor-dev`.
 
+### Key bindings
+
+| Keyboard | GameBoy |
+|----------|---------|
+| Right    | Right   |
+| Left     | Left    |
+| Up       | Up      |
+| Down     | Down    |
+| Z        | A       |
+| X        | B       |
+| Space    | Select  |
+| Enter    | Start   |
+| Escape   | Close   |
+
 ## Port it to a new environment
 
 The library itself is environment independent. It can be even ported onto bare-metal. Once you implement environment-specific part, i.e. `Hardware` trait, you will get a GameBoy emulator for your environment.
