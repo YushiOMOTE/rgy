@@ -9,5 +9,5 @@ font8x8 = { version = "0.2", default-features = false }
 lazy_static = { version = "1.2", features = ["spin_no_std"] }
 log = "0.4"
 hashbrown = "0.6"
-spin = "0.5"
+spin = "0.9"
 rgy = { path = "../core" }
