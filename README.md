@@ -16,22 +16,29 @@ No-std cross-platform Rust GameBoy emulator library. Rust GameboY (RGY, or Real 
 $ cargo run --example pc <a ROM file>
 ```
 
-The example runs the GameBoy emulator in Mac/Linux.
-It depends on `libasound2-dev` and `libxcursor-dev`.
+The example runs the GameBoy emulator in Mac/Linux/Windows.
+
+### Dependencies
+
+On Ubuntu, you need to install these packages:
+
+```
+$ sudo apt install libasound2-dev libxcursor-dev libudev-dev
+```
 
 ### Key bindings
 
-| Keyboard | GameBoy |
-|----------|---------|
-| Right    | Right   |
-| Left     | Left    |
-| Up       | Up      |
-| Down     | Down    |
-| Z        | A       |
-| X        | B       |
-| Space    | Select  |
-| Enter    | Start   |
-| Escape   | Close   |
+| Keyboard  | Gamepad      | GameBoy |
+|-----------|--------------|---------|
+| Up / W    | DPad Up      | Up      |
+| Left / A  | DPad Left    | Left    |
+| Down / S  | DPad Down    | Down    |
+| Right / D | DPad Right   | Right   |
+| K / X     | South / East | A       |
+| J / Z     | West / North | B       |
+| Space     | Select       | Select  |
+| Enter     | Start        | Start   |
+| Escape    | -            | Close   |
 
 ## Port it to a new environment
 
