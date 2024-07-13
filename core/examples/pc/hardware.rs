@@ -1,3 +1,4 @@
+use gilrs::{Button, GamepadId, Gilrs};
 use log::*;
 use minifb::{Scale, Window, WindowOptions};
 use std::collections::HashMap;
@@ -20,6 +21,8 @@ pub struct Hardware {
     keystate: Arc<Mutex<HashMap<Key, bool>>>,
     escape: Arc<AtomicBool>,
     color: bool,
+    gamepad: Arc<Mutex<Gilrs>>,
+    gamepad_id: Option<GamepadId>,
 }
 
 struct Gui {
@@ -131,6 +134,8 @@ impl Hardware {
 
         let escape = Arc::new(AtomicBool::new(false));
 
+        let gamepad = Arc::new(Mutex::new(Gilrs::new().unwrap()));
+
         Self {
             color,
             rampath,
@@ -138,6 +143,8 @@ impl Hardware {
             pcm: handle,
             keystate,
             escape,
+            gamepad,
+            gamepad_id: None,
         }
     }
 
@@ -162,12 +169,29 @@ impl rgy::Hardware for Hardware {
     }
 
     fn joypad_pressed(&mut self, key: Key) -> bool {
-        *self
+        let keyboard_pressed = *self
             .keystate
             .lock()
             .unwrap()
             .get(&key)
-            .expect("Logic error in keystate map")
+            .expect("Logic error in keystate map");
+
+        let gamepad = self.gamepad.lock().unwrap();
+        let gamepad_pressed = match self.gamepad_id.map(|id| gamepad.gamepad(id)) {
+            Some(g) => match key {
+                Key::Right => g.is_pressed(Button::DPadRight),
+                Key::Left => g.is_pressed(Button::DPadLeft),
+                Key::Up => g.is_pressed(Button::DPadUp),
+                Key::Down => g.is_pressed(Button::DPadDown),
+                Key::A => g.is_pressed(Button::North) | g.is_pressed(Button::East),
+                Key::B => g.is_pressed(Button::South) | g.is_pressed(Button::West),
+                Key::Select => g.is_pressed(Button::Select),
+                Key::Start => g.is_pressed(Button::Start),
+            },
+            None => false,
+        };
+
+        keyboard_pressed || gamepad_pressed
     }
 
     fn sound_play(&mut self, stream: Box<dyn Stream>) {
@@ -219,6 +243,10 @@ impl rgy::Hardware for Hardware {
     }
 
     fn sched(&mut self) -> bool {
+        while let Some(e) = self.gamepad.lock().unwrap().next_event() {
+            self.gamepad_id = Some(e.id);
+        }
+
         !self.escape.load(Ordering::Relaxed)
     }
 }
