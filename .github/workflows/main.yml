@@ -27,7 +27,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt update
-          sudo apt install libasound2-dev libxcursor-dev
+          sudo apt install libasound2-dev libxcursor-dev libudev-dev
       - run: cargo fmt --check
       - run: cargo clippy --workspace --examples --tests --benches
       - run: cargo build --verbose

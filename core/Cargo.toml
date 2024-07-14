@@ -26,6 +26,7 @@ cpal = "0.9"
 signal-hook = "0.3"
 core_affinity = "0.8"
 utils = { path = "../utils" }
+gilrs = "0.10.8"
 
 
 [features]
