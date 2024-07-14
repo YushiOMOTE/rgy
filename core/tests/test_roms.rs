@@ -179,3 +179,13 @@ fn halt_bug() {
         "../roms/halt_bug.gb",
     );
 }
+
+#[test]
+fn interrupt_time() {
+    // The ROM test is supposed to fail in DMG mode as the CPU speed is fixed to 00 (no double-speed mode) and therefore the checksum never be correct.
+    // The test compares with the expected display result in DMG mode that consumes 13 cycles when serial interrupt triggered manually.
+    test_rom(
+        Expected::from_file("tests/interrupt_time.txt"),
+        "../roms/interrupt_time/interrupt_time.gb",
+    );
+}

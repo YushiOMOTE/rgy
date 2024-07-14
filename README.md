@@ -81,7 +81,7 @@ Test status of [Blargg's Gameboy hardware test ROMs](https://github.com/retrio/g
 * [x] `mem_timing`
 * [x] `mem_timing-2`
 * [ ] `oam_bug`
-* [ ] `interrupt_time`
+* [x] `interrupt_time`
 * [ ] `dmg_sound`
 * [ ] `cgb_sound`
 
