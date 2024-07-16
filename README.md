@@ -5,7 +5,7 @@ No-std cross-platform Rust GameBoy emulator library. Rust GameboY (RGY, or Real 
 [![Latest version](https://img.shields.io/crates/v/rgy.svg)](https://crates.io/crates/rgy)
 [![Documentation](https://docs.rs/rgy/badge.svg)](https://docs.rs/rgy)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Actions Status](https://github.com/YushiOMOTE/rgy/workflows/main/badge.svg)](https://github.com/YushiOMOTE/rgy/actions)
+[![Actions Status](https://github.com/YushiOMOTE/rgy/workflows/main/badge.svg?branch=master)](https://github.com/YushiOMOTE/rgy/actions)
 
 <img src="https://raw.github.com/wiki/YushiOMOTE/gbr/media/demo.gif" width="450" />
 <img src="https://raw.github.com/wiki/YushiOMOTE/gbr/media/demo_screens_2.jpg" width="450" />
