@@ -222,14 +222,13 @@ fn dmg_sound_04_sweep() {
     );
 }
 
-// TODO: Fix APU
-// #[test]
-// fn dmg_sound_05_sweep_details() {
-//     test_rom(
-//         Expected::from_file("tests/dmg_sound_05_sweep_details.txt"),
-//         "../roms/dmg_sound/rom_singles/05-sweep details.gb",
-//     );
-// }
+#[test]
+fn dmg_sound_05_sweep_details() {
+    test_rom(
+        Expected::from_file("tests/dmg_sound_05_sweep_details.txt"),
+        "../roms/dmg_sound/rom_singles/05-sweep details.gb",
+    );
+}
 
 #[test]
 fn dmg_sound_06_overflow_on_trigger() {

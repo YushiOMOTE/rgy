@@ -94,7 +94,7 @@ Test status of [Blargg's Gameboy hardware test ROMs](https://github.com/retrio/g
     * [x] `02-len ctr`
     * [x] `03-trigger`
     * [x] `04-sweep`
-    * [ ] `05-sweep-details`
+    * [x] `05-sweep-details`
     * [x] `06-overflow on trigger`
     * [ ] `07-len sweep period sync`
     * [ ] `08-len ctr during power`
