@@ -189,3 +189,106 @@ fn interrupt_time() {
         "../roms/interrupt_time/interrupt_time.gb",
     );
 }
+
+#[test]
+fn dmg_sound_01_registers() {
+    test_rom(
+        Expected::from_file("tests/dmg_sound_01_registers.txt"),
+        "../roms/dmg_sound/rom_singles/01-registers.gb",
+    );
+}
+
+#[test]
+fn dmg_sound_02_len_ctr() {
+    test_rom(
+        Expected::from_file("tests/dmg_sound_02_len_ctr.txt"),
+        "../roms/dmg_sound/rom_singles/02-len ctr.gb",
+    );
+}
+
+#[test]
+fn dmg_sound_03_trigger() {
+    test_rom(
+        Expected::from_file("tests/dmg_sound_03_trigger.txt"),
+        "../roms/dmg_sound/rom_singles/03-trigger.gb",
+    );
+}
+
+#[test]
+fn dmg_sound_04_sweep() {
+    test_rom(
+        Expected::from_file("tests/dmg_sound_04_sweep.txt"),
+        "../roms/dmg_sound/rom_singles/04-sweep.gb",
+    );
+}
+
+// TODO: Fix APU
+// #[test]
+// fn dmg_sound_05_sweep_details() {
+//     test_rom(
+//         Expected::from_file("tests/dmg_sound_05_sweep_details.txt"),
+//         "../roms/dmg_sound/rom_singles/05-sweep details.gb",
+//     );
+// }
+
+#[test]
+fn dmg_sound_06_overflow_on_trigger() {
+    test_rom(
+        Expected::from_file("tests/dmg_sound_06_overflow_on_trigger.txt"),
+        "../roms/dmg_sound/rom_singles/06-overflow on trigger.gb",
+    );
+}
+
+// TODO: Fix APU
+// #[test]
+// fn dmg_sound_07_len_sweep_period_sync() {
+//     test_rom(
+//         Expected::from_file("tests/dmg_sound_07_len_sweep_period_sync.txt"),
+//         "../roms/dmg_sound/rom_singles/07-len sweep period sync.gb",
+//     );
+// }
+
+// TODO: Fix APU
+// #[test]
+// fn dmg_sound_08_len_ctr_during_power() {
+//     test_rom(
+//         Expected::from_file("tests/dmg_sound_01_registers.txt"),
+//         "../roms/dmg_sound/rom_singles/08-len ctr during power.gb",
+//     );
+// }
+
+// TODO: Fix APU
+// #[test]
+// fn dmg_sound_09_wave_read_while_on() {
+//     test_rom(
+//         Expected::from_file("tests/dmg_sound_01_registers.txt"),
+//         "../roms/dmg_sound/rom_singles/09-wave read while on.gb",
+//     );
+// }
+
+// TODO: Fix APU
+// #[test]
+// fn dmg_sound_10_wave_trigger_while_on() {
+//     test_rom(
+//         Expected::from_file("tests/dmg_sound_01_registers.txt"),
+//         "../roms/dmg_sound/rom_singles/10-wave trigger while on.gb",
+//     );
+// }
+
+// TODO: Fix APU
+// #[test]
+// fn dmg_sound_11_regs_after_power() {
+//     test_rom(
+//         Expected::from_file("tests/dmg_sound_01_registers.txt"),
+//         "../roms/dmg_sound/rom_singles/11-regs after power.gb",
+//     );
+// }
+
+// TODO: Fix APU
+// #[test]
+// fn dmg_sound_12_wave_write_while_on() {
+//     test_rom(
+//         Expected::from_file("tests/dmg_sound_01_registers.txt"),
+//         "../roms/dmg_sound/rom_singles/12-wave write while on.gb",
+//     );
+// }
