@@ -8,6 +8,7 @@ use self::{mixer::Mixer, noise::Noise, tone::Tone, wave::Wave};
 
 mod clock_divider;
 mod frame_sequencer;
+mod length_counter;
 mod mixer;
 mod noise;
 mod sweep;

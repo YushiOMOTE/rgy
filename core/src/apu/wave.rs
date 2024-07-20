@@ -5,14 +5,17 @@ use log::*;
 
 use crate::hardware::Stream;
 
-use super::util::{AtomicHelper, Counter, WaveIndex};
+use super::{
+    length_counter::LengthCounter,
+    util::{AtomicHelper, WaveIndex},
+};
 
 #[derive(Debug, Clone)]
 pub struct Wave {
     enable: bool,
     amp: u8,
     amp_shift: Arc<AtomicUsize>,
-    counter: Counter,
+    counter: LengthCounter,
     freq: Arc<AtomicUsize>,
     freq_high: u8,
     wavebuf: [u8; 16],
@@ -25,7 +28,7 @@ impl Wave {
             enable: false,
             amp: 0,
             amp_shift: Arc::new(AtomicUsize::new(0)),
-            counter: Counter::type256(),
+            counter: LengthCounter::type256(),
             freq: Arc::new(AtomicUsize::new(0)),
             freq_high: 0,
             wavebuf: [0; 16],
@@ -134,7 +137,7 @@ impl Wave {
 
 pub struct WaveStream {
     wave: Wave,
-    counter: Counter,
+    counter: LengthCounter,
     index: WaveIndex,
 }
 

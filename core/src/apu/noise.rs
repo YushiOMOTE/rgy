@@ -1,6 +1,6 @@
 use crate::hardware::Stream;
 
-use super::util::{Counter, Envelop};
+use super::{length_counter::LengthCounter, util::Envelop};
 
 #[derive(Debug, Clone)]
 pub struct Noise {
@@ -15,7 +15,7 @@ pub struct Noise {
     div_freq: usize,
 
     select: u8,
-    counter: Counter,
+    counter: LengthCounter,
     _freq: usize,
 
     dac: bool,
@@ -35,7 +35,7 @@ impl Noise {
             div_freq: 0,
 
             select: 0,
-            counter: Counter::type64(),
+            counter: LengthCounter::type64(),
             _freq: 0,
 
             dac: false,
@@ -118,7 +118,7 @@ impl Noise {
 pub struct NoiseStream {
     noise: Noise,
     env: Envelop,
-    counter: Counter,
+    counter: LengthCounter,
     wave: RandomWave,
 }
 
