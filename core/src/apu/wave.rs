@@ -7,7 +7,8 @@ use crate::hardware::Stream;
 
 use super::{
     length_counter::LengthCounter,
-    util::{AtomicHelper, WaveIndex},
+    util::AtomicHelper,
+    wave_buf::{WaveIndex, WaveRam},
 };
 
 #[derive(Debug, Clone)]
@@ -18,7 +19,8 @@ pub struct Wave {
     counter: LengthCounter,
     freq: Arc<AtomicUsize>,
     freq_high: u8,
-    wavebuf: [u8; 16],
+    wave_ram: WaveRam,
+    wave_index: WaveIndex,
     dac: bool,
 }
 
@@ -31,7 +33,8 @@ impl Wave {
             counter: LengthCounter::type256(),
             freq: Arc::new(AtomicUsize::new(0)),
             freq_high: 0,
-            wavebuf: [0; 16],
+            wave_ram: WaveRam::new(),
+            wave_index: WaveIndex::new(32),
             dac: false,
         }
     }
@@ -107,12 +110,12 @@ impl Wave {
 
     /// Read wave pattern buffer
     pub fn read_wave_buf(&self, offset: u16) -> u8 {
-        self.wavebuf[offset as usize - 0xff30]
+        self.wave_ram.read_byte(offset - 0xff30)
     }
 
     /// Write wave pattern buffer
     pub fn write_wave_buf(&mut self, offset: u16, value: u8) {
-        self.wavebuf[offset as usize - 0xff30] = value;
+        self.wave_ram.write_byte(offset - 0xff30, value);
     }
 
     /// Create stream from the current data
@@ -122,6 +125,22 @@ impl Wave {
 
     pub fn step(&mut self, cycles: usize) {
         self.counter.step(cycles);
+
+        let samples = self.wave_ram.length() * 2;
+        let freq = 65536 / (2048 - self.freq.get());
+        let index_freq = freq * samples;
+
+        self.wave_index.update_index(4_194_304, index_freq);
+
+        let amp = self.wave_ram.read_wave_form(self.wave_index.index());
+
+        let _amp = match self.amp_shift.get() {
+            0 => 0,
+            1 => amp,
+            2 => amp >> 1,
+            3 => amp >> 2,
+            _ => unreachable!(),
+        };
     }
 
     pub fn is_active(&self) -> bool {
@@ -130,7 +149,7 @@ impl Wave {
 
     pub fn clear(&mut self) {
         let mut wave = Wave::new();
-        core::mem::swap(&mut wave.wavebuf, &mut self.wavebuf);
+        core::mem::swap(&mut wave.wave_ram, &mut self.wave_ram);
         core::mem::swap(self, &mut wave);
     }
 }
@@ -145,10 +164,12 @@ impl WaveStream {
     fn new(wave: Wave) -> Self {
         let counter = wave.counter.clone();
 
+        let wave_length = wave.wave_ram.length() * 2;
+
         Self {
             wave,
             counter,
-            index: WaveIndex::new(),
+            index: WaveIndex::new(wave_length),
         }
     }
 }
@@ -171,16 +192,13 @@ impl Stream for WaveStream {
             return 0;
         }
 
-        let samples = self.wave.wavebuf.len() * 2;
+        let samples = self.wave.wave_ram.length() * 2;
         let freq = 65536 / (2048 - self.wave.freq.get());
         let index_freq = freq * samples;
-        let index = self.index.index(rate, index_freq, samples);
 
-        let amp = if index % 2 == 0 {
-            self.wave.wavebuf[index / 2] >> 4
-        } else {
-            self.wave.wavebuf[index / 2] & 0xf
-        };
+        self.index.update_index(rate, index_freq);
+
+        let amp = self.wave.wave_ram.read_wave_form(self.index.index());
 
         let amp = match self.wave.amp_shift.get() {
             0 => 0,

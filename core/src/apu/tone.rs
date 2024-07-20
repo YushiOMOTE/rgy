@@ -2,11 +2,7 @@ use log::*;
 
 use crate::hardware::Stream;
 
-use super::{
-    length_counter::LengthCounter,
-    sweep::Sweep,
-    util::{Envelop, WaveIndex},
-};
+use super::{length_counter::LengthCounter, sweep::Sweep, util::Envelop, wave_buf::WaveIndex};
 
 #[derive(Debug, Clone)]
 pub struct Tone {
@@ -174,7 +170,7 @@ impl ToneStream {
         Self {
             tone,
             env,
-            index: WaveIndex::new(),
+            index: WaveIndex::new(8),
         }
     }
 
@@ -215,8 +211,9 @@ impl Stream for ToneStream {
             _ => unreachable!(),
         };
 
-        let index = self.index.index(rate, freq * 8, 8);
-        if index <= duty {
+        self.index.update_index(rate, freq * 8);
+
+        if self.index.index() <= duty {
             0
         } else {
             amp as u16
