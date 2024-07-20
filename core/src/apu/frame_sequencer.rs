@@ -34,9 +34,13 @@ impl FrameSequencer {
     }
 
     pub fn step(&mut self, cycles: usize) -> Option<usize> {
-        if !self.divider.step(cycles) {
+        let times = self.divider.step(cycles);
+
+        if times == 0 {
             return None;
         }
+        // assert_eq!(times, 1);
+
         let current_step = self.step;
         self.step = (self.step + 1) % 8;
         Some(current_step)

@@ -31,28 +31,6 @@ impl AtomicHelper for AtomicBool {
     }
 }
 
-pub struct WaveIndex {
-    clock: usize,
-    index: usize,
-}
-
-impl WaveIndex {
-    pub fn new() -> Self {
-        Self { clock: 0, index: 0 }
-    }
-
-    pub fn index(&mut self, rate: usize, freq: usize, max: usize) -> usize {
-        self.clock += freq;
-
-        if self.clock >= rate {
-            self.clock -= rate;
-            self.index = (self.index + 1) % max;
-        }
-
-        self.index
-    }
-}
-
 pub struct Envelop {
     amp: usize,
     count: usize,

@@ -18,14 +18,14 @@ impl ClockDivider {
         self.source_clock_rate = source_clock_rate;
     }
 
-    pub fn step(&mut self, cycles: usize) -> bool {
+    pub fn step(&mut self, cycles: usize) -> usize {
         self.counter += cycles;
-        if self.counter >= self.interval() {
-            self.counter -= self.interval();
-            true
-        } else {
-            false
-        }
+
+        let times = self.counter / self.interval();
+
+        self.counter = self.counter % self.interval();
+
+        times
     }
 
     fn interval(&self) -> usize {
@@ -39,20 +39,20 @@ fn test_clock_divider() {
     let mut divider = ClockDivider::new(2, 1);
 
     // 4 ticks -> 2 ticks
-    assert!(!divider.step(1));
-    assert!(divider.step(1));
-    assert!(!divider.step(1));
-    assert!(divider.step(1));
+    assert_eq!(divider.step(1), 0);
+    assert_eq!(divider.step(1), 1);
+    assert_eq!(divider.step(1), 0);
+    assert_eq!(divider.step(1), 1);
 
     divider.set_source_clock_rate(4);
 
     // 8 ticks -> 2 ticks
-    assert!(!divider.step(1));
-    assert!(!divider.step(1));
-    assert!(!divider.step(1));
-    assert!(divider.step(1));
-    assert!(!divider.step(1));
-    assert!(!divider.step(1));
-    assert!(!divider.step(1));
-    assert!(divider.step(1));
+    assert_eq!(divider.step(1), 0);
+    assert_eq!(divider.step(1), 0);
+    assert_eq!(divider.step(1), 0);
+    assert_eq!(divider.step(1), 1);
+    assert_eq!(divider.step(1), 0);
+    assert_eq!(divider.step(1), 0);
+    assert_eq!(divider.step(1), 0);
+    assert_eq!(divider.step(1), 1);
 }

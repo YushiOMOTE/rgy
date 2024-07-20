@@ -254,23 +254,21 @@ fn dmg_sound_08_len_ctr_during_power() {
     );
 }
 
-// TODO: Fix APU
-// #[test]
-// fn dmg_sound_09_wave_read_while_on() {
-//     test_rom(
-//         Expected::from_file("tests/dmg_sound_01_registers.txt"),
-//         "../roms/dmg_sound/rom_singles/09-wave read while on.gb",
-//     );
-// }
+#[test]
+fn dmg_sound_09_wave_read_while_on() {
+    test_rom(
+        Expected::from_file("tests/dmg_sound_09_wave_read_while_on.txt"),
+        "../roms/dmg_sound/rom_singles/09-wave read while on.gb",
+    );
+}
 
-// TODO: Fix APU
-// #[test]
-// fn dmg_sound_10_wave_trigger_while_on() {
-//     test_rom(
-//         Expected::from_file("tests/dmg_sound_01_registers.txt"),
-//         "../roms/dmg_sound/rom_singles/10-wave trigger while on.gb",
-//     );
-// }
+#[test]
+fn dmg_sound_10_wave_trigger_while_on() {
+    test_rom(
+        Expected::from_file("tests/dmg_sound_10_wave_trigger_while_on.txt"),
+        "../roms/dmg_sound/rom_singles/10-wave trigger while on.gb",
+    );
+}
 
 // TODO: Fix APU
 // #[test]
@@ -281,11 +279,10 @@ fn dmg_sound_08_len_ctr_during_power() {
 //     );
 // }
 
-// TODO: Fix APU
-// #[test]
-// fn dmg_sound_12_wave_write_while_on() {
-//     test_rom(
-//         Expected::from_file("tests/dmg_sound_01_registers.txt"),
-//         "../roms/dmg_sound/rom_singles/12-wave write while on.gb",
-//     );
-// }
+#[test]
+fn dmg_sound_12_wave_write_while_on() {
+    test_rom(
+        Expected::from_file("tests/dmg_sound_12_wave_write_while_on.txt"),
+        "../roms/dmg_sound/rom_singles/12-wave write while on.gb",
+    );
+}
