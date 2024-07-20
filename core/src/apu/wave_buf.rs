@@ -31,14 +31,16 @@ impl WaveRam {
 
 #[derive(Debug, Clone)]
 pub struct WaveIndex {
+    source_clock_rate: usize,
     clock: usize,
     index: usize,
     length: usize,
 }
 
 impl WaveIndex {
-    pub fn new(length: usize) -> Self {
+    pub fn new(source_clock_rate: usize, length: usize) -> Self {
         Self {
+            source_clock_rate,
             clock: 0,
             index: 0,
             length,
@@ -49,11 +51,15 @@ impl WaveIndex {
         self.index
     }
 
-    pub fn update_index(&mut self, source_clock_rate: usize, freq: usize) {
+    pub fn set_source_clock_rate(&mut self, source_clock_rate: usize) {
+        self.source_clock_rate = source_clock_rate;
+    }
+
+    pub fn update_index(&mut self, freq: usize) {
         self.clock += freq;
 
-        if self.clock >= source_clock_rate {
-            self.clock -= source_clock_rate;
+        if self.clock >= self.source_clock_rate {
+            self.clock -= self.source_clock_rate;
             self.index = (self.index + 1) % self.length;
         }
     }

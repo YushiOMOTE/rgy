@@ -170,7 +170,7 @@ impl ToneStream {
         Self {
             tone,
             env,
-            index: WaveIndex::new(8),
+            index: WaveIndex::new(4_194_304, 8),
         }
     }
 
@@ -211,7 +211,8 @@ impl Stream for ToneStream {
             _ => unreachable!(),
         };
 
-        self.index.update_index(rate, freq * 8);
+        self.index.set_source_clock_rate(rate);
+        self.index.update_index(freq * 8);
 
         if self.index.index() <= duty {
             0

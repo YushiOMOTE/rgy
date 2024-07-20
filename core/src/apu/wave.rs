@@ -34,7 +34,7 @@ impl Wave {
             freq: Arc::new(AtomicUsize::new(0)),
             freq_high: 0,
             wave_ram: WaveRam::new(),
-            wave_index: WaveIndex::new(32),
+            wave_index: WaveIndex::new(4_194_304, 32),
             dac: false,
         }
     }
@@ -130,7 +130,7 @@ impl Wave {
         let freq = 65536 / (2048 - self.freq.get());
         let index_freq = freq * samples;
 
-        self.wave_index.update_index(4_194_304, index_freq);
+        self.wave_index.update_index(index_freq);
 
         let amp = self.wave_ram.read_wave_form(self.wave_index.index());
 
@@ -169,7 +169,7 @@ impl WaveStream {
         Self {
             wave,
             counter,
-            index: WaveIndex::new(wave_length),
+            index: WaveIndex::new(4_194_304, wave_length),
         }
     }
 }
@@ -196,7 +196,8 @@ impl Stream for WaveStream {
         let freq = 65536 / (2048 - self.wave.freq.get());
         let index_freq = freq * samples;
 
-        self.index.update_index(rate, index_freq);
+        self.index.set_source_clock_rate(rate);
+        self.index.update_index(index_freq);
 
         let amp = self.wave.wave_ram.read_wave_form(self.index.index());
 
