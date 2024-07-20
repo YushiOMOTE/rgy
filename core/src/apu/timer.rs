@@ -16,6 +16,10 @@ impl Timer {
         self.interval = interval;
     }
 
+    pub fn remaining(&self) -> usize {
+        self.interval.saturating_sub(self.counter)
+    }
+
     pub fn tick(&mut self) -> bool {
         if self.interval == 0 {
             return false;

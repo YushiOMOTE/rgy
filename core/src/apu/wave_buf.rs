@@ -16,7 +16,7 @@ impl WaveRam {
         self.ram[offset as usize] = value;
     }
 
-    pub fn read_wave_form(&self, index: usize) -> u8 {
+    pub fn read_waveform(&self, index: usize) -> u8 {
         if index % 2 == 0 {
             self.ram[index / 2] >> 4
         } else {
@@ -24,8 +24,8 @@ impl WaveRam {
         }
     }
 
-    pub fn length(&self) -> usize {
-        self.ram.len()
+    pub fn waveform_length(&self) -> usize {
+        self.ram.len() * 2
     }
 }
 
