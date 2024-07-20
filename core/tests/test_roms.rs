@@ -246,14 +246,13 @@ fn dmg_sound_07_len_sweep_period_sync() {
     );
 }
 
-// TODO: Fix APU
-// #[test]
-// fn dmg_sound_08_len_ctr_during_power() {
-//     test_rom(
-//         Expected::from_file("tests/dmg_sound_01_registers.txt"),
-//         "../roms/dmg_sound/rom_singles/08-len ctr during power.gb",
-//     );
-// }
+#[test]
+fn dmg_sound_08_len_ctr_during_power() {
+    test_rom(
+        Expected::from_file("tests/dmg_sound_08_len_ctr_during_power.txt"),
+        "../roms/dmg_sound/rom_singles/08-len ctr during power.gb",
+    );
+}
 
 // TODO: Fix APU
 // #[test]
