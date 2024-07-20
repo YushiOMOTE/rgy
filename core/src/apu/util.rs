@@ -2,6 +2,8 @@ use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use log::*;
 
+use super::frame_sequencer::FrameSequencer;
+
 pub trait AtomicHelper {
     type Item;
 
@@ -40,8 +42,9 @@ pub struct Counter {
     length: usize,
     rate: usize,
     base: usize,
-    count: usize,
     freeze: bool,
+    frame_sequencer: FrameSequencer,
+    first_half: bool,
 }
 
 impl Counter {
@@ -52,8 +55,9 @@ impl Counter {
             length: 0,
             rate: 4_194_304,
             base,
-            count: 0,
             freeze: false,
+            frame_sequencer: FrameSequencer::new(4_194_304),
+            first_half: false,
         }
     }
 
@@ -68,15 +72,14 @@ impl Counter {
     // trigger, enable, freeze
 
     pub fn update(&mut self, trigger: bool, enable: bool) {
-        debug!(
+        info!(
             "trigger={}, enable={}: {:p}: {:?}",
             trigger, enable, self, self
         );
 
         // Conditions to clock when enabled.
-        let in_first_half = self.count <= self.length_period() / 2; // First half
         let disabled_to_enabled = !self.enable && enable; // TODO: GB only. CGB has a different condition.
-        let clock_by_enable = disabled_to_enabled && in_first_half;
+        let clock_by_enable = disabled_to_enabled && self.first_half;
         let freeze_by_enable = if clock_by_enable {
             self.length == 1
         } else {
@@ -136,20 +139,24 @@ impl Counter {
     }
 
     pub fn step(&mut self, count: usize) {
-        self.count += count;
+        match self.frame_sequencer.step(count) {
+            Some(0) | Some(2) | Some(4) | Some(6) => {
+                self.first_half = true;
+            }
+            Some(1) | Some(3) | Some(5) | Some(7) => {
+                self.first_half = false;
+                return;
+            }
+            _ => return,
+        }
 
-        let period = self.length_period();
-        if self.count >= period {
-            self.count -= period;
+        if self.enable {
+            // Disabling length should stop length clocking
+            self.clock();
 
-            if self.enable {
-                // Disabling length should stop length clocking
-                self.clock();
-
-                if self.length == 0 {
-                    // Timeout de-activates the channel
-                    self.active = false;
-                }
+            if self.length == 0 {
+                // Timeout de-activates the channel
+                self.active = false;
             }
         }
     }
@@ -160,10 +167,6 @@ impl Counter {
 
     fn clock(&mut self) {
         self.length = self.length.saturating_sub(1);
-    }
-
-    fn length_period(&self) -> usize {
-        self.rate / 256
     }
 }
 
