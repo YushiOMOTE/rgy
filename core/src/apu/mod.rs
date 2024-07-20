@@ -6,8 +6,11 @@ use crate::hardware::HardwareHandle;
 
 use self::{mixer::Mixer, noise::Noise, tone::Tone, wave::Wave};
 
+mod clock_divider;
 mod mixer;
 mod noise;
+mod sweep;
+mod timer;
 mod tone;
 mod util;
 mod wave;

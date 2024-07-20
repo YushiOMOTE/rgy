@@ -2,7 +2,10 @@ use log::*;
 
 use crate::hardware::Stream;
 
-use super::util::{Counter, Envelop, WaveIndex};
+use super::{
+    sweep::Sweep,
+    util::{Counter, Envelop, WaveIndex},
+};
 
 #[derive(Debug, Clone)]
 pub struct Tone {
@@ -57,7 +60,7 @@ impl Tone {
         self.sweep_sub = value & 0x08 != 0;
         self.sweep_shift = (value & 0x07) as usize;
         if let Some(sweep) = &mut self.sweep {
-            sweep.update_time_shift(self.sweep_time, self.sweep_shift);
+            sweep.update_params(self.sweep_time, self.sweep_sub, self.sweep_shift);
         }
     }
 
@@ -131,19 +134,21 @@ impl Tone {
 
     pub fn step(&mut self, cycles: usize) {
         if let Some(sweep) = self.sweep.as_mut() {
-            sweep.step(cycles);
+            if let Some(new_freq) = sweep.step(cycles) {
+                self.freq = new_freq;
+            }
         }
         self.counter.step(cycles);
     }
 
     pub fn is_active(&self) -> bool {
-        let sweep_active = if let Some(sweep) = self.sweep.as_ref() {
-            sweep.is_active()
+        let sweep_disabling_channel = if let Some(sweep) = self.sweep.as_ref() {
+            sweep.disabling_channel()
         } else {
-            true
+            false
         };
 
-        self.counter.is_active() && self.dac && sweep_active
+        self.counter.is_active() && self.dac && !sweep_disabling_channel
     }
 
     fn real_freq(&self) -> usize {
@@ -152,143 +157,6 @@ impl Tone {
             None => self.freq,
         };
         131072 / (2048 - raw_freq)
-    }
-}
-
-#[derive(Clone, Debug)]
-struct Sweep {
-    enable: bool,
-    active: bool,
-    rate: usize,
-    cycles: usize,
-    freq: usize,
-    shadow_freq: usize,
-    count: usize,
-    timer: usize,
-    subtract: bool,
-    period: usize,
-    shift: usize,
-}
-
-impl Sweep {
-    fn new() -> Self {
-        Self {
-            enable: false,
-            active: false,
-            rate: 4_194_304,
-            cycles: 0,
-            freq: 0,
-            shadow_freq: 0,
-            count: 0,
-            timer: 0,
-            subtract: false,
-            period: 0,
-            shift: 0,
-        }
-    }
-
-    fn trigger(&mut self, freq: usize, period: usize, subtract: bool, shift: usize) {
-        self.freq = freq;
-        self.shadow_freq = freq;
-        self.timer = if period == 0 { 8 } else { period };
-        self.enable = period > 0 || shift > 0;
-        self.period = period;
-        self.shift = shift;
-        self.subtract = subtract;
-        self.active = true;
-
-        debug!("trigger: {:?}", self);
-
-        if self.shift > 0 && self.overflow() {
-            debug!("disabled immediately: {:?}", self);
-            self.disable();
-        }
-    }
-
-    fn update_time_shift(&mut self, period: usize, shift: usize) {
-        debug!("update period/shift {}/{}, {:?}", period, shift, self);
-        self.period = period;
-        self.shift = shift;
-    }
-
-    fn is_active(&self) -> bool {
-        self.active
-    }
-
-    fn step_with_rate(&mut self, rate: usize) {
-        self.rate = rate;
-        self.step(1);
-    }
-
-    fn step(&mut self, cycles: usize) {
-        self.cycles += cycles;
-        if self.cycles < self.interval() {
-            return;
-        }
-        self.cycles -= self.interval();
-
-        if !self.enable {
-            return;
-        }
-
-        self.count += 1;
-        if self.count < self.timer {
-            return;
-        }
-        self.count -= self.timer;
-
-        self.tick();
-    }
-
-    fn tick(&mut self) {
-        if !self.enable || self.period == 0 {
-            return;
-        }
-
-        if self.overflow() {
-            self.disable();
-            return;
-        }
-
-        let new_freq = self.calculate();
-
-        if self.shift > 0 {
-            debug!("update freq={}", self.freq);
-            self.freq = new_freq;
-            self.shadow_freq = new_freq;
-            if self.overflow() {
-                self.disable();
-            }
-        }
-    }
-
-    fn calculate(&self) -> usize {
-        let p = self.shadow_freq >> self.shift;
-
-        if self.subtract {
-            self.shadow_freq.saturating_sub(p)
-        } else {
-            self.shadow_freq.saturating_add(p)
-        }
-    }
-
-    fn overflow(&self) -> bool {
-        self.calculate() >= 2048
-    }
-
-    fn disable(&mut self) {
-        if self.enable {
-            self.active = false;
-        }
-        self.enable = false;
-    }
-
-    fn freq(&self) -> usize {
-        self.freq
-    }
-
-    fn interval(&self) -> usize {
-        self.rate / 128
     }
 }
 
