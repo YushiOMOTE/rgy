@@ -40,7 +40,6 @@ pub struct Counter {
     enable: bool,
     active: bool,
     length: usize,
-    rate: usize,
     base: usize,
     freeze: bool,
     frame_sequencer: FrameSequencer,
@@ -53,7 +52,6 @@ impl Counter {
             enable: false,
             active: false,
             length: 0,
-            rate: 4_194_304,
             base,
             freeze: false,
             frame_sequencer: FrameSequencer::new(4_194_304),
@@ -134,7 +132,7 @@ impl Counter {
 
     /// Called in the OS thread with sampling rate
     pub fn step_with_rate(&mut self, rate: usize) {
-        self.rate = rate;
+        self.frame_sequencer.set_source_clock_rate(rate);
         self.step(1);
     }
 
