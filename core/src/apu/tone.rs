@@ -3,8 +3,9 @@ use log::*;
 use crate::hardware::Stream;
 
 use super::{
+    length_counter::LengthCounter,
     sweep::Sweep,
-    util::{Counter, Envelop, WaveIndex},
+    util::{Envelop, WaveIndex},
 };
 
 #[derive(Debug, Clone)]
@@ -20,7 +21,7 @@ pub struct Tone {
     env_init: usize,
     env_inc: bool,
     env_count: usize,
-    counter: Counter,
+    counter: LengthCounter,
     freq: usize,
     freq_high: u8,
     dac: bool,
@@ -40,7 +41,7 @@ impl Tone {
             env_init: 0,
             env_inc: false,
             env_count: 0,
-            counter: Counter::type64(),
+            counter: LengthCounter::type64(),
             freq: 0,
             freq_high: 0,
             dac: false,

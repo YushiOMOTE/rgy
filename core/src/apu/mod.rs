@@ -7,6 +7,8 @@ use crate::hardware::HardwareHandle;
 use self::{mixer::Mixer, noise::Noise, tone::Tone, wave::Wave};
 
 mod clock_divider;
+mod frame_sequencer;
+mod length_counter;
 mod mixer;
 mod noise;
 mod sweep;
@@ -296,13 +298,20 @@ impl Apu {
     pub fn write_enable(&mut self, value: u8) {
         debug!("Write NR52: {:02x}", value);
 
-        self.enable = value & 0x80 != 0;
+        let enable = value & 0x80 != 0;
 
-        self.mixer.enable(self.enable);
+        self.mixer.enable(enable);
 
-        if self.enable {
+        if !self.enable && enable {
             info!("Sound master enabled");
-        } else {
+            // If disabled, clear all registers
+            for tone in &mut self.tones {
+                tone.clear();
+            }
+            self.wave.clear();
+            self.noise.clear();
+            self.mixer.clear();
+        } else if self.enable && !enable {
             info!("Sound master disabled");
             // If disabled, clear all registers
             for tone in &mut self.tones {
@@ -312,6 +321,8 @@ impl Apu {
             self.noise.clear();
             self.mixer.clear();
         }
+
+        self.enable = enable;
     }
 
     pub fn step(&mut self, cycles: usize) {

@@ -1,11 +1,11 @@
-use super::{clock_divider::ClockDivider, timer::Timer};
+use super::{frame_sequencer::FrameSequencer, timer::Timer};
 use log::*;
 
 #[derive(Clone, Debug)]
 pub struct Sweep {
     enable: bool,
     disabling_channel: bool,
-    divider: ClockDivider,
+    frame_sequencer: FrameSequencer,
     freq: usize,
     timer: Timer,
     subtract: bool,
@@ -18,7 +18,7 @@ impl Sweep {
     pub fn new() -> Self {
         Self {
             enable: false,
-            divider: ClockDivider::new(4_194_304, 128),
+            frame_sequencer: FrameSequencer::new(4_194_304),
             freq: 0,
             timer: Timer::new(),
             subtract: false,
@@ -72,13 +72,14 @@ impl Sweep {
     }
 
     pub fn step_with_rate(&mut self, rate: usize) {
-        self.divider.set_source_clock_rate(rate);
+        self.frame_sequencer.set_source_clock_rate(rate);
         self.step(1);
     }
 
     pub fn step(&mut self, cycles: usize) -> Option<usize> {
-        if !self.divider.step(cycles) {
-            return None;
+        match self.frame_sequencer.step(cycles) {
+            Some(2) | Some(6) => {}
+            _ => return None,
         }
 
         if !self.enable {

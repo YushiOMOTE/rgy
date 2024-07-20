@@ -238,14 +238,13 @@ fn dmg_sound_06_overflow_on_trigger() {
     );
 }
 
-// TODO: Fix APU
-// #[test]
-// fn dmg_sound_07_len_sweep_period_sync() {
-//     test_rom(
-//         Expected::from_file("tests/dmg_sound_07_len_sweep_period_sync.txt"),
-//         "../roms/dmg_sound/rom_singles/07-len sweep period sync.gb",
-//     );
-// }
+#[test]
+fn dmg_sound_07_len_sweep_period_sync() {
+    test_rom(
+        Expected::from_file("tests/dmg_sound_07_len_sweep_period_sync.txt"),
+        "../roms/dmg_sound/rom_singles/07-len sweep period sync.gb",
+    );
+}
 
 // TODO: Fix APU
 // #[test]
