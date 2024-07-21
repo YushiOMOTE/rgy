@@ -22,11 +22,12 @@ pub struct Wave {
     freq: Arc<AtomicUsize>,
     freq_high: u8,
     wave_ram: WaveRam,
-    next_index: usize,
+    index: usize,
     dac: bool,
     divider: ClockDivider,
     timer: Timer,
-    fetching: bool,
+    last_amp: u8,
+    first_fetch: bool,
 }
 
 impl Wave {
@@ -39,11 +40,12 @@ impl Wave {
             freq: Arc::new(AtomicUsize::new(0)),
             freq_high: 0,
             wave_ram: WaveRam::new(),
-            next_index: 0,
+            index: 0,
             dac: false,
             divider: ClockDivider::new(4_194_304, 2_097_152),
             timer: Timer::new(),
-            fetching: false,
+            last_amp: 0,
+            first_fetch: false,
         }
     }
 
@@ -117,27 +119,33 @@ impl Wave {
         if self.dac && trigger {
             self.enable = true;
 
-            self.reload_timer(1);
+            self.load_initial_timer();
 
-            info!("freq: {:04x}/{:?}", self.freq.get(), self.timer);
-            self.fetching = true;
-            self.next_index = 0;
-            // self.index = 0;
+            info!(
+                "freq: {:04x} / cycles to expire {} / {:?}",
+                self.freq.get(),
+                self.timer.remaining() * 2,
+                self.timer
+            );
+            self.index = 0;
+            self.first_fetch = true;
         }
         trigger
     }
 
     /// Read wave pattern buffer
     pub fn read_wave_buf(&self, offset: u16) -> u8 {
-        info!(
-            "read wave buf: {} ({})",
-            self.index(),
-            self.timer.remaining()
-        );
         let ram_index = offset - 0xff30;
-        let fetching_ram_index = (self.index() / 2) as u16;
+
+        info!(
+            "read wave buf: actual={} remaining_ticks={}",
+            self.index,
+            self.timer.remaining(),
+        );
+
+        let fetching_ram_index = (self.index as u16) / 2;
         let final_index = if self.is_active() {
-            if self.fetching {
+            if !self.first_fetch && self.timer.remaining() == 2 {
                 fetching_ram_index
             } else {
                 return 0xff;
@@ -172,16 +180,22 @@ impl Wave {
         if !self.enable {
             return;
         }
-
         if !self.timer.tick() {
             return;
         }
 
-        self.reload_timer(0);
+        self.reload_timer();
 
-        self.next_index = (self.next_index + 1) % self.wave_ram.waveform_length();
+        let amp = if self.first_fetch {
+            self.first_fetch = false;
+            self.last_amp
+        } else {
+            let new_amp = self.wave_ram.read_waveform(self.index);
+            self.last_amp = new_amp;
+            new_amp
+        };
 
-        let amp = self.wave_ram.read_waveform(self.index());
+        self.index = (self.index + 1) % self.wave_ram.waveform_length();
 
         let _amp = match self.amp_shift.get() {
             0 => 0,
@@ -192,12 +206,17 @@ impl Wave {
         };
     }
 
-    fn index(&self) -> usize {
-        (self.next_index.wrapping_sub(1)) % self.wave_ram.waveform_length()
+    fn load_initial_timer(&mut self) {
+        self.timer.set_interval(self.timer_interval() + 3);
     }
 
-    fn reload_timer(&mut self, delay: usize) {
-        self.timer.set_interval(2048 - self.freq.get() + delay);
+    fn reload_timer(&mut self) {
+        // info!("reload {}", self.timer_interval());
+        self.timer.set_interval(self.timer_interval());
+    }
+
+    fn timer_interval(&self) -> usize {
+        2048 - self.freq.get()
     }
 
     pub fn is_active(&self) -> bool {

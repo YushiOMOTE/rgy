@@ -14,6 +14,7 @@ impl Timer {
 
     pub fn set_interval(&mut self, interval: usize) {
         self.interval = interval;
+        self.counter = 0;
     }
 
     pub fn remaining(&self) -> usize {
