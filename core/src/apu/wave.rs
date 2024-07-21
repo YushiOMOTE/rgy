@@ -15,7 +15,6 @@ use super::{
 
 #[derive(Debug, Clone)]
 pub struct Wave {
-    enable: bool,
     amp: u8,
     amp_shift: Arc<AtomicUsize>,
     counter: LengthCounter,
@@ -33,7 +32,6 @@ pub struct Wave {
 impl Wave {
     pub fn new() -> Self {
         Self {
-            enable: false,
             amp: 0,
             amp_shift: Arc::new(AtomicUsize::new(0)),
             counter: LengthCounter::type256(),
@@ -62,7 +60,6 @@ impl Wave {
     pub fn write_enable(&mut self, value: u8) {
         self.dac = value & 0x80 != 0;
         if !self.dac {
-            self.enable = false;
             self.counter.deactivate();
         }
     }
@@ -114,11 +111,9 @@ impl Wave {
         self.freq
             .set((self.freq.get() & !0x700) | (((value & 0x7) as usize) << 8));
         let trigger = value & 0x80 != 0;
-        let enable = value & 0x40 != 0;
-        self.counter.update(trigger, enable);
+        let length_enable = value & 0x40 != 0;
+        self.counter.update(trigger, length_enable);
         if self.dac && trigger {
-            self.enable = true;
-
             self.load_initial_timer();
 
             info!(
@@ -178,7 +173,7 @@ impl Wave {
     }
 
     fn update(&mut self) {
-        if !self.enable {
+        if !self.is_active() {
             return;
         }
         if !self.timer.tick() {
@@ -257,7 +252,7 @@ impl Stream for WaveStream {
     }
 
     fn next(&mut self, rate: u32) -> u16 {
-        if !self.wave.enable {
+        if !self.wave.is_active() {
             return 0;
         }
 
