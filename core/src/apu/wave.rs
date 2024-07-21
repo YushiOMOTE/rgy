@@ -95,7 +95,7 @@ impl Wave {
 
     /// Write NR33 register (0xff1d)
     pub fn write_freq_low(&mut self, value: u8) {
-        info!("freq low: {:02x}", value);
+        // info!("freq low: {:02x}", value);
         self.freq.set((self.freq.get() & !0xff) | value as usize);
     }
 
@@ -112,28 +112,46 @@ impl Wave {
             .set((self.freq.get() & !0x700) | (((value & 0x7) as usize) << 8));
         let trigger = value & 0x80 != 0;
         let length_enable = value & 0x40 != 0;
+        let retrigger = self.counter.is_active();
         self.counter.update(trigger, length_enable);
         if self.dac && trigger {
+            if retrigger {
+                info!(
+                    "freq: {:04x} / sampling: {} ({}) / index: {} / retrigger?: {} / {:?}",
+                    self.freq.get(),
+                    self.is_sampling(),
+                    self.timer.remaining(),
+                    self.index,
+                    retrigger,
+                    self.timer,
+                );
+                // info!("ram before: {:02x?}", self.wave_ram);
+            }
+
+            if retrigger && !self.first_fetch {
+                self.alter_waveram();
+            }
+
             self.load_initial_timer();
 
-            info!(
-                "freq: {:04x} / cycles to expire {} / {:?}",
-                self.freq.get(),
-                self.timer.remaining() * 2,
-                self.timer
-            );
             self.index = 0;
             self.first_fetch = true;
+
+            // info!("ram after : {:02x?}", self.wave_ram);
         }
         trigger
     }
 
     /// Read wave pattern buffer
     pub fn read_wave_buf(&self, offset: u16) -> u8 {
-        match self.adjust_waveram_index(offset - 0xff30) {
+        let value = match self.adjust_waveram_index(offset - 0xff30) {
             Some(index) => self.wave_ram.read_byte(index),
             None => 0xff,
+        };
+        if offset == 0xff30 {
+            info!("{:02x?}", self.wave_ram.ram);
         }
+        value
     }
 
     /// Write wave pattern buffer
@@ -162,7 +180,7 @@ impl Wave {
         let apu_index = (self.index as u16) / 2;
 
         if self.is_active() {
-            if !self.first_fetch && self.timer.remaining() == 2 {
+            if !self.first_fetch && self.is_sampling() {
                 Some(apu_index)
             } else {
                 None
@@ -170,6 +188,38 @@ impl Wave {
         } else {
             Some(cpu_index)
         }
+    }
+
+    fn alter_waveram(&mut self) {
+        // TODO: Find the source that 2 cycles are consumed on retrigger
+        self.timer.tick();
+
+        if !self.is_sampling() {
+            return;
+        }
+
+        let byte_offset = (self.index as u16 + 1) % 32 / 2;
+
+        match byte_offset {
+            0..=3 => {
+                let byte = self.wave_ram.read_byte(byte_offset);
+                self.wave_ram.write_byte(0, byte);
+            }
+            4..=15 => {
+                for i in 0..4 {
+                    let byte = self.wave_ram.read_byte((byte_offset / 4) * 4 + i);
+                    self.wave_ram.write_byte(i, byte);
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn is_sampling(&self) -> bool {
+        // Timer tick is 2 cycles. 2 ticks means 4 cycles.
+        // Having this in CPU instruction means the instraction is happening
+        // at the same time that APU is reading a sample from the Wave RAM.
+        self.timer.remaining() == 2
     }
 
     fn update(&mut self) {

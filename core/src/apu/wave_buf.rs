@@ -1,6 +1,6 @@
 #[derive(Debug, Clone)]
 pub struct WaveRam {
-    ram: [u8; 16],
+    pub ram: [u8; 16],
 }
 
 impl WaveRam {
