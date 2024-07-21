@@ -95,7 +95,6 @@ impl Wave {
 
     /// Write NR33 register (0xff1d)
     pub fn write_freq_low(&mut self, value: u8) {
-        // info!("freq low: {:02x}", value);
         self.freq.set((self.freq.get() & !0xff) | value as usize);
     }
 
@@ -115,20 +114,9 @@ impl Wave {
         let retrigger = self.counter.is_active();
         self.counter.update(trigger, length_enable);
         if self.dac && trigger {
-            if retrigger {
-                info!(
-                    "freq: {:04x} / sampling: {} ({}) / index: {} / retrigger?: {} / {:?}",
-                    self.freq.get(),
-                    self.is_sampling(),
-                    self.timer.remaining(),
-                    self.index,
-                    retrigger,
-                    self.timer,
-                );
-                // info!("ram before: {:02x?}", self.wave_ram);
-            }
-
             if retrigger && !self.first_fetch {
+                // Advance one tick on retrigger
+                self.timer.tick();
                 self.alter_waveram();
             }
 
@@ -136,8 +124,6 @@ impl Wave {
 
             self.index = 0;
             self.first_fetch = true;
-
-            // info!("ram after : {:02x?}", self.wave_ram);
         }
         trigger
     }
@@ -148,9 +134,6 @@ impl Wave {
             Some(index) => self.wave_ram.read_byte(index),
             None => 0xff,
         };
-        if offset == 0xff30 {
-            info!("{:02x?}", self.wave_ram.ram);
-        }
         value
     }
 
@@ -191,9 +174,6 @@ impl Wave {
     }
 
     fn alter_waveram(&mut self) {
-        // TODO: Find the source that 2 cycles are consumed on retrigger
-        self.timer.tick();
-
         if !self.is_sampling() {
             return;
         }
@@ -257,7 +237,6 @@ impl Wave {
     }
 
     fn reload_timer(&mut self) {
-        // info!("reload {}", self.timer_interval());
         self.timer.set_interval(self.timer_interval());
     }
 

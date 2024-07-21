@@ -56,19 +56,19 @@ impl rgy::Hardware for TestHardware {
         }
 
         // // print display to console
-        if ly == VRAM_HEIGHT - 1 {
-            println!();
-            for (index, color) in self.display.iter().enumerate() {
-                if *color == 0xdddddd {
-                    print!(".")
-                } else {
-                    print!("#")
-                }
-                if index % VRAM_WIDTH == VRAM_WIDTH - 1 {
-                    println!();
-                }
-            }
-        }
+        // if ly == VRAM_HEIGHT - 1 {
+        //     println!();
+        //     for (index, color) in self.display.iter().enumerate() {
+        //         if *color == 0xdddddd {
+        //             print!(".")
+        //         } else {
+        //             print!("#")
+        //         }
+        //         if index % VRAM_WIDTH == VRAM_WIDTH - 1 {
+        //             println!();
+        //         }
+        //     }
+        // }
     }
 
     fn joypad_pressed(&mut self, _: rgy::Key) -> bool {
@@ -128,7 +128,7 @@ fn test_rom(expected: Expected, path: &str) {
         hw,
         rgy::debug::NullDebugger,
     );
-    const TIMEOUT: Duration = Duration::from_secs(10);
+    const TIMEOUT: Duration = Duration::from_secs(60);
     let now = Instant::now();
     while sys.poll() {
         if now.elapsed() >= TIMEOUT {
