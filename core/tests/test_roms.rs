@@ -56,19 +56,19 @@ impl rgy::Hardware for TestHardware {
         }
 
         // // print display to console
-        // if ly == VRAM_HEIGHT - 1 {
-        //     println!();
-        //     for (index, color) in self.display.iter().enumerate() {
-        //         if *color == 0xdddddd {
-        //             print!(".")
-        //         } else {
-        //             print!("#")
-        //         }
-        //         if index % VRAM_WIDTH == VRAM_WIDTH - 1 {
-        //             println!();
-        //         }
-        //     }
-        // }
+        if ly == VRAM_HEIGHT - 1 {
+            println!();
+            for (index, color) in self.display.iter().enumerate() {
+                if *color == 0xdddddd {
+                    print!(".")
+                } else {
+                    print!("#")
+                }
+                if index % VRAM_WIDTH == VRAM_WIDTH - 1 {
+                    println!();
+                }
+            }
+        }
     }
 
     fn joypad_pressed(&mut self, _: rgy::Key) -> bool {
@@ -128,7 +128,7 @@ fn test_rom(expected: Expected, path: &str) {
         hw,
         rgy::debug::NullDebugger,
     );
-    const TIMEOUT: Duration = Duration::from_secs(60);
+    const TIMEOUT: Duration = Duration::from_secs(10);
     let now = Instant::now();
     while sys.poll() {
         if now.elapsed() >= TIMEOUT {
@@ -262,14 +262,13 @@ fn dmg_sound_09_wave_read_while_on() {
     );
 }
 
-// TODO: Fix APU
-// #[test]
-// fn dmg_sound_10_wave_trigger_while_on() {
-//     test_rom(
-//         Expected::from_file("tests/dmg_sound_01_registers.txt"),
-//         "../roms/dmg_sound/rom_singles/10-wave trigger while on.gb",
-//     );
-// }
+#[test]
+fn dmg_sound_10_wave_trigger_while_on() {
+    test_rom(
+        Expected::from_file("tests/dmg_sound_10_wave_trigger_while_on.txt"),
+        "../roms/dmg_sound/rom_singles/10-wave trigger while on.gb",
+    );
+}
 
 // TODO: Fix APU
 // #[test]
