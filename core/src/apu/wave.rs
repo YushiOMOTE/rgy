@@ -135,30 +135,17 @@ impl Wave {
 
     /// Read wave pattern buffer
     pub fn read_wave_buf(&self, offset: u16) -> u8 {
-        let ram_index = offset - 0xff30;
-
-        info!(
-            "read wave buf: actual={} remaining_ticks={}",
-            self.index,
-            self.timer.remaining(),
-        );
-
-        let fetching_ram_index = (self.index as u16) / 2;
-        let final_index = if self.is_active() {
-            if !self.first_fetch && self.timer.remaining() == 2 {
-                fetching_ram_index
-            } else {
-                return 0xff;
-            }
-        } else {
-            ram_index
-        };
-        self.wave_ram.read_byte(final_index)
+        match self.adjust_waveram_index(offset - 0xff30) {
+            Some(index) => self.wave_ram.read_byte(index),
+            None => 0xff,
+        }
     }
 
     /// Write wave pattern buffer
     pub fn write_wave_buf(&mut self, offset: u16, value: u8) {
-        self.wave_ram.write_byte(offset - 0xff30, value);
+        if let Some(index) = self.adjust_waveram_index(offset - 0xff30) {
+            self.wave_ram.write_byte(index, value);
+        }
     }
 
     /// Create stream from the current data
@@ -173,6 +160,20 @@ impl Wave {
 
         for _ in 0..times {
             self.update();
+        }
+    }
+
+    fn adjust_waveram_index(&self, cpu_index: u16) -> Option<u16> {
+        let apu_index = (self.index as u16) / 2;
+
+        if self.is_active() {
+            if !self.first_fetch && self.timer.remaining() == 2 {
+                Some(apu_index)
+            } else {
+                None
+            }
+        } else {
+            Some(cpu_index)
         }
     }
 
@@ -260,34 +261,32 @@ impl Stream for WaveStream {
             return 0;
         }
 
-        // let rate = rate as usize;
+        let rate = rate as usize;
 
-        // self.counter.step_with_rate(rate);
+        self.counter.step_with_rate(rate);
 
-        // if !self.counter.is_active() {
-        //     return 0;
-        // }
+        if !self.counter.is_active() {
+            return 0;
+        }
 
-        // let samples = self.wave.wave_ram.waveform_length();
-        // let freq = 65536 / (2048 - self.wave.freq.get());
-        // let index_freq = freq * samples;
+        let samples = self.wave.wave_ram.waveform_length();
+        let freq = 65536 / (2048 - self.wave.freq.get());
+        let index_freq = freq * samples;
 
-        // self.index.set_source_clock_rate(rate);
-        // self.index.update_index(index_freq);
+        self.index.set_source_clock_rate(rate);
+        self.index.update_index(index_freq);
 
-        // let amp = self.wave.wave_ram.read_waveform(self.index.index());
+        let amp = self.wave.wave_ram.read_waveform(self.index.index());
 
-        // let amp = match self.wave.amp_shift.get() {
-        //     0 => 0,
-        //     1 => amp,
-        //     2 => amp >> 1,
-        //     3 => amp >> 2,
-        //     _ => unreachable!(),
-        // };
+        let amp = match self.wave.amp_shift.get() {
+            0 => 0,
+            1 => amp,
+            2 => amp >> 1,
+            3 => amp >> 2,
+            _ => unreachable!(),
+        };
 
-        // amp as u16
-
-        0
+        amp as u16
     }
 
     fn on(&self) -> bool {
