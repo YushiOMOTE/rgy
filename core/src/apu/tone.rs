@@ -8,7 +8,6 @@ use super::{length_counter::LengthCounter, sweep::Sweep, util::Envelop, wave_buf
 pub struct Tone {
     power: bool,
     sweep: Option<Sweep>,
-    sweep_raw: u8,
     sweep_time: usize,
     sweep_sub: bool,
     sweep_shift: usize,
@@ -28,7 +27,6 @@ impl Tone {
         Self {
             power: false,
             sweep: if with_sweep { Some(Sweep::new()) } else { None },
-            sweep_raw: 0,
             sweep_time: 0,
             sweep_sub: false,
             sweep_shift: 0,
@@ -46,7 +44,10 @@ impl Tone {
 
     /// Read NR10 register (0xff10)
     pub fn read_sweep(&self) -> u8 {
-        self.sweep_raw | 0x80
+        let mut value = (self.sweep_time as u8 & 0x7) << 4;
+        value |= (self.sweep_sub as u8) << 3;
+        value |= (self.sweep_shift as u8) & 0x7;
+        value | 0x80
     }
 
     /// Write NR10 register (0xff10)
@@ -56,7 +57,6 @@ impl Tone {
         }
 
         debug!("write NR10: {:02x}", value);
-        self.sweep_raw = value;
         self.sweep_time = ((value >> 4) & 0x7) as usize;
         self.sweep_sub = value & 0x08 != 0;
         self.sweep_shift = (value & 0x07) as usize;
@@ -161,7 +161,6 @@ impl Tone {
             sweep.power_off();
         }
 
-        self.sweep_raw = 0;
         self.sweep_time = 0;
         self.sweep_sub = false;
         self.sweep_shift = 0;
