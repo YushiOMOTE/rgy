@@ -3,7 +3,6 @@ use log::*;
 
 #[derive(Clone, Debug)]
 pub struct Sweep {
-    enable: bool,
     disabling_channel: bool,
     frame_sequencer: FrameSequencer,
     freq: usize,
@@ -17,10 +16,9 @@ pub struct Sweep {
 impl Sweep {
     pub fn new() -> Self {
         Self {
-            enable: false,
             frame_sequencer: FrameSequencer::new(4_194_304),
             freq: 0,
-            timer: Timer::new(),
+            timer: Timer::disabled(),
             subtract: false,
             period: 0,
             shift: 0,
@@ -39,12 +37,17 @@ impl Sweep {
 
     pub fn trigger(&mut self, freq: usize, period: usize, subtract: bool, shift: usize) {
         self.freq = freq;
-        self.enable = period > 0 || shift > 0;
         self.disabling_channel = false;
         self.period = period;
         self.shift = shift;
         self.subtract = subtract;
         self.subtracted = false;
+
+        if period > 0 || shift > 0 {
+            self.timer.enable();
+        } else {
+            self.timer.disable();
+        }
 
         self.reload_timer();
 
@@ -80,10 +83,6 @@ impl Sweep {
         match self.frame_sequencer.step(cycles) {
             Some(2) | Some(6) => {}
             _ => return None,
-        }
-
-        if !self.enable {
-            return None;
         }
 
         if !self.timer.tick() {
@@ -135,7 +134,7 @@ impl Sweep {
     }
 
     fn disable(&mut self) {
-        self.enable = false;
+        self.timer.disable();
         self.disabling_channel = true;
     }
 
@@ -144,10 +143,9 @@ impl Sweep {
     }
 
     pub fn power_off(&mut self) {
-        self.enable = false;
-
         self.frame_sequencer.reset_step();
         self.freq = 0;
+        self.timer.disable();
         self.timer.reset();
         self.subtract = false;
         self.period = 0;
