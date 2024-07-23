@@ -17,7 +17,7 @@ pub struct Noise {
     div_freq: usize,
 
     select: u8,
-    counter: LengthCounter,
+    length_counter: LengthCounter,
     _freq: usize,
 
     dac: bool,
@@ -39,7 +39,7 @@ impl Noise {
             div_freq: 0,
 
             select: 0,
-            counter: LengthCounter::type64(),
+            length_counter: LengthCounter::type64(),
             _freq: 0,
 
             dac: false,
@@ -54,7 +54,7 @@ impl Noise {
 
     /// Write NR41 register (0xff20)
     pub fn write_len(&mut self, value: u8) {
-        self.counter.load((value & 0x3f) as usize);
+        self.length_counter.load((value & 0x3f) as usize);
     }
 
     /// Read NR42 register (0xff21)
@@ -74,7 +74,7 @@ impl Noise {
         self.env_count = (value & 0x7) as usize;
         self.dac = value & 0xf8 != 0;
         if !self.dac {
-            self.counter.deactivate();
+            self.length_counter.deactivate();
         }
     }
 
@@ -109,7 +109,7 @@ impl Noise {
         self.select = value;
         let trigger = value & 0x80 != 0;
         let enable = value & 0x40 != 0;
-        self.counter.update(trigger, enable);
+        self.length_counter.update(trigger, enable);
         trigger
     }
 
@@ -119,17 +119,17 @@ impl Noise {
     }
 
     pub fn step(&mut self, cycles: usize) {
-        self.counter.step(cycles);
+        self.length_counter.step(cycles);
     }
 
     pub fn is_active(&self) -> bool {
-        self.counter.is_active() && self.dac
+        self.length_counter.is_active() && self.dac
     }
 
     pub fn power_on(&mut self) {
         self.power = true;
 
-        self.counter.power_on();
+        self.length_counter.power_on();
     }
 
     pub fn power_off(&mut self) {
@@ -146,7 +146,7 @@ impl Noise {
         self.div_freq = 0;
 
         self.select = 0;
-        self.counter.power_off();
+        self.length_counter.power_off();
 
         self._freq = 0;
         self.dac = false;
@@ -163,7 +163,7 @@ pub struct NoiseStream {
 impl NoiseStream {
     pub fn new(noise: Noise) -> Self {
         let env = Envelop::new(noise.env_init, noise.env_count, noise.env_inc);
-        let counter = noise.counter.clone();
+        let counter = noise.length_counter.clone();
         let wave = RandomWave::new(noise.step);
 
         Self {

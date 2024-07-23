@@ -18,7 +18,7 @@ pub struct Wave {
     power: bool,
     amp: u8,
     amp_shift: Arc<AtomicUsize>,
-    counter: LengthCounter,
+    length_counter: LengthCounter,
     freq: Arc<AtomicUsize>,
     freq_high: u8,
     wave_ram: WaveRam,
@@ -36,7 +36,7 @@ impl Wave {
             power: false,
             amp: 0,
             amp_shift: Arc::new(AtomicUsize::new(0)),
-            counter: LengthCounter::type256(),
+            length_counter: LengthCounter::type256(),
             freq: Arc::new(AtomicUsize::new(0)),
             freq_high: 0,
             wave_ram: WaveRam::new(),
@@ -66,7 +66,7 @@ impl Wave {
 
         self.dac = value & 0x80 != 0;
         if !self.dac {
-            self.counter.deactivate();
+            self.length_counter.deactivate();
         }
     }
 
@@ -78,7 +78,7 @@ impl Wave {
 
     /// Write NR31 register (0xff1b)
     pub fn write_len(&mut self, value: u8) {
-        self.counter.load(value as usize);
+        self.length_counter.load(value as usize);
     }
 
     /// Read NR32 register (0xff1c)
@@ -129,8 +129,8 @@ impl Wave {
             .set((self.freq.get() & !0x700) | (((value & 0x7) as usize) << 8));
         let trigger = value & 0x80 != 0;
         let length_enable = value & 0x40 != 0;
-        let retrigger = self.counter.is_active();
-        self.counter.update(trigger, length_enable);
+        let retrigger = self.length_counter.is_active();
+        self.length_counter.update(trigger, length_enable);
         if self.dac && trigger {
             if retrigger && !self.first_fetch {
                 // Advance one tick on retrigger
@@ -168,7 +168,7 @@ impl Wave {
     }
 
     pub fn step(&mut self, cycles: usize) {
-        self.counter.step(cycles);
+        self.length_counter.step(cycles);
 
         let times = self.divider.step(cycles);
 
@@ -263,12 +263,12 @@ impl Wave {
     }
 
     pub fn is_active(&self) -> bool {
-        self.counter.is_active() && self.dac
+        self.length_counter.is_active() && self.dac
     }
 
     pub fn power_on(&mut self) {
         self.power = true;
-        self.counter.power_on();
+        self.length_counter.power_on();
     }
 
     pub fn power_off(&mut self) {
@@ -276,7 +276,7 @@ impl Wave {
 
         self.amp = 0;
         self.amp_shift.set(0);
-        self.counter.power_off();
+        self.length_counter.power_off();
         self.freq.set(0);
         self.freq_high = 0;
 
@@ -297,7 +297,7 @@ pub struct WaveStream {
 
 impl WaveStream {
     fn new(wave: Wave) -> Self {
-        let counter = wave.counter.clone();
+        let counter = wave.length_counter.clone();
 
         let wave_length = wave.wave_ram.waveform_length();
 

@@ -17,7 +17,7 @@ pub struct Tone {
     env_init: usize,
     env_inc: bool,
     env_count: usize,
-    counter: LengthCounter,
+    length_counter: LengthCounter,
     freq: usize,
     freq_high: u8,
     dac: bool,
@@ -37,7 +37,7 @@ impl Tone {
             env_init: 0,
             env_inc: false,
             env_count: 0,
-            counter: LengthCounter::type64(),
+            length_counter: LengthCounter::type64(),
             freq: 0,
             freq_high: 0,
             dac: false,
@@ -72,7 +72,7 @@ impl Tone {
 
     /// Write NR11/NR21 register (0xff11/0xff16)
     pub fn write_wave(&mut self, value: u8) {
-        self.counter.load((value & 0x3f) as usize);
+        self.length_counter.load((value & 0x3f) as usize);
 
         if !self.power {
             return;
@@ -98,7 +98,7 @@ impl Tone {
         self.env_count = (value & 0x7) as usize;
         self.dac = value & 0xf8 != 0;
         if !self.dac {
-            self.counter.deactivate();
+            self.length_counter.deactivate();
         }
     }
 
@@ -133,7 +133,7 @@ impl Tone {
         self.freq = (self.freq & !0x700) | (((value & 0x7) as usize) << 8);
         let trigger = value & 0x80 != 0;
         let enable = value & 0x40 != 0;
-        self.counter.update(trigger, enable);
+        self.length_counter.update(trigger, enable);
         if let Some(sweep) = self.sweep.as_mut() {
             sweep.trigger(self.freq, self.sweep_time, self.sweep_sub, self.sweep_shift);
         }
@@ -151,7 +151,7 @@ impl Tone {
         if let Some(sweep) = self.sweep.as_mut() {
             sweep.power_on();
         }
-        self.counter.power_on();
+        self.length_counter.power_on();
     }
 
     pub fn power_off(&mut self) {
@@ -173,7 +173,7 @@ impl Tone {
         self.env_inc = false;
         self.env_count = 0;
 
-        self.counter.power_off();
+        self.length_counter.power_off();
 
         self.freq = 0;
         self.freq_high = 0;
@@ -187,7 +187,7 @@ impl Tone {
                 self.freq = new_freq;
             }
         }
-        self.counter.step(cycles);
+        self.length_counter.step(cycles);
     }
 
     pub fn is_active(&self) -> bool {
@@ -197,7 +197,7 @@ impl Tone {
             false
         };
 
-        self.counter.is_active() && self.dac && !sweep_disabling_channel
+        self.length_counter.is_active() && self.dac && !sweep_disabling_channel
     }
 
     fn real_freq(&self) -> usize {
@@ -227,7 +227,7 @@ impl ToneStream {
     }
 
     fn step(&mut self, rate: usize) {
-        self.tone.counter.step_with_rate(rate);
+        self.tone.length_counter.step_with_rate(rate);
         if let Some(sweep) = &mut self.tone.sweep {
             sweep.step_with_rate(rate);
         }
@@ -244,7 +244,7 @@ impl Stream for ToneStream {
 
         self.step(rate);
 
-        if !self.tone.counter.is_active() {
+        if !self.tone.length_counter.is_active() {
             return 0;
         }
 
@@ -274,6 +274,6 @@ impl Stream for ToneStream {
     }
 
     fn on(&self) -> bool {
-        self.tone.counter.is_active()
+        self.tone.length_counter.is_active()
     }
 }
