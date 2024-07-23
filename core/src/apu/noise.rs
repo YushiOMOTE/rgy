@@ -4,6 +4,8 @@ use super::{length_counter::LengthCounter, util::Envelop};
 
 #[derive(Debug, Clone)]
 pub struct Noise {
+    power: bool,
+
     envelop: u8,
     env_init: usize,
     env_inc: bool,
@@ -24,6 +26,8 @@ pub struct Noise {
 impl Noise {
     pub fn new() -> Self {
         Self {
+            power: false,
+
             envelop: 0,
             env_init: 0,
             env_inc: false,
@@ -60,6 +64,10 @@ impl Noise {
 
     /// Write NR42 register (0xff21)
     pub fn write_envelop(&mut self, value: u8) {
+        if !self.power {
+            return;
+        }
+
         self.envelop = value;
         self.env_init = (value >> 4) as usize;
         self.env_inc = value & 0x08 != 0;
@@ -77,6 +85,10 @@ impl Noise {
 
     /// Write NR43 register (0xff22)
     pub fn write_poly_counter(&mut self, value: u8) {
+        if !self.power {
+            return;
+        }
+
         self.poly_counter = value;
         self.shift_freq = (value >> 4) as usize;
         self.step = value & 0x08 != 0;
@@ -90,6 +102,10 @@ impl Noise {
 
     /// Write NR44 register (0xff23)
     pub fn write_select(&mut self, value: u8) -> bool {
+        if !self.power {
+            return false;
+        }
+
         self.select = value;
         let trigger = value & 0x80 != 0;
         let enable = value & 0x40 != 0;
@@ -110,8 +126,30 @@ impl Noise {
         self.counter.is_active() && self.dac
     }
 
-    pub fn clear(&mut self) {
-        core::mem::swap(self, &mut Noise::new());
+    pub fn power_on(&mut self) {
+        self.power = true;
+
+        self.counter.power_on();
+    }
+
+    pub fn power_off(&mut self) {
+        self.power = false;
+
+        self.envelop = 0;
+        self.env_init = 0;
+        self.env_inc = false;
+        self.env_count = 0;
+
+        self.poly_counter = 0;
+        self.shift_freq = 0;
+        self.step = false;
+        self.div_freq = 0;
+
+        self.select = 0;
+        self.counter.power_off();
+
+        self._freq = 0;
+        self.dac = false;
     }
 }
 

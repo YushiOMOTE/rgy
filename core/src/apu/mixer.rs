@@ -10,6 +10,7 @@ use core::sync::atomic::{AtomicBool, AtomicUsize};
 use spin::Mutex;
 
 pub struct Mixer {
+    power: bool,
     ctrl: u8,
     so1_volume: usize,
     so2_volume: usize,
@@ -21,6 +22,7 @@ pub struct Mixer {
 impl Mixer {
     pub fn new() -> Self {
         Self {
+            power: false,
             ctrl: 0,
             so1_volume: 0,
             so2_volume: 0,
@@ -37,6 +39,10 @@ impl Mixer {
 
     /// Write NR50 register (0xff24)
     pub fn write_ctrl(&mut self, value: u8) {
+        if !self.power {
+            return;
+        }
+
         self.ctrl = value;
         self.so1_volume = (value as usize & 0x70) >> 4;
         self.so2_volume = value as usize & 0x07;
@@ -50,6 +56,10 @@ impl Mixer {
 
     /// Write NR51 register (0xff25)
     pub fn write_so_mask(&mut self, value: u8) {
+        if !self.power {
+            return;
+        }
+
         self.so_mask = value as usize;
         self.update_stream();
     }
@@ -105,7 +115,12 @@ impl Mixer {
         v1 + v2
     }
 
-    pub fn clear(&mut self) {
+    pub fn power_on(&mut self) {
+        self.power = true;
+    }
+
+    pub fn power_off(&mut self) {
+        self.power = false;
         self.ctrl = 0;
         self.so1_volume = 0;
         self.so2_volume = 0;

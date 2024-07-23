@@ -31,6 +31,10 @@ impl ClockDivider {
     fn interval(&self) -> usize {
         self.source_clock_rate / self.target_clock_rate
     }
+
+    pub fn reset(&mut self) {
+        self.counter = 0;
+    }
 }
 
 #[test]

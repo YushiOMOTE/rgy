@@ -50,9 +50,6 @@ impl Apu {
 
     /// Write NR10 register (0xff10)
     pub fn write_tone_sweep(&mut self, value: u8) {
-        if !self.enable {
-            return;
-        }
         self.tones[0].write_sweep(value)
     }
 
@@ -63,9 +60,6 @@ impl Apu {
 
     /// Write NR11/NR21 register (0xff11/0xff16)
     pub fn write_tone_wave(&mut self, tone: usize, value: u8) {
-        if !self.enable {
-            return;
-        }
         self.tones[tone].write_wave(value)
     }
 
@@ -76,9 +70,6 @@ impl Apu {
 
     /// Write NR12/NR22 register (0xff12/0xff17)
     pub fn write_tone_envelop(&mut self, tone: usize, value: u8) {
-        if !self.enable {
-            return;
-        }
         self.tones[tone].write_envelop(value)
     }
 
@@ -89,9 +80,6 @@ impl Apu {
 
     /// Write NR13/NR23 register (0xff13/0xff18)
     pub fn write_tone_freq_low(&mut self, tone: usize, value: u8) {
-        if !self.enable {
-            return;
-        }
         self.tones[tone].write_freq_low(value)
     }
 
@@ -102,9 +90,6 @@ impl Apu {
 
     /// Write NR14/NR24 register (0xff14/0xff19)
     pub fn write_tone_freq_high(&mut self, tone: usize, value: u8) {
-        if !self.enable {
-            return;
-        }
         if self.tones[tone].write_freq_high(value) {
             self.mixer.sync_tone(tone, self.tones[tone].clone());
         }
@@ -117,9 +102,6 @@ impl Apu {
 
     /// Write NR30 register (0xff1a)
     pub fn write_wave_enable(&mut self, value: u8) {
-        if !self.enable {
-            return;
-        }
         self.wave.write_enable(value);
         self.mixer.sync_wave(self.wave.clone());
     }
@@ -131,9 +113,6 @@ impl Apu {
 
     /// Write NR31 register (0xff1b)
     pub fn write_wave_len(&mut self, value: u8) {
-        if !self.enable {
-            return;
-        }
         self.wave.write_len(value);
     }
 
@@ -144,9 +123,6 @@ impl Apu {
 
     /// Write NR32 register (0xff1c)
     pub fn write_wave_amp(&mut self, value: u8) {
-        if !self.enable {
-            return;
-        }
         self.wave.write_amp(value)
     }
 
@@ -157,9 +133,6 @@ impl Apu {
 
     /// Write NR33 register (0xff1d)
     pub fn write_wave_freq_low(&mut self, value: u8) {
-        if !self.enable {
-            return;
-        }
         self.wave.write_freq_low(value)
     }
 
@@ -170,9 +143,6 @@ impl Apu {
 
     /// Write NR34 register (0xff1e)
     pub fn write_wave_freq_high(&mut self, value: u8) {
-        if !self.enable {
-            return;
-        }
         if self.wave.write_freq_high(value) {
             self.mixer.sync_wave(self.wave.clone());
         }
@@ -185,9 +155,6 @@ impl Apu {
 
     /// Write wave pattern buffer
     pub fn write_wave_buf(&mut self, offset: u16, value: u8) {
-        if !self.enable {
-            return;
-        }
         self.wave.write_wave_buf(offset, value)
     }
 
@@ -198,9 +165,6 @@ impl Apu {
 
     /// Write NR41 register (0xff20)
     pub fn write_noise_len(&mut self, value: u8) {
-        if !self.enable {
-            return;
-        }
         self.noise.write_len(value)
     }
 
@@ -211,9 +175,6 @@ impl Apu {
 
     /// Write NR42 register (0xff21)
     pub fn write_noise_envelop(&mut self, value: u8) {
-        if !self.enable {
-            return;
-        }
         self.noise.write_envelop(value)
     }
 
@@ -224,9 +185,6 @@ impl Apu {
 
     /// Write NR43 register (0xff22)
     pub fn write_noise_poly_counter(&mut self, value: u8) {
-        if !self.enable {
-            return;
-        }
         self.noise.write_poly_counter(value)
     }
 
@@ -237,9 +195,6 @@ impl Apu {
 
     /// Write NR44 register (0xff23)
     pub fn write_noise_select(&mut self, value: u8) {
-        if !self.enable {
-            return;
-        }
         if self.noise.write_select(value) {
             self.mixer.sync_noise(self.noise.clone());
         }
@@ -254,9 +209,6 @@ impl Apu {
 
     /// Write NR50 register (0xff24)
     pub fn write_ctrl(&mut self, value: u8) {
-        if !self.enable {
-            return;
-        }
         self.mixer.write_ctrl(value)
     }
 
@@ -269,9 +221,6 @@ impl Apu {
 
     /// Write NR51 register (0xff25)
     pub fn write_so_mask(&mut self, value: u8) {
-        if !self.enable {
-            return;
-        }
         self.mixer.write_so_mask(value)
     }
 
@@ -291,7 +240,6 @@ impl Apu {
         };
         v |= if self.wave.is_active() { 0x04 } else { 0x00 };
         v |= if self.noise.is_active() { 0x08 } else { 0x00 };
-        debug!("Read NR52: {:02x}", v);
         v
     }
 
@@ -305,22 +253,21 @@ impl Apu {
 
         if !self.enable && enable {
             info!("Sound master enabled");
-            // If disabled, clear all registers
             for tone in &mut self.tones {
-                tone.clear();
+                tone.power_on();
             }
-            self.wave.clear();
-            self.noise.clear();
-            self.mixer.clear();
+            self.wave.power_on();
+            self.noise.power_on();
+            self.mixer.power_on();
         } else if self.enable && !enable {
             info!("Sound master disabled");
-            // If disabled, clear all registers
+
             for tone in &mut self.tones {
-                tone.clear();
+                tone.power_off();
             }
-            self.wave.clear();
-            self.noise.clear();
-            self.mixer.clear();
+            self.wave.power_off();
+            self.noise.power_off();
+            self.mixer.power_off();
         }
 
         self.enable = enable;

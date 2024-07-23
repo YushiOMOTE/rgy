@@ -89,7 +89,7 @@ Test status of [Blargg's Gameboy hardware test ROMs](https://github.com/retrio/g
 * [x] `mem_timing-2`
 * [ ] `oam_bug`
 * [x] `interrupt_time`
-* [ ] `dmg_sound`
+* [x] `dmg_sound`
     * [x] `01-registers`
     * [x] `02-len ctr`
     * [x] `03-trigger`
@@ -100,7 +100,7 @@ Test status of [Blargg's Gameboy hardware test ROMs](https://github.com/retrio/g
     * [x] `08-len ctr during power`
     * [x] `09-wave read while on`
     * [x] `10-wave trigger while on`
-    * [ ] `11-regs after power`
+    * [x] `11-regs after power`
     * [x] `12-wave write while on`
 * [ ] `cgb_sound`
 

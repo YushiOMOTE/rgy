@@ -6,12 +6,12 @@ use super::{length_counter::LengthCounter, sweep::Sweep, util::Envelop, wave_buf
 
 #[derive(Debug, Clone)]
 pub struct Tone {
+    power: bool,
     sweep: Option<Sweep>,
     sweep_raw: u8,
     sweep_time: usize,
     sweep_sub: bool,
     sweep_shift: usize,
-    wave_raw: u8,
     wave_duty: usize,
     envelop: u8,
     env_init: usize,
@@ -26,12 +26,12 @@ pub struct Tone {
 impl Tone {
     pub fn new(with_sweep: bool) -> Self {
         Self {
+            power: false,
             sweep: if with_sweep { Some(Sweep::new()) } else { None },
             sweep_raw: 0,
             sweep_time: 0,
             sweep_sub: false,
             sweep_shift: 0,
-            wave_raw: 0,
             wave_duty: 0,
             envelop: 0,
             env_init: 0,
@@ -51,6 +51,10 @@ impl Tone {
 
     /// Write NR10 register (0xff10)
     pub fn write_sweep(&mut self, value: u8) {
+        if !self.power {
+            return;
+        }
+
         debug!("write NR10: {:02x}", value);
         self.sweep_raw = value;
         self.sweep_time = ((value >> 4) & 0x7) as usize;
@@ -63,14 +67,18 @@ impl Tone {
 
     /// Read NR11/NR21 register (0xff11/0xff16)
     pub fn read_wave(&self) -> u8 {
-        self.wave_raw | 0x3f
+        (self.wave_duty << 6) as u8 | 0x3f
     }
 
     /// Write NR11/NR21 register (0xff11/0xff16)
     pub fn write_wave(&mut self, value: u8) {
-        self.wave_raw = value;
-        self.wave_duty = (value >> 6).into();
         self.counter.load((value & 0x3f) as usize);
+
+        if !self.power {
+            return;
+        }
+
+        self.wave_duty = (value >> 6).into();
     }
 
     /// Read NR12/NR22 register (0xff12/0xff17)
@@ -80,6 +88,10 @@ impl Tone {
 
     /// Write NR12/NR22 register (0xff12/0xff17)
     pub fn write_envelop(&mut self, value: u8) {
+        if !self.power {
+            return;
+        }
+
         self.envelop = value;
         self.env_init = (value >> 4) as usize;
         self.env_inc = value & 0x08 != 0;
@@ -98,6 +110,10 @@ impl Tone {
 
     /// Write NR13/NR23 register (0xff13/0xff18)
     pub fn write_freq_low(&mut self, value: u8) {
+        if !self.power {
+            return;
+        }
+
         self.freq = (self.freq & !0xff) | value as usize;
     }
 
@@ -109,6 +125,10 @@ impl Tone {
 
     /// Write NR14/NR24 register (0xff14/0xff19)
     pub fn write_freq_high(&mut self, value: u8) -> bool {
+        if !self.power {
+            return false;
+        }
+
         self.freq_high = value;
         self.freq = (self.freq & !0x700) | (((value & 0x7) as usize) << 8);
         let trigger = value & 0x80 != 0;
@@ -125,8 +145,40 @@ impl Tone {
         ToneStream::new(self.clone())
     }
 
-    pub fn clear(&mut self) {
-        core::mem::swap(self, &mut Tone::new(self.sweep.is_some()));
+    pub fn power_on(&mut self) {
+        self.power = true;
+
+        if let Some(sweep) = self.sweep.as_mut() {
+            sweep.power_on();
+        }
+        self.counter.power_on();
+    }
+
+    pub fn power_off(&mut self) {
+        self.power = false;
+
+        if let Some(sweep) = self.sweep.as_mut() {
+            sweep.power_off();
+        }
+
+        self.sweep_raw = 0;
+        self.sweep_time = 0;
+        self.sweep_sub = false;
+        self.sweep_shift = 0;
+
+        self.wave_duty = 0;
+
+        self.envelop = 0;
+        self.env_init = 0;
+        self.env_inc = false;
+        self.env_count = 0;
+
+        self.counter.power_off();
+
+        self.freq = 0;
+        self.freq_high = 0;
+
+        self.dac = false;
     }
 
     pub fn step(&mut self, cycles: usize) {
