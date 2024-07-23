@@ -141,12 +141,9 @@ impl Sweep {
 
     pub fn power_on(&mut self) {
         self.frame_sequencer.reset_step();
-
-        info!("Power on sweep");
     }
 
     pub fn power_off(&mut self) {
-        info!("Power off sweep");
         self.enable = false;
 
         self.frame_sequencer.reset_step();

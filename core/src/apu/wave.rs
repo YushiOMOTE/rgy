@@ -157,10 +157,6 @@ impl Wave {
 
     /// Write wave pattern buffer
     pub fn write_wave_buf(&mut self, offset: u16, value: u8) {
-        // if !self.power {
-        //     return;
-        // }
-
         if let Some(index) = self.adjust_waveram_index(offset - 0xff30) {
             self.wave_ram.write_byte(index, value);
         }
