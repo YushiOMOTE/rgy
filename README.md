@@ -98,10 +98,10 @@ Test status of [Blargg's Gameboy hardware test ROMs](https://github.com/retrio/g
     * [x] `06-overflow on trigger`
     * [x] `07-len sweep period sync`
     * [x] `08-len ctr during power`
-    * [ ] `09-wave read while on`
-    * [ ] `10-wave trigger while on`
+    * [x] `09-wave read while on`
+    * [x] `10-wave trigger while on`
     * [ ] `11-regs after power`
-    * [ ] `12-wave write while on`
+    * [x] `12-wave write while on`
 * [ ] `cgb_sound`
 
 ## Projects

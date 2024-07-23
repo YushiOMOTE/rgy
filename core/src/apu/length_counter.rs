@@ -36,7 +36,7 @@ impl LengthCounter {
     // trigger, enable, freeze
 
     pub fn update(&mut self, trigger: bool, enable: bool) {
-        info!(
+        debug!(
             "trigger={}, enable={}: {:p}: {:?}",
             trigger, enable, self, self
         );
