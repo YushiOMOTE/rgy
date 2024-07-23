@@ -35,6 +35,11 @@ impl Timer {
             false
         }
     }
+
+    pub fn reset(&mut self) {
+        self.counter = 0;
+        self.interval = 0;
+    }
 }
 
 #[test]

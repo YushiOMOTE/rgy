@@ -15,6 +15,7 @@ use super::{
 
 #[derive(Debug, Clone)]
 pub struct Wave {
+    power: bool,
     amp: u8,
     amp_shift: Arc<AtomicUsize>,
     counter: LengthCounter,
@@ -32,6 +33,7 @@ pub struct Wave {
 impl Wave {
     pub fn new() -> Self {
         Self {
+            power: false,
             amp: 0,
             amp_shift: Arc::new(AtomicUsize::new(0)),
             counter: LengthCounter::type256(),
@@ -58,6 +60,10 @@ impl Wave {
 
     /// Write NR30 register (0xff1a)
     pub fn write_enable(&mut self, value: u8) {
+        if !self.power {
+            return;
+        }
+
         self.dac = value & 0x80 != 0;
         if !self.dac {
             self.counter.deactivate();
@@ -82,6 +88,10 @@ impl Wave {
 
     /// Write NR32 register (0xff1c)
     pub fn write_amp(&mut self, value: u8) {
+        if !self.power {
+            return;
+        }
+
         debug!("Wave amp shift: {:02x}", value);
         self.amp = value;
         self.amp_shift.set((value as usize >> 5) & 0x3);
@@ -95,6 +105,10 @@ impl Wave {
 
     /// Write NR33 register (0xff1d)
     pub fn write_freq_low(&mut self, value: u8) {
+        if !self.power {
+            return;
+        }
+
         self.freq.set((self.freq.get() & !0xff) | value as usize);
     }
 
@@ -106,6 +120,10 @@ impl Wave {
 
     /// Write NR34 register (0xff1e)
     pub fn write_freq_high(&mut self, value: u8) -> bool {
+        if !self.power {
+            return false;
+        }
+
         self.freq_high = value;
         self.freq
             .set((self.freq.get() & !0x700) | (((value & 0x7) as usize) << 8));
@@ -139,6 +157,10 @@ impl Wave {
 
     /// Write wave pattern buffer
     pub fn write_wave_buf(&mut self, offset: u16, value: u8) {
+        // if !self.power {
+        //     return;
+        // }
+
         if let Some(index) = self.adjust_waveram_index(offset - 0xff30) {
             self.wave_ram.write_byte(index, value);
         }
@@ -248,10 +270,26 @@ impl Wave {
         self.counter.is_active() && self.dac
     }
 
-    pub fn clear(&mut self) {
-        let mut wave = Wave::new();
-        core::mem::swap(&mut wave.wave_ram, &mut self.wave_ram);
-        core::mem::swap(self, &mut wave);
+    pub fn power_on(&mut self) {
+        self.power = true;
+        self.counter.power_on();
+    }
+
+    pub fn power_off(&mut self) {
+        self.power = false;
+
+        self.amp = 0;
+        self.amp_shift.set(0);
+        self.counter.power_off();
+        self.freq.set(0);
+        self.freq_high = 0;
+
+        self.index = 0;
+        self.dac = false;
+        self.divider.reset();
+        self.timer.reset();
+        self.last_amp = 0;
+        self.first_fetch = false;
     }
 }
 

@@ -45,6 +45,11 @@ impl FrameSequencer {
         self.step = (self.step + 1) % 8;
         Some(current_step)
     }
+
+    pub fn reset_step(&mut self) {
+        self.step = 0;
+        self.divider.reset();
+    }
 }
 
 #[test]
@@ -66,4 +71,17 @@ fn test_frame_sequencer() {
             _ => assert_eq!(seq.step(1), None),
         }
     }
+}
+
+#[test]
+fn test_frame_sequencer_reset() {
+    let mut seq = FrameSequencer::new(1024);
+
+    assert_eq!(seq.step(1), None);
+    assert_eq!(seq.step(1), Some(0));
+    assert_eq!(seq.step(1), None);
+    assert_eq!(seq.step(1), Some(1));
+    seq.reset_step();
+    assert_eq!(seq.step(1), None);
+    assert_eq!(seq.step(1), Some(0));
 }

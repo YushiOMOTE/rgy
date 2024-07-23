@@ -270,14 +270,13 @@ fn dmg_sound_10_wave_trigger_while_on() {
     );
 }
 
-// TODO: Fix APU
-// #[test]
-// fn dmg_sound_11_regs_after_power() {
-//     test_rom(
-//         Expected::from_file("tests/dmg_sound_01_registers.txt"),
-//         "../roms/dmg_sound/rom_singles/11-regs after power.gb",
-//     );
-// }
+#[test]
+fn dmg_sound_11_regs_after_power() {
+    test_rom(
+        Expected::from_file("tests/dmg_sound_11_regs_after_power.txt"),
+        "../roms/dmg_sound/rom_singles/11-regs after power.gb",
+    );
+}
 
 #[test]
 fn dmg_sound_12_wave_write_while_on() {

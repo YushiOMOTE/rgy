@@ -92,6 +92,15 @@ impl LengthCounter {
         self.active = false;
     }
 
+    pub fn power_on(&mut self) {
+        self.frame_sequencer.reset_step();
+    }
+
+    pub fn power_off(&mut self) {
+        self.enable = false;
+        self.active = false;
+    }
+
     pub fn load(&mut self, value: usize) {
         self.length = self.base - value;
     }

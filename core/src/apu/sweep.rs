@@ -138,4 +138,24 @@ impl Sweep {
         self.enable = false;
         self.disabling_channel = true;
     }
+
+    pub fn power_on(&mut self) {
+        self.frame_sequencer.reset_step();
+
+        info!("Power on sweep");
+    }
+
+    pub fn power_off(&mut self) {
+        info!("Power off sweep");
+        self.enable = false;
+
+        self.frame_sequencer.reset_step();
+        self.freq = 0;
+        self.timer.reset();
+        self.subtract = false;
+        self.period = 0;
+        self.shift = 0;
+        self.subtracted = false;
+        self.disabling_channel = false;
+    }
 }
