@@ -2,25 +2,54 @@ use crate::hardware::Stream;
 
 use super::{length_counter::LengthCounter, util::Envelop};
 
+use bitfield_struct::bitfield;
+
 #[derive(Debug, Clone)]
 pub struct Noise {
     power: bool,
 
-    envelop: u8,
-    env_init: usize,
-    env_inc: bool,
-    env_count: usize,
+    nr41: Nr41,
+    nr42: Nr42,
+    nr43: Nr43,
+    nr44: Nr44,
 
-    poly_counter: u8,
-    shift_freq: usize,
-    step: bool,
-    div_freq: usize,
-
-    select: u8,
     length_counter: LengthCounter,
-    _freq: usize,
 
     dac: bool,
+}
+
+#[bitfield(u8)]
+struct Nr41 {
+    #[bits(6)]
+    length: usize,
+    #[bits(2)]
+    _unused: u8,
+}
+
+#[bitfield(u8)]
+struct Nr42 {
+    #[bits(3)]
+    count: usize,
+    increase: bool,
+    #[bits(4)]
+    init: usize,
+}
+
+#[bitfield(u8)]
+struct Nr43 {
+    #[bits(3)]
+    div_freq: usize,
+    step: bool,
+    #[bits(4)]
+    shift_freq: usize,
+}
+
+#[bitfield(u8)]
+struct Nr44 {
+    #[bits(6)]
+    _unused: u8,
+    enable_length: bool,
+    trigger: bool,
 }
 
 impl Noise {
@@ -28,19 +57,12 @@ impl Noise {
         Self {
             power: false,
 
-            envelop: 0,
-            env_init: 0,
-            env_inc: false,
-            env_count: 0,
+            nr41: Nr41::default(),
+            nr42: Nr42::default(),
+            nr43: Nr43::default(),
+            nr44: Nr44::default(),
 
-            poly_counter: 0,
-            shift_freq: 0,
-            step: false,
-            div_freq: 0,
-
-            select: 0,
             length_counter: LengthCounter::type64(),
-            _freq: 0,
 
             dac: false,
         }
@@ -54,12 +76,14 @@ impl Noise {
 
     /// Write NR41 register (0xff20)
     pub fn write_len(&mut self, value: u8) {
-        self.length_counter.load((value & 0x3f) as usize);
+        self.nr41 = Nr41::from_bits(value);
+
+        self.length_counter.load(self.nr41.length());
     }
 
     /// Read NR42 register (0xff21)
     pub fn read_envelop(&self) -> u8 {
-        self.envelop
+        self.nr42.into_bits()
     }
 
     /// Write NR42 register (0xff21)
@@ -68,11 +92,9 @@ impl Noise {
             return;
         }
 
-        self.envelop = value;
-        self.env_init = (value >> 4) as usize;
-        self.env_inc = value & 0x08 != 0;
-        self.env_count = (value & 0x7) as usize;
-        self.dac = value & 0xf8 != 0;
+        self.nr42 = Nr42::from_bits(value);
+
+        self.dac = self.nr42.init() > 0 || self.nr42.increase();
         if !self.dac {
             self.length_counter.deactivate();
         }
@@ -80,7 +102,7 @@ impl Noise {
 
     /// Read NR43 register (0xff22)
     pub fn read_poly_counter(&self) -> u8 {
-        self.poly_counter
+        self.nr42.into_bits()
     }
 
     /// Write NR43 register (0xff22)
@@ -89,15 +111,12 @@ impl Noise {
             return;
         }
 
-        self.poly_counter = value;
-        self.shift_freq = (value >> 4) as usize;
-        self.step = value & 0x08 != 0;
-        self.div_freq = (value & 0x7) as usize;
+        self.nr43 = Nr43::from_bits(value);
     }
 
     /// Read NR44 register (0xff23)
     pub fn read_select(&self) -> u8 {
-        self.select | 0xbf
+        self.nr44.into_bits() | 0xbf
     }
 
     /// Write NR44 register (0xff23)
@@ -106,11 +125,12 @@ impl Noise {
             return false;
         }
 
-        self.select = value;
-        let trigger = value & 0x80 != 0;
-        let enable = value & 0x40 != 0;
-        self.length_counter.update(trigger, enable);
-        trigger
+        self.nr44 = Nr44::from_bits(value);
+
+        self.length_counter
+            .update(self.nr44.trigger(), self.nr44.enable_length());
+
+        self.nr44.trigger()
     }
 
     /// Create stream from the current data
@@ -135,20 +155,13 @@ impl Noise {
     pub fn power_off(&mut self) {
         self.power = false;
 
-        self.envelop = 0;
-        self.env_init = 0;
-        self.env_inc = false;
-        self.env_count = 0;
+        self.nr41 = Nr41::default();
+        self.nr42 = Nr42::default();
+        self.nr43 = Nr43::default();
+        self.nr44 = Nr44::default();
 
-        self.poly_counter = 0;
-        self.shift_freq = 0;
-        self.step = false;
-        self.div_freq = 0;
-
-        self.select = 0;
         self.length_counter.power_off();
 
-        self._freq = 0;
         self.dac = false;
     }
 }
@@ -162,9 +175,9 @@ pub struct NoiseStream {
 
 impl NoiseStream {
     pub fn new(noise: Noise) -> Self {
-        let env = Envelop::new(noise.env_init, noise.env_count, noise.env_inc);
+        let env = Envelop::new(noise.nr42.init(), noise.nr42.count(), noise.nr42.increase());
         let counter = noise.length_counter.clone();
-        let wave = RandomWave::new(noise.step);
+        let wave = RandomWave::new(noise.nr43.step());
 
         Self {
             noise,
@@ -193,13 +206,13 @@ impl Stream for NoiseStream {
         let amp = self.env.amp(rate);
 
         // Noise: 524288 Hz / r / 2 ^ (s+1)
-        let r = self.noise.div_freq;
-        let s = self.noise.shift_freq as u32;
+        let r = self.noise.nr43.div_freq();
+        let s = self.noise.nr43.shift_freq() as u32;
         let freq = if r == 0 {
             // For r = 0, assume r = 0.5 instead
             524288 * 5 / 10 / 2usize.pow(s + 1)
         } else {
-            524288 / self.noise.div_freq / 2usize.pow(s + 1)
+            524288 / self.noise.nr43.div_freq() / 2usize.pow(s + 1)
         };
 
         if self.wave.high(rate, freq) {
