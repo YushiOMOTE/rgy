@@ -1,49 +1,134 @@
-use alloc::sync::Arc;
-use core::sync::atomic::AtomicUsize;
-
 use log::*;
 
 use crate::hardware::Stream;
+use bitfield_struct::bitfield;
 
 use super::{
-    clock_divider::ClockDivider,
-    length_counter::LengthCounter,
-    timer::Timer,
-    util::AtomicHelper,
-    wave_buf::{WaveIndex, WaveRam},
+    clock_divider::ClockDivider, length_counter::LengthCounter, timer::Timer, wave_buf::WaveIndex,
 };
+
+const RAM_SIZE: usize = 16;
+const WAVE_SIZE: usize = RAM_SIZE * 2;
 
 #[derive(Debug, Clone)]
 pub struct Wave {
     power: bool,
-    amp: u8,
-    amp_shift: Arc<AtomicUsize>,
-    counter: LengthCounter,
-    freq: Arc<AtomicUsize>,
-    freq_high: u8,
-    wave_ram: WaveRam,
-    index: usize,
-    dac: bool,
+    length_counter: LengthCounter,
+    freq: Freq,
+    ram: [u8; RAM_SIZE],
+    index: Index,
+    nr30: Nr30,
+    nr31: Nr31,
+    nr32: Nr32,
+    nr33: Nr33,
+    nr34: Nr34,
     divider: ClockDivider,
     timer: Timer,
     last_amp: u8,
     first_fetch: bool,
 }
 
+#[bitfield(u8)]
+struct Nr30 {
+    #[bits(7)]
+    _unused: u8,
+    dac: bool,
+}
+
+#[bitfield(u8)]
+struct Nr31 {
+    #[bits(8)]
+    length: usize,
+}
+
+#[bitfield(u8)]
+struct Nr32 {
+    #[bits(5)]
+    _unused1: u8,
+    #[bits(2)]
+    amp_shift: usize,
+    #[bits(1)]
+    _unused2: u8,
+}
+
+#[bitfield(u8)]
+struct Nr33 {
+    #[bits(8)]
+    freq_low: usize,
+}
+
+#[bitfield(u8)]
+struct Nr34 {
+    #[bits(3)]
+    freq_high: usize,
+    #[bits(3)]
+    _unused: u8,
+    length_enable: bool,
+    trigger: bool,
+}
+
+#[bitfield(u16)]
+struct Freq {
+    #[bits(8)]
+    low: usize,
+    #[bits(3)]
+    high: usize,
+    #[bits(5)]
+    _unused: u16,
+}
+
+impl Freq {
+    fn value(&self) -> usize {
+        self.into_bits() as usize
+    }
+
+    fn hz(&self) -> usize {
+        65536 / (2048 - self.value())
+    }
+}
+
+trait ReadWaveRam {
+    fn read(&self, index: Index) -> u8;
+}
+
+impl ReadWaveRam for [u8; RAM_SIZE] {
+    fn read(&self, index: Index) -> u8 {
+        if index.0 % 2 == 0 {
+            self[index.0 / 2] >> 4
+        } else {
+            self[index.0 / 2] & 0xf
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Index(usize);
+
+impl Index {
+    fn next(&self) -> Self {
+        Self((self.0 + 1) % WAVE_SIZE)
+    }
+
+    fn byte_index(&self) -> usize {
+        self.0 / 2
+    }
+}
+
 impl Wave {
     pub fn new() -> Self {
         Self {
             power: false,
-            amp: 0,
-            amp_shift: Arc::new(AtomicUsize::new(0)),
-            counter: LengthCounter::type256(),
-            freq: Arc::new(AtomicUsize::new(0)),
-            freq_high: 0,
-            wave_ram: WaveRam::new(),
-            index: 0,
-            dac: false,
+            length_counter: LengthCounter::type256(),
+            freq: Freq::default(),
+            ram: [0; RAM_SIZE],
+            index: Index(0),
+            nr30: Nr30::default(),
+            nr31: Nr31::default(),
+            nr32: Nr32::default(),
+            nr33: Nr33::default(),
+            nr34: Nr34::default(),
             divider: ClockDivider::new(4_194_304, 2_097_152),
-            timer: Timer::new(),
+            timer: Timer::enabled(),
             last_amp: 0,
             first_fetch: false,
         }
@@ -51,11 +136,7 @@ impl Wave {
 
     /// Read NR30 register (0xff1a)
     pub fn read_enable(&self) -> u8 {
-        if self.dac {
-            0xff
-        } else {
-            0x7f
-        }
+        self.nr30.into_bits() | 0x7f
     }
 
     /// Write NR30 register (0xff1a)
@@ -64,26 +145,29 @@ impl Wave {
             return;
         }
 
-        self.dac = value & 0x80 != 0;
-        if !self.dac {
-            self.counter.deactivate();
+        self.nr30 = Nr30::from_bits(value);
+
+        if !self.nr30.dac() {
+            self.length_counter.deactivate();
         }
     }
 
     /// Read NR31 register (0xff1b)
     pub fn read_len(&self) -> u8 {
-        // Write-only?
+        // Write-only
         0xff
     }
 
     /// Write NR31 register (0xff1b)
     pub fn write_len(&mut self, value: u8) {
-        self.counter.load(value as usize);
+        self.nr31 = Nr31::from_bits(value);
+
+        self.length_counter.load(self.nr31.length());
     }
 
     /// Read NR32 register (0xff1c)
     pub fn read_amp(&self) -> u8 {
-        self.amp | 0x9f
+        self.nr32.into_bits() | 0x9f
     }
 
     /// Write NR32 register (0xff1c)
@@ -93,8 +177,7 @@ impl Wave {
         }
 
         debug!("Wave amp shift: {:02x}", value);
-        self.amp = value;
-        self.amp_shift.set((value as usize >> 5) & 0x3);
+        self.nr32 = Nr32::from_bits(value);
     }
 
     /// Read NR33 register (0xff1d)
@@ -109,13 +192,14 @@ impl Wave {
             return;
         }
 
-        self.freq.set((self.freq.get() & !0xff) | value as usize);
+        self.nr33 = Nr33::from_bits(value);
+        self.freq = self.freq.with_low(self.nr33.freq_low());
     }
 
     /// Read NR34 register (0xff1e)
     pub fn read_freq_high(&self) -> u8 {
         // Mask write-only bits
-        self.freq_high | 0xbf
+        self.nr34.into_bits() | 0xbf
     }
 
     /// Write NR34 register (0xff1e)
@@ -124,14 +208,15 @@ impl Wave {
             return false;
         }
 
-        self.freq_high = value;
-        self.freq
-            .set((self.freq.get() & !0x700) | (((value & 0x7) as usize) << 8));
+        self.nr34 = Nr34::from_bits(value);
+
+        self.freq = self.freq.with_high(self.nr34.freq_high());
+
         let trigger = value & 0x80 != 0;
         let length_enable = value & 0x40 != 0;
-        let retrigger = self.counter.is_active();
-        self.counter.update(trigger, length_enable);
-        if self.dac && trigger {
+        let retrigger = self.length_counter.is_active();
+        self.length_counter.update(trigger, length_enable);
+        if self.nr30.dac() && trigger {
             if retrigger && !self.first_fetch {
                 // Advance one tick on retrigger
                 self.timer.tick();
@@ -140,7 +225,7 @@ impl Wave {
 
             self.load_initial_timer();
 
-            self.index = 0;
+            self.index = Index(0);
             self.first_fetch = true;
         }
         trigger
@@ -149,7 +234,7 @@ impl Wave {
     /// Read wave pattern buffer
     pub fn read_wave_buf(&self, offset: u16) -> u8 {
         let value = match self.adjust_waveram_index(offset - 0xff30) {
-            Some(index) => self.wave_ram.read_byte(index),
+            Some(index) => self.ram[index],
             None => 0xff,
         };
         value
@@ -158,7 +243,7 @@ impl Wave {
     /// Write wave pattern buffer
     pub fn write_wave_buf(&mut self, offset: u16, value: u8) {
         if let Some(index) = self.adjust_waveram_index(offset - 0xff30) {
-            self.wave_ram.write_byte(index, value);
+            self.ram[index] = value;
         }
     }
 
@@ -168,7 +253,7 @@ impl Wave {
     }
 
     pub fn step(&mut self, cycles: usize) {
-        self.counter.step(cycles);
+        self.length_counter.step(cycles);
 
         let times = self.divider.step(cycles);
 
@@ -177,8 +262,8 @@ impl Wave {
         }
     }
 
-    fn adjust_waveram_index(&self, cpu_index: u16) -> Option<u16> {
-        let apu_index = (self.index as u16) / 2;
+    fn adjust_waveram_index(&self, cpu_index: u16) -> Option<usize> {
+        let apu_index = self.index.byte_index();
 
         if self.is_active() {
             if !self.first_fetch && self.is_sampling() {
@@ -187,7 +272,7 @@ impl Wave {
                 None
             }
         } else {
-            Some(cpu_index)
+            Some(cpu_index as usize)
         }
     }
 
@@ -196,17 +281,15 @@ impl Wave {
             return;
         }
 
-        let byte_offset = (self.index as u16 + 1) % 32 / 2;
+        let byte_offset = self.index.next().byte_index();
 
         match byte_offset {
             0..=3 => {
-                let byte = self.wave_ram.read_byte(byte_offset);
-                self.wave_ram.write_byte(0, byte);
+                self.ram[0] = self.ram[byte_offset];
             }
             4..=15 => {
                 for i in 0..4 {
-                    let byte = self.wave_ram.read_byte((byte_offset / 4) * 4 + i);
-                    self.wave_ram.write_byte(i, byte);
+                    self.ram[i] = self.ram[(byte_offset / 4) * 4 + i];
                 }
             }
             _ => unreachable!(),
@@ -217,7 +300,7 @@ impl Wave {
         // Timer tick is 2 cycles. 2 ticks means 4 cycles.
         // Having this in CPU instruction means the instraction is happening
         // at the same time that APU is reading a sample from the Wave RAM.
-        self.timer.remaining() == 2
+        self.timer.expires_in() == 2
     }
 
     fn update(&mut self) {
@@ -234,14 +317,14 @@ impl Wave {
             self.first_fetch = false;
             self.last_amp
         } else {
-            let new_amp = self.wave_ram.read_waveform(self.index);
+            let new_amp = self.ram.read(self.index);
             self.last_amp = new_amp;
             new_amp
         };
 
-        self.index = (self.index + 1) % self.wave_ram.waveform_length();
+        self.index = self.index.next();
 
-        let _amp = match self.amp_shift.get() {
+        let _amp = match self.nr32.amp_shift() {
             0 => 0,
             1 => amp,
             2 => amp >> 1,
@@ -259,33 +342,36 @@ impl Wave {
     }
 
     fn timer_interval(&self) -> usize {
-        2048 - self.freq.get()
+        2048 - self.freq.value()
     }
 
     pub fn is_active(&self) -> bool {
-        self.counter.is_active() && self.dac
+        self.length_counter.is_active() && self.nr30.dac()
     }
 
     pub fn power_on(&mut self) {
         self.power = true;
-        self.counter.power_on();
+        self.length_counter.power_on();
     }
 
     pub fn power_off(&mut self) {
         self.power = false;
 
-        self.amp = 0;
-        self.amp_shift.set(0);
-        self.counter.power_off();
-        self.freq.set(0);
-        self.freq_high = 0;
+        self.length_counter.power_off();
 
-        self.index = 0;
-        self.dac = false;
+        self.index = Index(0);
         self.divider.reset();
         self.timer.reset();
         self.last_amp = 0;
         self.first_fetch = false;
+
+        self.nr30 = Nr30::default();
+        self.nr31 = Nr31::default();
+        self.nr32 = Nr32::default();
+        self.nr33 = Nr33::default();
+        self.nr34 = Nr34::default();
+
+        self.freq = Freq::default();
     }
 }
 
@@ -297,14 +383,12 @@ pub struct WaveStream {
 
 impl WaveStream {
     fn new(wave: Wave) -> Self {
-        let counter = wave.counter.clone();
-
-        let wave_length = wave.wave_ram.waveform_length();
+        let counter = wave.length_counter.clone();
 
         Self {
             wave,
             counter,
-            index: WaveIndex::new(4_194_304, wave_length),
+            index: WaveIndex::new(4_194_304, WAVE_SIZE),
         }
     }
 }
@@ -327,16 +411,15 @@ impl Stream for WaveStream {
             return 0;
         }
 
-        let samples = self.wave.wave_ram.waveform_length();
-        let freq = 65536 / (2048 - self.wave.freq.get());
-        let index_freq = freq * samples;
+        let freq = self.wave.freq.hz();
+        let index_freq = freq * WAVE_SIZE;
 
         self.index.set_source_clock_rate(rate);
         self.index.update_index(index_freq);
 
-        let amp = self.wave.wave_ram.read_waveform(self.index.index());
+        let amp = self.wave.ram.read(Index(self.index.index()));
 
-        let amp = match self.wave.amp_shift.get() {
+        let amp = match self.wave.nr32.amp_shift() {
             0 => 0,
             1 => amp,
             2 => amp >> 1,

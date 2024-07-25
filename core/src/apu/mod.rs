@@ -6,6 +6,8 @@ use crate::hardware::HardwareHandle;
 
 use self::{mixer::Mixer, noise::Noise, tone::Tone, wave::Wave};
 
+use bitfield_struct::bitfield;
+
 mod clock_divider;
 mod frame_sequencer;
 mod length_counter;
@@ -23,7 +25,18 @@ pub struct Apu {
     wave: Wave,
     noise: Noise,
     mixer: Mixer,
-    enable: bool,
+    nr52: Nr52,
+}
+
+#[bitfield(u8)]
+struct Nr52 {
+    ch1_on: bool,
+    ch2_on: bool,
+    ch3_on: bool,
+    ch4_on: bool,
+    #[bits(3)]
+    _unused: u8,
+    power_on: bool,
 }
 
 impl Apu {
@@ -39,7 +52,7 @@ impl Apu {
             wave: Wave::new(),
             noise: Noise::new(),
             mixer,
-            enable: false,
+            nr52: Nr52::default(),
         }
     }
 
@@ -226,40 +239,33 @@ impl Apu {
 
     /// Read NR52 register (0xff26)
     pub fn read_enable(&self) -> u8 {
-        let mut v = 0x70;
-        v |= if self.enable { 0x80 } else { 0x00 };
-        v |= if self.tones[0].is_active() {
-            0x01
-        } else {
-            0x00
-        };
-        v |= if self.tones[1].is_active() {
-            0x02
-        } else {
-            0x00
-        };
-        v |= if self.wave.is_active() { 0x04 } else { 0x00 };
-        v |= if self.noise.is_active() { 0x08 } else { 0x00 };
-        v
+        self.nr52
+            .with_ch1_on(self.tones[0].is_active())
+            .with_ch2_on(self.tones[1].is_active())
+            .with_ch3_on(self.wave.is_active())
+            .with_ch4_on(self.noise.is_active())
+            .into_bits()
+            | 0x70
     }
 
     /// Write NR52 register (0xff26)
     pub fn write_enable(&mut self, value: u8) {
-        debug!("Write NR52: {:02x}", value);
+        let before = self.nr52.power_on();
 
-        let enable = value & 0x80 != 0;
+        self.nr52 = Nr52::from_bits(value);
 
-        self.mixer.enable(enable);
+        let after = self.nr52.power_on();
 
-        if !self.enable && enable {
+        if !before && after {
             info!("Sound master enabled");
             for tone in &mut self.tones {
                 tone.power_on();
             }
+
             self.wave.power_on();
             self.noise.power_on();
             self.mixer.power_on();
-        } else if self.enable && !enable {
+        } else if before && !after {
             info!("Sound master disabled");
 
             for tone in &mut self.tones {
@@ -269,8 +275,6 @@ impl Apu {
             self.noise.power_off();
             self.mixer.power_off();
         }
-
-        self.enable = enable;
     }
 
     pub fn step(&mut self, cycles: usize) {

@@ -205,7 +205,7 @@ impl<T: Sys> Cpu<T> {
             None => return,
         };
 
-        info!("Interrupted: {:02x}", value);
+        debug!("Interrupted: {:02x}", value);
 
         self.interrupted(value);
     }
@@ -488,7 +488,7 @@ impl<T: Sys> Cpu<T> {
     /// Add 1 to pc unless HALT bug is triggerred
     fn inc_pc(&mut self) {
         if self.halt_bug {
-            info!("Halt bug");
+            debug!("Halt bug");
             self.halt_bug = false;
         } else {
             self.set_pc(self.get_pc().wrapping_add(1));

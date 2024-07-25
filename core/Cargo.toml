@@ -16,6 +16,7 @@ lazy_static = { version = "1.2", features = ["spin_no_std"] }
 log = "0.4"
 hashbrown = "0.14"
 spin = "0.9"
+bitfield-struct = "0.8.0"
 
 [dev-dependencies]
 env_logger = "0.11"

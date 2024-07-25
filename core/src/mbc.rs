@@ -100,10 +100,10 @@ impl Mbc1 {
     fn on_write(&mut self, addr: u16, value: u8) {
         if addr <= 0x1fff {
             if value & 0xf == 0x0a {
-                info!("External RAM enabled");
+                debug!("External RAM enabled");
                 self.ram_enable = true;
             } else {
-                info!("External RAM disabled");
+                debug!("External RAM disabled");
                 self.ram_enable = false;
                 self.hw.get().borrow_mut().save_ram(&self.ram);
             }

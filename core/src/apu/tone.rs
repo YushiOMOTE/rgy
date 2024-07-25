@@ -1,26 +1,89 @@
-use log::*;
-
 use crate::hardware::Stream;
 
 use super::{length_counter::LengthCounter, sweep::Sweep, util::Envelop, wave_buf::WaveIndex};
+
+use bitfield_struct::bitfield;
 
 #[derive(Debug, Clone)]
 pub struct Tone {
     power: bool,
     sweep: Option<Sweep>,
-    sweep_raw: u8,
-    sweep_time: usize,
-    sweep_sub: bool,
-    sweep_shift: usize,
-    wave_duty: usize,
-    envelop: u8,
-    env_init: usize,
-    env_inc: bool,
-    env_count: usize,
-    counter: LengthCounter,
-    freq: usize,
-    freq_high: u8,
+    nr10: Nr10,
+    nr11: Nr11,
+    nr12: Nr12,
+    nr13: Nr13,
+    nr14: Nr14,
+    length_counter: LengthCounter,
+    freq: Freq,
     dac: bool,
+}
+
+#[bitfield(u8)]
+struct Nr10 {
+    #[bits(3)]
+    shift: usize,
+    subtract: bool,
+    #[bits(3)]
+    freq: usize,
+    #[bits(1)]
+    _unused: u8,
+}
+
+#[bitfield(u8)]
+struct Nr11 {
+    #[bits(6)]
+    length: usize,
+    #[bits(2)]
+    wave_duty: usize,
+}
+
+#[bitfield(u8)]
+struct Nr12 {
+    #[bits(3)]
+    count: usize,
+    increase: bool,
+    #[bits(4)]
+    init: usize,
+}
+
+#[bitfield(u8)]
+struct Nr13 {
+    #[bits(8)]
+    freq_low: usize,
+}
+
+#[bitfield(u8)]
+struct Nr14 {
+    #[bits(3)]
+    freq_high: usize,
+    #[bits(3)]
+    _unused: u8,
+    enable_length: bool,
+    trigger: bool,
+}
+
+#[bitfield(u16)]
+struct Freq {
+    #[bits(8)]
+    low: usize,
+    #[bits(3)]
+    high: usize,
+    #[bits(5)]
+    _unused: u16,
+}
+
+impl Freq {
+    fn from_value(value: usize) -> Self {
+        Self::from_bits(value as u16)
+    }
+
+    fn value(&self) -> usize {
+        self.into_bits() as usize
+    }
+
+    fn hz(&self) -> usize {
+        131072 / (2048 - self.value())
+    }
 }
 
 impl Tone {
@@ -28,25 +91,20 @@ impl Tone {
         Self {
             power: false,
             sweep: if with_sweep { Some(Sweep::new()) } else { None },
-            sweep_raw: 0,
-            sweep_time: 0,
-            sweep_sub: false,
-            sweep_shift: 0,
-            wave_duty: 0,
-            envelop: 0,
-            env_init: 0,
-            env_inc: false,
-            env_count: 0,
-            counter: LengthCounter::type64(),
-            freq: 0,
-            freq_high: 0,
+            nr10: Nr10::default(),
+            nr11: Nr11::default(),
+            nr12: Nr12::default(),
+            nr13: Nr13::default(),
+            nr14: Nr14::default(),
+            length_counter: LengthCounter::type64(),
+            freq: Freq::default(),
             dac: false,
         }
     }
 
     /// Read NR10 register (0xff10)
     pub fn read_sweep(&self) -> u8 {
-        self.sweep_raw | 0x80
+        self.nr10.into_bits() | 0x80
     }
 
     /// Write NR10 register (0xff10)
@@ -55,35 +113,33 @@ impl Tone {
             return;
         }
 
-        debug!("write NR10: {:02x}", value);
-        self.sweep_raw = value;
-        self.sweep_time = ((value >> 4) & 0x7) as usize;
-        self.sweep_sub = value & 0x08 != 0;
-        self.sweep_shift = (value & 0x07) as usize;
+        self.nr10 = Nr10::from_bits(value);
         if let Some(sweep) = &mut self.sweep {
-            sweep.update_params(self.sweep_time, self.sweep_sub, self.sweep_shift);
+            sweep.update_params(self.nr10.freq(), self.nr10.subtract(), self.nr10.shift());
         }
     }
 
     /// Read NR11/NR21 register (0xff11/0xff16)
     pub fn read_wave(&self) -> u8 {
-        (self.wave_duty << 6) as u8 | 0x3f
+        self.nr11.into_bits() | 0x3f
     }
 
     /// Write NR11/NR21 register (0xff11/0xff16)
     pub fn write_wave(&mut self, value: u8) {
-        self.counter.load((value & 0x3f) as usize);
+        let reg = Nr11::from_bits(value);
+
+        self.length_counter.load(reg.length());
 
         if !self.power {
             return;
         }
 
-        self.wave_duty = (value >> 6).into();
+        self.nr11 = reg;
     }
 
     /// Read NR12/NR22 register (0xff12/0xff17)
     pub fn read_envelop(&self) -> u8 {
-        self.envelop
+        self.nr12.into_bits()
     }
 
     /// Write NR12/NR22 register (0xff12/0xff17)
@@ -92,13 +148,11 @@ impl Tone {
             return;
         }
 
-        self.envelop = value;
-        self.env_init = (value >> 4) as usize;
-        self.env_inc = value & 0x08 != 0;
-        self.env_count = (value & 0x7) as usize;
-        self.dac = value & 0xf8 != 0;
+        self.nr12 = Nr12::from_bits(value);
+
+        self.dac = self.nr12.init() > 0 || self.nr12.increase();
         if !self.dac {
-            self.counter.deactivate();
+            self.length_counter.deactivate();
         }
     }
 
@@ -114,13 +168,14 @@ impl Tone {
             return;
         }
 
-        self.freq = (self.freq & !0xff) | value as usize;
+        self.nr13 = Nr13::from_bits(value);
+        self.freq = self.freq.with_low(self.nr13.freq_low());
     }
 
     /// Read NR14/NR24 register (0xff14/0xff19)
     pub fn read_freq_high(&self) -> u8 {
         // Fix write-only bits to high
-        self.freq_high | 0xbf
+        self.nr14.into_bits() | 0xbf
     }
 
     /// Write NR14/NR24 register (0xff14/0xff19)
@@ -129,15 +184,23 @@ impl Tone {
             return false;
         }
 
-        self.freq_high = value;
-        self.freq = (self.freq & !0x700) | (((value & 0x7) as usize) << 8);
-        let trigger = value & 0x80 != 0;
-        let enable = value & 0x40 != 0;
-        self.counter.update(trigger, enable);
+        self.nr14 = Nr14::from_bits(value);
+
+        self.freq = self.freq.with_high(self.nr14.freq_high());
+
+        self.length_counter
+            .update(self.nr14.trigger(), self.nr14.enable_length());
+
         if let Some(sweep) = self.sweep.as_mut() {
-            sweep.trigger(self.freq, self.sweep_time, self.sweep_sub, self.sweep_shift);
+            sweep.trigger(
+                self.freq.value(),
+                self.nr10.freq(),
+                self.nr10.subtract(),
+                self.nr10.shift(),
+            );
         }
-        trigger
+
+        self.nr14.trigger()
     }
 
     /// Create stream from the current data
@@ -151,7 +214,7 @@ impl Tone {
         if let Some(sweep) = self.sweep.as_mut() {
             sweep.power_on();
         }
-        self.counter.power_on();
+        self.length_counter.power_on();
     }
 
     pub fn power_off(&mut self) {
@@ -161,22 +224,14 @@ impl Tone {
             sweep.power_off();
         }
 
-        self.sweep_raw = 0;
-        self.sweep_time = 0;
-        self.sweep_sub = false;
-        self.sweep_shift = 0;
+        self.nr10 = Nr10::from_bits(0);
+        self.nr11 = Nr11::from_bits(0);
+        self.nr12 = Nr12::from_bits(0);
+        self.nr13 = Nr13::from_bits(0);
+        self.nr14 = Nr14::from_bits(0);
+        self.freq = Freq::from_bits(0);
 
-        self.wave_duty = 0;
-
-        self.envelop = 0;
-        self.env_init = 0;
-        self.env_inc = false;
-        self.env_count = 0;
-
-        self.counter.power_off();
-
-        self.freq = 0;
-        self.freq_high = 0;
+        self.length_counter.power_off();
 
         self.dac = false;
     }
@@ -184,10 +239,10 @@ impl Tone {
     pub fn step(&mut self, cycles: usize) {
         if let Some(sweep) = self.sweep.as_mut() {
             if let Some(new_freq) = sweep.step(cycles) {
-                self.freq = new_freq;
+                self.freq = Freq::from_value(new_freq);
             }
         }
-        self.counter.step(cycles);
+        self.length_counter.step(cycles);
     }
 
     pub fn is_active(&self) -> bool {
@@ -197,15 +252,14 @@ impl Tone {
             false
         };
 
-        self.counter.is_active() && self.dac && !sweep_disabling_channel
+        self.length_counter.is_active() && self.dac && !sweep_disabling_channel
     }
 
-    fn real_freq(&self) -> usize {
-        let raw_freq = match &self.sweep {
-            Some(sweep) => sweep.freq(),
+    fn freq(&self) -> Freq {
+        match &self.sweep {
+            Some(sweep) => Freq::from_value(sweep.freq()),
             None => self.freq,
-        };
-        131072 / (2048 - raw_freq)
+        }
     }
 }
 
@@ -217,7 +271,7 @@ pub struct ToneStream {
 
 impl ToneStream {
     fn new(tone: Tone) -> Self {
-        let env = Envelop::new(tone.env_init, tone.env_count, tone.env_inc);
+        let env = Envelop::new(tone.nr12.init(), tone.nr12.count(), tone.nr12.increase());
 
         Self {
             tone,
@@ -227,7 +281,7 @@ impl ToneStream {
     }
 
     fn step(&mut self, rate: usize) {
-        self.tone.counter.step_with_rate(rate);
+        self.tone.length_counter.step_with_rate(rate);
         if let Some(sweep) = &mut self.tone.sweep {
             sweep.step_with_rate(rate);
         }
@@ -244,7 +298,7 @@ impl Stream for ToneStream {
 
         self.step(rate);
 
-        if !self.tone.counter.is_active() {
+        if !self.tone.length_counter.is_active() {
             return 0;
         }
 
@@ -252,10 +306,10 @@ impl Stream for ToneStream {
         let amp = self.env.amp(rate);
 
         // Sweep
-        let freq = self.tone.real_freq();
+        let freq = self.tone.freq().hz();
 
         // Square wave generation
-        let duty = match self.tone.wave_duty {
+        let duty = match self.tone.nr11.wave_duty() {
             0 => 0,
             1 => 1,
             2 => 3,
@@ -274,6 +328,6 @@ impl Stream for ToneStream {
     }
 
     fn on(&self) -> bool {
-        self.tone.counter.is_active()
+        self.tone.length_counter.is_active()
     }
 }
