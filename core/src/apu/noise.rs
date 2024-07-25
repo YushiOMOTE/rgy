@@ -75,7 +75,7 @@ impl Noise {
             divider: ClockDivider::new(CPU_FREQ_HZ, NOISE_FREQ_HZ),
             timer: Timer::enabled(),
             envelop: Envelop::new(),
-            lfsr: Lfsr::new(false),
+            lfsr: Lfsr::new(),
 
             amp: 0,
 
@@ -147,7 +147,7 @@ impl Noise {
 
         if self.nr44.trigger() {
             self.reload_timer();
-            self.lfsr = Lfsr::new(self.nr43.step());
+            self.lfsr.trigger(self.nr43.step());
             self.envelop
                 .update(self.nr42.init(), self.nr42.count(), self.nr42.increase());
         }
@@ -238,7 +238,7 @@ impl Noise {
 
         self.length_counter.power_off();
 
-        self.lfsr = Lfsr::new(false);
+        self.lfsr.reset();
 
         self.amp = 0;
 
@@ -278,25 +278,37 @@ struct Lfsr {
 }
 
 impl Lfsr {
-    fn new(short: bool) -> Self {
+    fn new() -> Self {
         Self {
-            value: 0xdead,
-            short,
+            value: 0,
+            short: false,
         }
     }
 
+    fn reset(&mut self) {
+        self.value = 0;
+        self.short = false;
+    }
+
     fn high(&self) -> bool {
+        // Inverted bit 1
         self.value & 1 == 0
     }
 
-    fn update(&mut self) {
-        let bit = !(self.value ^ (self.value >> 1)) & 1;
+    fn trigger(&mut self, short: bool) {
+        self.value = 0;
+        self.short = short;
+    }
 
+    fn update(&mut self) {
+        // NXOR bit 0 and 1.
+        let bit = !((self.value & 0x01) ^ ((self.value & 0x02) >> 1)) & 1;
+
+        // Put XOR-ed result in bit 15 (and bit 7 in short mode)
         if self.short {
-            self.value &= 0xff;
-            self.value = (self.value >> 1) | (bit << 7);
+            self.value = ((self.value >> 1) & 0x7f7f) | (bit << 7) | (bit << 15);
         } else {
-            self.value = (self.value >> 1) | (bit << 15);
+            self.value = ((self.value >> 1) & 0x7fff) | (bit << 15);
         }
     }
 }
