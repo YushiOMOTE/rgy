@@ -1,5 +1,9 @@
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
+use crate::cpu::CPU_FREQ_HZ;
+
+use super::{frame_sequencer::FrameSequencer, timer::Timer};
+
 pub trait AtomicHelper {
     type Item;
 
@@ -31,45 +35,57 @@ impl AtomicHelper for AtomicBool {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Envelop {
     amp: usize,
-    count: usize,
     inc: bool,
-    clock: usize,
+    frame_sequencer: FrameSequencer,
+    timer: Timer,
 }
 
 impl Envelop {
-    pub fn new(amp: usize, count: usize, inc: bool) -> Self {
+    pub fn new() -> Self {
         Self {
-            amp,
-            count,
-            inc,
-            clock: 0,
+            amp: 0,
+            inc: false,
+            frame_sequencer: FrameSequencer::new(CPU_FREQ_HZ),
+            timer: Timer::enabled(),
         }
     }
 
-    pub fn amp(&mut self, rate: usize) -> usize {
+    pub fn update(&mut self, amp: usize, count: usize, inc: bool) {
+        self.amp = amp;
+        self.inc = inc;
+        self.timer.set_interval(count);
+    }
+
+    pub fn step(&mut self, cycles: usize) {
         if self.amp == 0 {
-            return 0;
+            return;
         }
 
-        if self.count == 0 {
-            return self.amp;
+        match self.frame_sequencer.step(cycles) {
+            Some(7) => {}
+            _ => return,
         }
 
-        let interval = rate * self.count / 64;
-
-        self.clock += 1;
-        if self.clock >= interval {
-            self.clock -= interval;
-
-            self.amp = if self.inc {
-                self.amp.saturating_add(1).min(15)
-            } else {
-                self.amp.saturating_sub(1)
-            };
+        if !self.timer.tick() {
+            return;
         }
 
+        self.amp = if self.inc {
+            self.amp.saturating_add(1).min(15)
+        } else {
+            self.amp.saturating_sub(1)
+        };
+    }
+
+    pub fn step_with_rate(&mut self, rate: usize, cycles: usize) {
+        self.frame_sequencer.set_source_clock_rate(rate);
+        self.step(cycles);
+    }
+
+    pub fn amp(&self) -> usize {
         self.amp
     }
 }

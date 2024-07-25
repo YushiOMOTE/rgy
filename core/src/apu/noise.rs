@@ -175,7 +175,9 @@ pub struct NoiseStream {
 
 impl NoiseStream {
     pub fn new(noise: Noise) -> Self {
-        let env = Envelop::new(noise.nr42.init(), noise.nr42.count(), noise.nr42.increase());
+        let mut env = Envelop::new();
+        env.update(noise.nr42.init(), noise.nr42.count(), noise.nr42.increase());
+
         let counter = noise.length_counter.clone();
         let wave = RandomWave::new(noise.nr43.step());
 
@@ -203,7 +205,9 @@ impl Stream for NoiseStream {
         }
 
         // Envelop
-        let amp = self.env.amp(rate);
+        self.env.step_with_rate(rate, 1);
+
+        let amp = self.env.amp();
 
         // Noise: 524288 Hz / r / 2 ^ (s+1)
         let r = self.noise.nr43.div_freq();

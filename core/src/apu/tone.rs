@@ -273,7 +273,9 @@ pub struct ToneStream {
 
 impl ToneStream {
     fn new(tone: Tone) -> Self {
-        let env = Envelop::new(tone.nr12.init(), tone.nr12.count(), tone.nr12.increase());
+        let mut env = Envelop::new();
+
+        env.update(tone.nr12.init(), tone.nr12.count(), tone.nr12.increase());
 
         Self {
             tone,
@@ -305,7 +307,9 @@ impl Stream for ToneStream {
         }
 
         // Envelop
-        let amp = self.env.amp(rate);
+        self.env.step_with_rate(rate, 1);
+
+        let amp = self.env.amp() as u16;
 
         // Sweep
         let freq = self.tone.freq().hz();
