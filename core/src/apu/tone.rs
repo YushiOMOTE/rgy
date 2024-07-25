@@ -4,6 +4,8 @@ use super::{length_counter::LengthCounter, sweep::Sweep, util::Envelop, wave_buf
 
 use bitfield_struct::bitfield;
 
+const TONE_FREQ_HZ: usize = 131_072;
+
 #[derive(Debug, Clone)]
 pub struct Tone {
     power: bool,
@@ -82,7 +84,7 @@ impl Freq {
     }
 
     fn hz(&self) -> usize {
-        131072 / (2048 - self.value())
+        TONE_FREQ_HZ / (2048 - self.value())
     }
 }
 

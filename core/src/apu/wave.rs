@@ -9,6 +9,8 @@ use super::{
 
 const RAM_SIZE: usize = 16;
 const WAVE_SIZE: usize = RAM_SIZE * 2;
+const WAVE_SAMPLE_FREQ_HZ: usize = 65536;
+const WAVE_FREQ_HZ: usize = 2_097_152;
 
 #[derive(Debug, Clone)]
 pub struct Wave {
@@ -83,7 +85,7 @@ impl Freq {
     }
 
     fn hz(&self) -> usize {
-        65536 / (2048 - self.value())
+        WAVE_SAMPLE_FREQ_HZ / (2048 - self.value())
     }
 }
 
@@ -127,7 +129,7 @@ impl Wave {
             nr32: Nr32::default(),
             nr33: Nr33::default(),
             nr34: Nr34::default(),
-            divider: ClockDivider::new(CPU_FREQ_HZ, 2_097_152),
+            divider: ClockDivider::new(CPU_FREQ_HZ, WAVE_FREQ_HZ),
             timer: Timer::enabled(),
             last_amp: 0,
             first_fetch: false,
