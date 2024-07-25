@@ -1,4 +1,4 @@
-use crate::hardware::Stream;
+use crate::{cpu::CPU_FREQ_HZ, hardware::Stream};
 
 use super::{length_counter::LengthCounter, sweep::Sweep, util::Envelop, wave_buf::WaveIndex};
 
@@ -276,7 +276,7 @@ impl ToneStream {
         Self {
             tone,
             env,
-            index: WaveIndex::new(4_194_304, 8),
+            index: WaveIndex::new(CPU_FREQ_HZ, 8),
         }
     }
 

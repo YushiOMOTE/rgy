@@ -1,6 +1,6 @@
 use log::*;
 
-use crate::hardware::Stream;
+use crate::{cpu::CPU_FREQ_HZ, hardware::Stream};
 use bitfield_struct::bitfield;
 
 use super::{
@@ -127,7 +127,7 @@ impl Wave {
             nr32: Nr32::default(),
             nr33: Nr33::default(),
             nr34: Nr34::default(),
-            divider: ClockDivider::new(4_194_304, 2_097_152),
+            divider: ClockDivider::new(CPU_FREQ_HZ, 2_097_152),
             timer: Timer::enabled(),
             last_amp: 0,
             first_fetch: false,
@@ -388,7 +388,7 @@ impl WaveStream {
         Self {
             wave,
             counter,
-            index: WaveIndex::new(4_194_304, WAVE_SIZE),
+            index: WaveIndex::new(CPU_FREQ_HZ, WAVE_SIZE),
         }
     }
 }
