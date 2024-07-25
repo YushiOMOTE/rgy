@@ -212,7 +212,7 @@ impl Noise {
         let shift = self.nr43.shift_freq();
 
         if divider == 0 {
-            5 << shift / 10
+            (5 << shift) / 10
         } else {
             divider << shift
         }
@@ -290,18 +290,12 @@ impl Lfsr {
     }
 
     fn update(&mut self) {
+        let bit = !(self.value ^ (self.value >> 1)) & 1;
+
         if self.short {
             self.value &= 0xff;
-            let bit = (self.value & 0x0001)
-                ^ ((self.value & 0x0004) >> 2)
-                ^ ((self.value & 0x0008) >> 3)
-                ^ ((self.value & 0x0010) >> 5);
             self.value = (self.value >> 1) | (bit << 7);
         } else {
-            let bit = (self.value & 0x0001)
-                ^ ((self.value & 0x0004) >> 2)
-                ^ ((self.value & 0x0008) >> 3)
-                ^ ((self.value & 0x0020) >> 5);
             self.value = (self.value >> 1) | (bit << 15);
         }
     }
