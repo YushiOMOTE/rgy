@@ -256,10 +256,6 @@ impl Apu {
 
         let after = self.nr52.power_on();
 
-        if before != after {
-            self.mixer.enable(after);
-        }
-
         if !before && after {
             info!("Sound master enabled");
             for tone in &mut self.tones {

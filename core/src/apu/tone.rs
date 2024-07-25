@@ -1,5 +1,3 @@
-use log::*;
-
 use crate::hardware::Stream;
 
 use super::{length_counter::LengthCounter, sweep::Sweep, util::Envelop, wave_buf::WaveIndex};
@@ -115,7 +113,6 @@ impl Tone {
             return;
         }
 
-        info!("write NR10: {:02x}", value);
         self.nr10 = Nr10::from_bits(value);
         if let Some(sweep) = &mut self.sweep {
             sweep.update_params(self.nr10.freq(), self.nr10.subtract(), self.nr10.shift());

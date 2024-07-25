@@ -6,35 +6,52 @@ use super::{
 };
 use crate::hardware::Stream;
 use alloc::sync::Arc;
+use bitfield_struct::bitfield;
 use core::sync::atomic::{AtomicBool, AtomicUsize};
 use spin::Mutex;
 
 pub struct Mixer {
     power: bool,
-    ctrl: u8,
-    so1_volume: usize,
-    so2_volume: usize,
-    so_mask: usize,
-    enable: bool,
+    nr50: Nr50,
+    nr51: Nr51,
     stream: MixerStream,
+}
+
+#[bitfield(u8)]
+struct Nr50 {
+    #[bits(3)]
+    right_volume: usize,
+    vin_right_enable: bool,
+    #[bits(3)]
+    left_volume: usize,
+    vin_left_enable: bool,
+}
+
+#[bitfield(u8)]
+struct Nr51 {
+    ch1_right: bool,
+    ch2_right: bool,
+    ch3_right: bool,
+    ch4_right: bool,
+    ch1_left: bool,
+    ch2_left: bool,
+    ch3_left: bool,
+    ch4_left: bool,
 }
 
 impl Mixer {
     pub fn new() -> Self {
         Self {
             power: false,
-            ctrl: 0,
-            so1_volume: 0,
-            so2_volume: 0,
-            so_mask: 0,
-            enable: false,
+            nr50: Nr50::default(),
+            nr51: Nr51::default(),
             stream: MixerStream::new(),
         }
     }
 
     /// Read NR50 register (0xff24)
     pub fn read_ctrl(&self) -> u8 {
-        self.ctrl
+        self.nr50.into_bits()
     }
 
     /// Write NR50 register (0xff24)
@@ -43,15 +60,14 @@ impl Mixer {
             return;
         }
 
-        self.ctrl = value;
-        self.so1_volume = (value as usize & 0x70) >> 4;
-        self.so2_volume = value as usize & 0x07;
+        self.nr50 = Nr50::from_bits(value);
+
         self.update_stream();
     }
 
     /// Read NR51 register (0xff25)
     pub fn read_so_mask(&self) -> u8 {
-        self.so_mask as u8
+        self.nr51.into_bits()
     }
 
     /// Write NR51 register (0xff25)
@@ -60,7 +76,8 @@ impl Mixer {
             return;
         }
 
-        self.so_mask = value as usize;
+        self.nr51 = Nr51::from_bits(value);
+
         self.update_stream();
     }
 
@@ -82,54 +99,68 @@ impl Mixer {
         self.stream.clone()
     }
 
-    pub fn enable(&mut self, enable: bool) {
-        self.enable = enable;
-        self.update_stream();
-    }
-
     // Update streams based on register settings
     fn update_stream(&mut self) {
-        self.stream.enable.set(self.enable);
+        self.stream.enable.set(self.power);
 
-        if self.enable {
+        if self.power {
             for (i, tone) in self.stream.tones.iter().enumerate() {
-                tone.volume.set(self.get_volume(i as u8))
+                tone.volume.set(self.get_tone_volume(i))
             }
-            self.stream.wave.volume.set(self.get_volume(2));
-            self.stream.noise.volume.set(self.get_volume(3));
+            self.stream.wave.volume.set(self.get_wave_volume());
+            self.stream.noise.volume.set(self.get_noise_volume());
         }
     }
 
-    fn get_volume(&self, id: u8) -> usize {
-        let mask = 1 << id;
-        let v1 = if self.so_mask & mask != 0 {
-            self.so1_volume
+    fn get_tone_volume(&self, tone: usize) -> usize {
+        if tone == 0 {
+            self.get_volume(self.nr51.ch1_right(), self.nr51.ch1_left())
+        } else {
+            self.get_volume(self.nr51.ch2_right(), self.nr51.ch2_left())
+        }
+    }
+
+    fn get_wave_volume(&self) -> usize {
+        self.get_volume(self.nr51.ch3_right(), self.nr51.ch3_left())
+    }
+
+    fn get_noise_volume(&self) -> usize {
+        self.get_volume(self.nr51.ch4_right(), self.nr51.ch4_left())
+    }
+
+    fn get_volume(&self, right_enable: bool, left_enable: bool) -> usize {
+        let right = if right_enable {
+            self.nr50.right_volume()
         } else {
             0
         };
-        let v2 = if self.so_mask & (mask << 4) != 0 {
-            self.so2_volume
+
+        let left = if left_enable {
+            self.nr50.left_volume()
         } else {
             0
         };
-        v1 + v2
+
+        right + left
     }
 
     pub fn power_on(&mut self) {
         self.power = true;
+        self.update_stream();
     }
 
     pub fn power_off(&mut self) {
         self.power = false;
-        self.ctrl = 0;
-        self.so1_volume = 0;
-        self.so2_volume = 0;
-        self.so_mask = 0;
+
+        self.nr50 = Nr50::default();
+        self.nr51 = Nr51::default();
+
         for tone in &mut self.stream.tones {
             tone.clear();
         }
         self.stream.wave.clear();
         self.stream.noise.clear();
+        self.update_stream();
     }
 }
 
