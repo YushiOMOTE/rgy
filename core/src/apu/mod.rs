@@ -18,7 +18,6 @@ mod timer;
 mod tone;
 mod util;
 mod wave;
-mod wave_buf;
 
 pub struct Apu {
     tones: [Tone; 2],
