@@ -1,7 +1,8 @@
 use crate::{cpu::CPU_FREQ_HZ, hardware::Stream};
 
 use super::{
-    clock_divider::ClockDivider, length_counter::LengthCounter, timer::Timer, util::Envelop,
+    clock_divider::ClockDivider, dac::Dac, length_counter::LengthCounter, timer::Timer,
+    util::Envelop,
 };
 
 use bitfield_struct::bitfield;
@@ -22,9 +23,7 @@ pub struct Noise {
     timer: Timer,
     envelop: Envelop,
     lfsr: Lfsr,
-    amp: usize,
-
-    dac: bool,
+    dac: Dac,
 }
 
 #[bitfield(u8)]
@@ -77,9 +76,7 @@ impl Noise {
             envelop: Envelop::new(),
             lfsr: Lfsr::new(),
 
-            amp: 0,
-
-            dac: false,
+            dac: Dac::new(),
         }
     }
 
@@ -109,8 +106,10 @@ impl Noise {
 
         self.nr42 = Nr42::from_bits(value);
 
-        self.dac = self.nr42.init() > 0 || self.nr42.increase();
-        if !self.dac {
+        if self.nr42.init() > 0 || self.nr42.increase() {
+            self.dac.power_on();
+        } else {
+            self.dac.power_off();
             self.length_counter.deactivate();
         }
     }
@@ -196,11 +195,11 @@ impl Noise {
 
         self.lfsr.update();
 
-        self.amp = if self.lfsr.high() {
+        self.dac.write(if self.lfsr.high() {
             self.envelop.amp()
         } else {
             0
-        };
+        });
     }
 
     fn reload_timer(&mut self) {
@@ -219,7 +218,7 @@ impl Noise {
     }
 
     pub fn is_active(&self) -> bool {
-        self.length_counter.is_active() && self.dac
+        self.length_counter.is_active() && self.dac.on()
     }
 
     pub fn power_on(&mut self) {
@@ -240,9 +239,7 @@ impl Noise {
 
         self.lfsr.reset();
 
-        self.amp = 0;
-
-        self.dac = false;
+        self.dac.power_off();
     }
 }
 
@@ -263,7 +260,7 @@ impl Stream for NoiseStream {
 
     fn next(&mut self, rate: u32) -> u16 {
         self.noise.step_with_rate(rate as usize);
-        self.noise.amp as u16
+        self.noise.dac.amp_as_u16()
     }
 
     fn on(&self) -> bool {

@@ -3,7 +3,7 @@ use log::*;
 use crate::{cpu::CPU_FREQ_HZ, hardware::Stream};
 use bitfield_struct::bitfield;
 
-use super::{clock_divider::ClockDivider, length_counter::LengthCounter, timer::Timer};
+use super::{clock_divider::ClockDivider, dac::Dac, length_counter::LengthCounter, timer::Timer};
 
 const RAM_SIZE: usize = 16;
 const WAVE_SIZE: usize = RAM_SIZE * 2;
@@ -24,8 +24,8 @@ pub struct Wave {
     divider: ClockDivider,
     timer: Timer,
     last_sample: u8,
-    amp: usize,
     first_fetch: bool,
+    dac: Dac,
 }
 
 #[bitfield(u8)]
@@ -126,7 +126,7 @@ impl Wave {
             divider: ClockDivider::new(CPU_FREQ_HZ, WAVE_FREQ_HZ),
             timer: Timer::enabled(),
             last_sample: 0,
-            amp: 0,
+            dac: Dac::new(),
             first_fetch: false,
         }
     }
@@ -144,7 +144,10 @@ impl Wave {
 
         self.nr30 = Nr30::from_bits(value);
 
-        if !self.nr30.dac() {
+        if self.nr30.dac() {
+            self.dac.power_on();
+        } else {
+            self.dac.power_off();
             self.length_counter.deactivate();
         }
     }
@@ -213,7 +216,7 @@ impl Wave {
         let length_enable = value & 0x40 != 0;
         let retrigger = self.length_counter.is_active();
         self.length_counter.update(trigger, length_enable);
-        if self.nr30.dac() && trigger {
+        if self.dac.on() && trigger {
             if retrigger && !self.first_fetch {
                 // Advance one tick on retrigger
                 self.timer.tick();
@@ -333,13 +336,13 @@ impl Wave {
 
         self.index = self.index.next();
 
-        self.amp = match self.nr32.amp_shift() {
+        self.dac.write(match self.nr32.amp_shift() {
             0 => 0,
             1 => sample,
             2 => sample >> 1,
             3 => sample >> 2,
             _ => unreachable!(),
-        } as usize;
+        } as usize)
     }
 
     fn load_initial_timer(&mut self) {
@@ -355,7 +358,7 @@ impl Wave {
     }
 
     pub fn is_active(&self) -> bool {
-        self.length_counter.is_active() && self.nr30.dac()
+        self.length_counter.is_active() && self.dac.on()
     }
 
     pub fn power_on(&mut self) {
@@ -373,7 +376,7 @@ impl Wave {
         self.timer.reset();
         self.last_sample = 0;
         self.first_fetch = false;
-        self.amp = 0;
+        self.dac.power_off();
 
         self.nr30 = Nr30::default();
         self.nr31 = Nr31::default();
@@ -402,7 +405,7 @@ impl Stream for WaveStream {
 
     fn next(&mut self, rate: u32) -> u16 {
         self.wave.step_with_rate(rate as usize);
-        self.wave.amp as u16
+        self.wave.dac.amp_as_u16()
     }
 
     fn on(&self) -> bool {

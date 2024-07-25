@@ -1,8 +1,8 @@
 use crate::{cpu::CPU_FREQ_HZ, hardware::Stream};
 
 use super::{
-    clock_divider::ClockDivider, length_counter::LengthCounter, sweep::Sweep, timer::Timer,
-    util::Envelop,
+    clock_divider::ClockDivider, dac::Dac, length_counter::LengthCounter, sweep::Sweep,
+    timer::Timer, util::Envelop,
 };
 
 use bitfield_struct::bitfield;
@@ -23,9 +23,8 @@ pub struct Tone {
     divider: ClockDivider,
     timer: Timer,
     freq: Freq,
-    dac: bool,
+    dac: Dac,
     index: usize,
-    amp: usize,
 }
 
 #[bitfield(u8)]
@@ -107,9 +106,8 @@ impl Tone {
             timer: Timer::enabled(),
             divider: ClockDivider::new(CPU_FREQ_HZ, TONE_FREQ_HZ),
             freq: Freq::default(),
-            dac: false,
+            dac: Dac::new(),
             index: 0,
-            amp: 0,
         }
     }
 
@@ -161,8 +159,10 @@ impl Tone {
 
         self.nr12 = Nr12::from_bits(value);
 
-        self.dac = self.nr12.init() > 0 || self.nr12.increase();
-        if !self.dac {
+        if self.nr12.init() > 0 || self.nr12.increase() {
+            self.dac.power_on();
+        } else {
+            self.dac.power_off();
             self.length_counter.deactivate();
         }
     }
@@ -251,8 +251,7 @@ impl Tone {
 
         self.length_counter.power_off();
 
-        self.dac = false;
-        self.amp = 0;
+        self.dac.power_off();
     }
 
     pub fn step(&mut self, cycles: usize) {
@@ -307,7 +306,7 @@ impl Tone {
             _ => unreachable!(),
         };
 
-        self.amp = wave[self.index] * self.envelop.amp();
+        self.dac.write(wave[self.index] * self.envelop.amp());
     }
 
     fn reload_timer(&mut self) {
@@ -325,7 +324,7 @@ impl Tone {
             false
         };
 
-        self.length_counter.is_active() && self.dac && !sweep_disabling_channel
+        self.length_counter.is_active() && self.dac.on() && !sweep_disabling_channel
     }
 }
 
@@ -346,7 +345,7 @@ impl Stream for ToneStream {
 
     fn next(&mut self, rate: u32) -> u16 {
         self.tone.step_with_rate(rate as usize);
-        self.tone.amp as u16
+        self.tone.dac.amp_as_u16()
     }
 
     fn on(&self) -> bool {
