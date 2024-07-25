@@ -1,8 +1,12 @@
-use crate::hardware::Stream;
+use crate::{cpu::CPU_FREQ_HZ, hardware::Stream};
 
-use super::{length_counter::LengthCounter, util::Envelop};
+use super::{
+    clock_divider::ClockDivider, length_counter::LengthCounter, timer::Timer, util::Envelop,
+};
 
 use bitfield_struct::bitfield;
+
+const NOISE_FREQ_HZ: usize = 262_144;
 
 #[derive(Debug, Clone)]
 pub struct Noise {
@@ -14,6 +18,11 @@ pub struct Noise {
     nr44: Nr44,
 
     length_counter: LengthCounter,
+    divider: ClockDivider,
+    timer: Timer,
+    envelop: Envelop,
+    lfsr: Lfsr,
+    amp: usize,
 
     dac: bool,
 }
@@ -63,6 +72,12 @@ impl Noise {
             nr44: Nr44::default(),
 
             length_counter: LengthCounter::type64(),
+            divider: ClockDivider::new(CPU_FREQ_HZ, NOISE_FREQ_HZ),
+            timer: Timer::enabled(),
+            envelop: Envelop::new(),
+            lfsr: Lfsr::new(false),
+
+            amp: 0,
 
             dac: false,
         }
@@ -130,6 +145,13 @@ impl Noise {
         self.length_counter
             .update(self.nr44.trigger(), self.nr44.enable_length());
 
+        if self.nr44.trigger() {
+            self.reload_timer();
+            self.lfsr = Lfsr::new(self.nr43.step());
+            self.envelop
+                .update(self.nr42.init(), self.nr42.count(), self.nr42.increase());
+        }
+
         self.nr44.trigger()
     }
 
@@ -140,6 +162,60 @@ impl Noise {
 
     pub fn step(&mut self, cycles: usize) {
         self.length_counter.step(cycles);
+        self.envelop.step(cycles);
+
+        let times = self.divider.step(cycles);
+
+        for _ in 0..times {
+            self.update();
+        }
+    }
+
+    pub fn step_with_rate(&mut self, rate: usize) {
+        self.length_counter.step_with_rate(rate);
+        self.envelop.step_with_rate(rate, 1);
+
+        self.divider.set_source_clock_rate(rate);
+
+        let times = self.divider.step(1);
+
+        for _ in 0..times {
+            self.update();
+        }
+    }
+
+    fn update(&mut self) {
+        if !self.is_active() {
+            return;
+        }
+        if !self.timer.tick() {
+            return;
+        }
+
+        self.reload_timer();
+
+        self.lfsr.update();
+
+        self.amp = if self.lfsr.high() {
+            self.envelop.amp()
+        } else {
+            0
+        };
+    }
+
+    fn reload_timer(&mut self) {
+        self.timer.set_interval(self.timer_interval());
+    }
+
+    fn timer_interval(&self) -> usize {
+        let divider = self.nr43.div_freq();
+        let shift = self.nr43.shift_freq();
+
+        if divider == 0 {
+            5 << shift / 10
+        } else {
+            divider << shift
+        }
     }
 
     pub fn is_active(&self) -> bool {
@@ -162,31 +238,21 @@ impl Noise {
 
         self.length_counter.power_off();
 
+        self.lfsr = Lfsr::new(false);
+
+        self.amp = 0;
+
         self.dac = false;
     }
 }
 
 pub struct NoiseStream {
     noise: Noise,
-    env: Envelop,
-    counter: LengthCounter,
-    wave: RandomWave,
 }
 
 impl NoiseStream {
     pub fn new(noise: Noise) -> Self {
-        let mut env = Envelop::new();
-        env.update(noise.nr42.init(), noise.nr42.count(), noise.nr42.increase());
-
-        let counter = noise.length_counter.clone();
-        let wave = RandomWave::new(noise.nr43.step());
-
-        Self {
-            noise,
-            env,
-            counter,
-            wave,
-        }
+        Self { noise }
     }
 }
 
@@ -196,41 +262,16 @@ impl Stream for NoiseStream {
     }
 
     fn next(&mut self, rate: u32) -> u16 {
-        let rate = rate as usize;
-
-        self.counter.step_with_rate(rate);
-
-        if !self.counter.is_active() {
-            return 0;
-        }
-
-        // Envelop
-        self.env.step_with_rate(rate, 1);
-
-        let amp = self.env.amp();
-
-        // Noise: 524288 Hz / r / 2 ^ (s+1)
-        let r = self.noise.nr43.div_freq();
-        let s = self.noise.nr43.shift_freq() as u32;
-        let freq = if r == 0 {
-            // For r = 0, assume r = 0.5 instead
-            524288 * 5 / 10 / 2usize.pow(s + 1)
-        } else {
-            524288 / self.noise.nr43.div_freq() / 2usize.pow(s + 1)
-        };
-
-        if self.wave.high(rate, freq) {
-            amp as u16
-        } else {
-            0
-        }
+        self.noise.step_with_rate(rate as usize);
+        self.noise.amp as u16
     }
 
     fn on(&self) -> bool {
-        self.counter.is_active()
+        self.noise.is_active()
     }
 }
 
+#[derive(Debug, Clone)]
 struct Lfsr {
     value: u16,
     short: bool,
@@ -263,30 +304,5 @@ impl Lfsr {
                 ^ ((self.value & 0x0020) >> 5);
             self.value = (self.value >> 1) | (bit << 15);
         }
-    }
-}
-
-struct RandomWave {
-    lfsr: Lfsr,
-    clock: usize,
-}
-
-impl RandomWave {
-    fn new(short: bool) -> Self {
-        Self {
-            lfsr: Lfsr::new(short),
-            clock: 0,
-        }
-    }
-
-    fn high(&mut self, rate: usize, freq: usize) -> bool {
-        self.clock += freq;
-
-        if self.clock >= rate {
-            self.clock -= rate;
-            self.lfsr.update()
-        }
-
-        self.lfsr.high()
     }
 }
