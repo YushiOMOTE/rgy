@@ -31,11 +31,6 @@ impl Dac {
         self.amp
     }
 
-    // TODO: Abolish this
-    pub fn amp_as_u16(&self) -> u16 {
-        (self.amp + 8).min(15) as u16
-    }
-
     pub fn on(&self) -> bool {
         self.power
     }

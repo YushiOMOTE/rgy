@@ -1,39 +1,6 @@
-use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-
 use crate::cpu::CPU_FREQ_HZ;
 
 use super::{frame_sequencer::FrameSequencer, timer::Timer};
-
-pub trait AtomicHelper {
-    type Item;
-
-    fn get(&self) -> Self::Item;
-    fn set(&self, v: Self::Item);
-}
-
-impl AtomicHelper for AtomicUsize {
-    type Item = usize;
-
-    fn get(&self) -> Self::Item {
-        self.load(Ordering::SeqCst)
-    }
-
-    fn set(&self, v: Self::Item) {
-        self.store(v, Ordering::SeqCst)
-    }
-}
-
-impl AtomicHelper for AtomicBool {
-    type Item = bool;
-
-    fn get(&self) -> Self::Item {
-        self.load(Ordering::SeqCst)
-    }
-
-    fn set(&self, v: Self::Item) {
-        self.store(v, Ordering::SeqCst)
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct Envelop {
@@ -80,9 +47,9 @@ impl Envelop {
         };
     }
 
-    pub fn step_with_rate(&mut self, rate: usize, cycles: usize) {
+    pub fn step_with_rate(&mut self, rate: usize) {
         self.frame_sequencer.set_source_clock_rate(rate);
-        self.step(cycles);
+        self.step(1);
     }
 
     pub fn amp(&self) -> usize {

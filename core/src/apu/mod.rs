@@ -10,6 +10,7 @@ use bitfield_struct::bitfield;
 
 mod clock_divider;
 mod dac;
+mod envelop;
 mod frame_sequencer;
 mod length_counter;
 mod mixer;
@@ -17,7 +18,6 @@ mod noise;
 mod sweep;
 mod timer;
 mod tone;
-mod util;
 mod wave;
 
 pub struct Apu {
@@ -265,6 +265,8 @@ impl Apu {
             self.wave.power_on();
             self.noise.power_on();
             self.mixer.power_on();
+
+            self.sync_all();
         } else if before && !after {
             info!("Sound master disabled");
 
@@ -274,7 +276,17 @@ impl Apu {
             self.wave.power_off();
             self.noise.power_off();
             self.mixer.power_off();
+
+            self.sync_all();
         }
+    }
+
+    fn sync_all(&mut self) {
+        for (i, tone) in self.tones.iter().enumerate() {
+            self.mixer.sync_tone(i, tone.clone());
+        }
+        self.mixer.sync_wave(self.wave.clone());
+        self.mixer.sync_noise(self.noise.clone());
     }
 
     pub fn step(&mut self, cycles: usize) {
