@@ -10,7 +10,7 @@ use bitfield_struct::bitfield;
 
 mod clock_divider;
 mod dac;
-mod envelop;
+mod envelope;
 mod frame_sequencer;
 mod length_counter;
 mod mixer;

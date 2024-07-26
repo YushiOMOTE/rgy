@@ -3,14 +3,14 @@ use crate::cpu::CPU_FREQ_HZ;
 use super::{frame_sequencer::FrameSequencer, timer::Timer};
 
 #[derive(Debug, Clone)]
-pub struct Envelop {
+pub struct Envelope {
     amp: usize,
     inc: bool,
     frame_sequencer: FrameSequencer,
     timer: Timer,
 }
 
-impl Envelop {
+impl Envelope {
     pub fn new() -> Self {
         Self {
             amp: 0,

@@ -1,7 +1,7 @@
 use crate::cpu::CPU_FREQ_HZ;
 
 use super::{
-    clock_divider::ClockDivider, dac::Dac, envelop::Envelop, length_counter::LengthCounter,
+    clock_divider::ClockDivider, dac::Dac, envelope::Envelope, length_counter::LengthCounter,
     sweep::Sweep, timer::Timer,
 };
 
@@ -13,7 +13,7 @@ const TONE_FREQ_HZ: usize = 1_048_576;
 pub struct Tone {
     power: bool,
     sweep: Option<Sweep>,
-    envelop: Envelop,
+    envelope: Envelope,
     nr10: Nr10,
     nr11: Nr11,
     nr12: Nr12,
@@ -96,7 +96,7 @@ impl Tone {
         Self {
             power: false,
             sweep: if with_sweep { Some(Sweep::new()) } else { None },
-            envelop: Envelop::new(),
+            envelope: Envelope::new(),
             nr10: Nr10::default(),
             nr11: Nr11::default(),
             nr12: Nr12::default(),
@@ -214,7 +214,7 @@ impl Tone {
 
         if self.nr14.trigger() {
             self.reload_timer();
-            self.envelop
+            self.envelope
                 .update(self.nr12.init(), self.nr12.count(), self.nr12.increase());
         }
 
@@ -256,7 +256,7 @@ impl Tone {
             }
         }
         self.length_counter.step(cycles);
-        self.envelop.step(cycles);
+        self.envelope.step(cycles);
 
         let times = self.divider.step(cycles);
 
@@ -271,7 +271,7 @@ impl Tone {
             self.freq = Freq::from_value(sweep.freq());
         }
         self.length_counter.step_with_rate(rate);
-        self.envelop.step_with_rate(rate);
+        self.envelope.step_with_rate(rate);
         self.divider.set_source_clock_rate(rate);
 
         let times = self.divider.step(1);
@@ -301,7 +301,7 @@ impl Tone {
             _ => unreachable!(),
         };
 
-        self.dac.write(wave[self.index] * self.envelop.amp());
+        self.dac.write(wave[self.index] * self.envelope.amp());
     }
 
     fn reload_timer(&mut self) {
