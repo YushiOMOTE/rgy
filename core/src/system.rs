@@ -1,4 +1,4 @@
-use crate::cpu::Cpu;
+use crate::cpu::{Cpu, CPU_FREQ_HZ};
 use crate::debug::Debugger;
 use crate::fc::FreqControl;
 use crate::hardware::{Hardware, HardwareHandle};
@@ -28,7 +28,8 @@ impl Default for Config {
 impl Config {
     /// Create the default configuration.
     pub fn new() -> Self {
-        let freq = 4194300; // 4.1943 MHz
+        let freq = CPU_FREQ_HZ as u64;
+
         Self {
             freq,
             sample: freq / 1000,

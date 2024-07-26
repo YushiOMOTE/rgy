@@ -1,4 +1,5 @@
 use super::frame_sequencer::FrameSequencer;
+use crate::cpu::CPU_FREQ_HZ;
 use log::*;
 
 #[derive(Clone, Debug)]
@@ -20,7 +21,7 @@ impl LengthCounter {
             length: 0,
             base,
             freeze: false,
-            frame_sequencer: FrameSequencer::new(4_194_304),
+            frame_sequencer: FrameSequencer::new(CPU_FREQ_HZ),
             first_half: false,
         }
     }

@@ -2,6 +2,9 @@ use crate::mmu::Mmu;
 use alloc::fmt;
 use log::*;
 
+/// CPU frequency in Hz.
+pub const CPU_FREQ_HZ: usize = 4_194_304;
+
 /// Interface for CPU to interact with memory/devices
 pub trait Sys {
     /// Get the interrupt vector address clearing the interrupt flag state

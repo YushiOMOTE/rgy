@@ -19,17 +19,13 @@ impl ClockDivider {
     }
 
     pub fn step(&mut self, cycles: usize) -> usize {
-        self.counter += cycles;
+        self.counter += cycles * self.target_clock_rate;
 
-        let times = self.counter / self.interval();
+        let times = self.counter / self.source_clock_rate;
 
-        self.counter = self.counter % self.interval();
+        self.counter = self.counter % self.source_clock_rate;
 
         times
-    }
-
-    fn interval(&self) -> usize {
-        self.source_clock_rate / self.target_clock_rate
     }
 
     pub fn reset(&mut self) {

@@ -1,21 +1,30 @@
-use crate::hardware::Stream;
+use crate::{cpu::CPU_FREQ_HZ, hardware::Stream};
 
-use super::{length_counter::LengthCounter, sweep::Sweep, util::Envelop, wave_buf::WaveIndex};
+use super::{
+    clock_divider::ClockDivider, dac::Dac, length_counter::LengthCounter, sweep::Sweep,
+    timer::Timer, util::Envelop,
+};
 
 use bitfield_struct::bitfield;
+
+const TONE_FREQ_HZ: usize = 1_048_576;
 
 #[derive(Debug, Clone)]
 pub struct Tone {
     power: bool,
     sweep: Option<Sweep>,
+    envelop: Envelop,
     nr10: Nr10,
     nr11: Nr11,
     nr12: Nr12,
     nr13: Nr13,
     nr14: Nr14,
     length_counter: LengthCounter,
+    divider: ClockDivider,
+    timer: Timer,
     freq: Freq,
-    dac: bool,
+    dac: Dac,
+    index: usize,
 }
 
 #[bitfield(u8)]
@@ -80,10 +89,6 @@ impl Freq {
     fn value(&self) -> usize {
         self.into_bits() as usize
     }
-
-    fn hz(&self) -> usize {
-        131072 / (2048 - self.value())
-    }
 }
 
 impl Tone {
@@ -91,14 +96,18 @@ impl Tone {
         Self {
             power: false,
             sweep: if with_sweep { Some(Sweep::new()) } else { None },
+            envelop: Envelop::new(),
             nr10: Nr10::default(),
             nr11: Nr11::default(),
             nr12: Nr12::default(),
             nr13: Nr13::default(),
             nr14: Nr14::default(),
             length_counter: LengthCounter::type64(),
+            timer: Timer::enabled(),
+            divider: ClockDivider::new(CPU_FREQ_HZ, TONE_FREQ_HZ),
             freq: Freq::default(),
-            dac: false,
+            dac: Dac::new(),
+            index: 0,
         }
     }
 
@@ -150,8 +159,10 @@ impl Tone {
 
         self.nr12 = Nr12::from_bits(value);
 
-        self.dac = self.nr12.init() > 0 || self.nr12.increase();
-        if !self.dac {
+        if self.nr12.init() > 0 || self.nr12.increase() {
+            self.dac.power_on();
+        } else {
+            self.dac.power_off();
             self.length_counter.deactivate();
         }
     }
@@ -169,6 +180,7 @@ impl Tone {
         }
 
         self.nr13 = Nr13::from_bits(value);
+
         self.freq = self.freq.with_low(self.nr13.freq_low());
     }
 
@@ -198,6 +210,12 @@ impl Tone {
                 self.nr10.subtract(),
                 self.nr10.shift(),
             );
+        }
+
+        if self.nr14.trigger() {
+            self.reload_timer();
+            self.envelop
+                .update(self.nr12.init(), self.nr12.count(), self.nr12.increase());
         }
 
         self.nr14.trigger()
@@ -233,7 +251,7 @@ impl Tone {
 
         self.length_counter.power_off();
 
-        self.dac = false;
+        self.dac.power_off();
     }
 
     pub fn step(&mut self, cycles: usize) {
@@ -243,6 +261,60 @@ impl Tone {
             }
         }
         self.length_counter.step(cycles);
+        self.envelop.step(cycles);
+
+        let times = self.divider.step(cycles);
+
+        for _ in 0..times {
+            self.update();
+        }
+    }
+
+    fn step_with_rate(&mut self, rate: usize) {
+        if let Some(sweep) = self.sweep.as_mut() {
+            sweep.step_with_rate(rate);
+            self.freq = Freq::from_value(sweep.freq());
+        }
+        self.length_counter.step_with_rate(rate);
+        self.envelop.step_with_rate(rate, 1);
+        self.divider.set_source_clock_rate(rate);
+
+        let times = self.divider.step(1);
+
+        for _ in 0..times {
+            self.update();
+        }
+    }
+
+    fn update(&mut self) {
+        if !self.is_active() {
+            return;
+        }
+        if !self.timer.tick() {
+            return;
+        }
+
+        self.reload_timer();
+
+        self.index = (self.index + 1) % 8;
+
+        let wave = match self.nr11.wave_duty() {
+            0 => [0, 0, 0, 0, 0, 0, 0, 1],
+            1 => [1, 0, 0, 0, 0, 0, 0, 1],
+            2 => [1, 0, 0, 0, 0, 1, 1, 1],
+            3 => [0, 1, 1, 1, 1, 1, 1, 0],
+            _ => unreachable!(),
+        };
+
+        self.dac.write(wave[self.index] * self.envelop.amp());
+    }
+
+    fn reload_timer(&mut self) {
+        self.timer.set_interval(self.timer_interval());
+    }
+
+    fn timer_interval(&self) -> usize {
+        2048 - self.freq.value()
     }
 
     pub fn is_active(&self) -> bool {
@@ -252,39 +324,17 @@ impl Tone {
             false
         };
 
-        self.length_counter.is_active() && self.dac && !sweep_disabling_channel
-    }
-
-    fn freq(&self) -> Freq {
-        match &self.sweep {
-            Some(sweep) => Freq::from_value(sweep.freq()),
-            None => self.freq,
-        }
+        self.length_counter.is_active() && self.dac.on() && !sweep_disabling_channel
     }
 }
 
 pub struct ToneStream {
     tone: Tone,
-    env: Envelop,
-    index: WaveIndex,
 }
 
 impl ToneStream {
     fn new(tone: Tone) -> Self {
-        let env = Envelop::new(tone.nr12.init(), tone.nr12.count(), tone.nr12.increase());
-
-        Self {
-            tone,
-            env,
-            index: WaveIndex::new(4_194_304, 8),
-        }
-    }
-
-    fn step(&mut self, rate: usize) {
-        self.tone.length_counter.step_with_rate(rate);
-        if let Some(sweep) = &mut self.tone.sweep {
-            sweep.step_with_rate(rate);
-        }
+        Self { tone }
     }
 }
 
@@ -294,40 +344,11 @@ impl Stream for ToneStream {
     }
 
     fn next(&mut self, rate: u32) -> u16 {
-        let rate = rate as usize;
-
-        self.step(rate);
-
-        if !self.tone.length_counter.is_active() {
-            return 0;
-        }
-
-        // Envelop
-        let amp = self.env.amp(rate);
-
-        // Sweep
-        let freq = self.tone.freq().hz();
-
-        // Square wave generation
-        let duty = match self.tone.nr11.wave_duty() {
-            0 => 0,
-            1 => 1,
-            2 => 3,
-            3 => 5,
-            _ => unreachable!(),
-        };
-
-        self.index.set_source_clock_rate(rate);
-        self.index.update_index(freq * 8);
-
-        if self.index.index() <= duty {
-            0
-        } else {
-            amp as u16
-        }
+        self.tone.step_with_rate(rate as usize);
+        self.tone.dac.amp_as_u16()
     }
 
     fn on(&self) -> bool {
-        self.tone.length_counter.is_active()
+        self.tone.is_active()
     }
 }

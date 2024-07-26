@@ -1,5 +1,7 @@
 use super::clock_divider::ClockDivider;
 
+const FRAME_SEQUENCER_FREQ_HZ: usize = 512;
+
 /// The frame sequencer generates low frequency clocks for the modulation units. It is clocked by a 512 Hz timer.
 ///
 /// Step   Length Ctr  Vol Env     Sweep
@@ -24,7 +26,7 @@ pub struct FrameSequencer {
 impl FrameSequencer {
     pub fn new(source_clock_rate: usize) -> Self {
         Self {
-            divider: ClockDivider::new(source_clock_rate, 512),
+            divider: ClockDivider::new(source_clock_rate, FRAME_SEQUENCER_FREQ_HZ),
             step: 0,
         }
     }
