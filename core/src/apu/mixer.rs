@@ -271,7 +271,7 @@ impl Stream for MixerStream {
             vol += self.wave.volume(i);
             vol += self.noise.volume(i);
             vol *= self.volume(i);
-            (vol + center) as u16
+            (vol + center) as u16 * 2
         });
 
         (values.next().unwrap(), values.next().unwrap())
