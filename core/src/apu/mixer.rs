@@ -256,6 +256,27 @@ impl Stream for MixerStream {
             .fold(0, |total, vol| total + vol + center) as u16
     }
 
+    fn next_dual(&mut self, rate: u32) -> (u16, u16) {
+        let center = (self.max() / 2) as isize;
+
+        self.tones[0].step(rate);
+        self.tones[1].step(rate);
+        self.wave.step(rate);
+        self.noise.step(rate);
+
+        let mut values = (0..2).map(|i| {
+            let mut vol = 0;
+            vol += self.tones[0].volume(i);
+            vol += self.tones[1].volume(i);
+            vol += self.wave.volume(i);
+            vol += self.noise.volume(i);
+            vol *= self.volume(i);
+            (vol + center) as u16
+        });
+
+        (values.next().unwrap(), values.next().unwrap())
+    }
+
     fn on(&self) -> bool {
         true
     }
