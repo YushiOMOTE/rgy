@@ -7,7 +7,7 @@ pub struct Timer {
 }
 
 impl Timer {
-    fn new(enable: bool) -> Self {
+    pub fn new(enable: bool) -> Self {
         Self {
             enable,
             counter: 0,
