@@ -1,5 +1,3 @@
-use crate::cpu::CPU_FREQ_HZ;
-
 use super::{frame_sequencer::FrameSequencer, timer::Timer};
 
 #[derive(Debug, Clone)]
@@ -15,7 +13,7 @@ impl Envelope {
         Self {
             amp: 0,
             inc: false,
-            frame_sequencer: FrameSequencer::new(CPU_FREQ_HZ),
+            frame_sequencer: FrameSequencer::new(),
             timer: Timer::enabled(),
         }
     }
@@ -27,10 +25,6 @@ impl Envelope {
     }
 
     pub fn step(&mut self, cycles: usize) {
-        if self.amp == 0 {
-            return;
-        }
-
         match self.frame_sequencer.step(cycles) {
             Some(7) => {}
             _ => return,

@@ -8,7 +8,6 @@ use self::{mixer::Mixer, noise::Noise, tone::Tone, wave::Wave};
 
 use bitfield_struct::bitfield;
 
-mod clock_divider;
 mod dac;
 mod envelope;
 mod frame_sequencer;

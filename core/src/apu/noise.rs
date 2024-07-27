@@ -1,9 +1,5 @@
-use crate::cpu::CPU_FREQ_HZ;
-
-use super::{
-    clock_divider::ClockDivider, dac::Dac, envelope::Envelope, length_counter::LengthCounter,
-    timer::Timer,
-};
+use super::{dac::Dac, envelope::Envelope, length_counter::LengthCounter, timer::Timer};
+use crate::clock_divider::ClockDivider;
 
 use bitfield_struct::bitfield;
 
@@ -71,7 +67,7 @@ impl Noise {
             nr44: Nr44::default(),
 
             length_counter: LengthCounter::type64(),
-            divider: ClockDivider::new(CPU_FREQ_HZ, NOISE_FREQ_HZ),
+            divider: ClockDivider::new(NOISE_FREQ_HZ),
             timer: Timer::enabled(),
             envelope: Envelope::new(),
             lfsr: Lfsr::new(),

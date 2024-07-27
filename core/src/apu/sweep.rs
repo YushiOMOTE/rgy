@@ -1,5 +1,4 @@
 use super::{frame_sequencer::FrameSequencer, timer::Timer};
-use crate::cpu::CPU_FREQ_HZ;
 use log::*;
 
 #[derive(Clone, Debug)]
@@ -17,7 +16,7 @@ pub struct Sweep {
 impl Sweep {
     pub fn new() -> Self {
         Self {
-            frame_sequencer: FrameSequencer::new(CPU_FREQ_HZ),
+            frame_sequencer: FrameSequencer::new(),
             freq: 0,
             timer: Timer::disabled(),
             subtract: false,

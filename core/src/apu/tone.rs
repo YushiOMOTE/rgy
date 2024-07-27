@@ -1,9 +1,7 @@
-use crate::cpu::CPU_FREQ_HZ;
-
 use super::{
-    clock_divider::ClockDivider, dac::Dac, envelope::Envelope, length_counter::LengthCounter,
-    sweep::Sweep, timer::Timer,
+    dac::Dac, envelope::Envelope, length_counter::LengthCounter, sweep::Sweep, timer::Timer,
 };
+use crate::clock_divider::ClockDivider;
 
 use bitfield_struct::bitfield;
 
@@ -104,7 +102,7 @@ impl Tone {
             nr14: Nr14::default(),
             length_counter: LengthCounter::type64(),
             timer: Timer::enabled(),
-            divider: ClockDivider::new(CPU_FREQ_HZ, TONE_FREQ_HZ),
+            divider: ClockDivider::new(TONE_FREQ_HZ),
             freq: Freq::default(),
             dac: Dac::new(),
             index: 0,

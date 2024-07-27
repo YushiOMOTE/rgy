@@ -1,26 +1,73 @@
-use crate::ic::Irq;
+use crate::{clock_divider::ClockDivider, ic::Irq};
 use log::*;
 
 pub struct Timer {
     irq: Irq,
-    div: u8,
-    div_clocks: usize,
+    div: Div,
     tim: u8,
     tim_clocks: usize,
     tim_load: u8,
     ctrl: u8,
+    div_apu_bit: bool,
+}
+
+struct Div {
+    enable: bool,
+    count: u8,
+    divider: ClockDivider,
+}
+
+impl Div {
+    fn new() -> Self {
+        Self {
+            enable: true,
+            count: 0,
+            divider: ClockDivider::new(16384),
+        }
+    }
+
+    fn count(&self) -> u8 {
+        self.count
+    }
+
+    fn reset(&mut self) {
+        self.count = 0;
+        self.divider.reset();
+    }
+
+    fn step(&mut self, cycles: usize) {
+        if !self.divider.step_one(cycles) {
+            return;
+        }
+
+        if self.enable {
+            self.count = self.count.wrapping_add(1);
+        }
+    }
+
+    // TODO: To be used for STOP emulation where DIV doesn't ticks
+    #[allow(dead_code)]
+    fn enable(&mut self) {
+        self.enable = true;
+    }
+
+    // TODO: To be used for STOP emulation where DIV doesn't ticks
+    #[allow(dead_code)]
+    fn diable(&mut self) {
+        self.enable = false;
+    }
 }
 
 impl Timer {
     pub fn new(irq: Irq) -> Self {
         Self {
             irq,
-            div: 0,
-            div_clocks: 0,
+            div: Div::new(),
             tim: 0,
             tim_clocks: 0,
             tim_load: 0,
             ctrl: 0,
+            div_apu_bit: false,
         }
     }
 
@@ -34,22 +81,11 @@ impl Timer {
         };
     }
 
-    fn div_clock_reset(&mut self) {
-        self.div_clocks = 256; // 16384Hz = 256 cpu clocks
-    }
-
-    pub fn step(&mut self, time: usize) {
-        if self.div_clocks < time {
-            self.div = self.div.wrapping_add(1);
-            let rem = time - self.div_clocks;
-            self.div_clock_reset();
-            self.div_clocks -= rem;
-        } else {
-            self.div_clocks -= time;
-        }
+    pub fn step(&mut self, time: usize) -> bool {
+        self.div.step(time);
 
         if self.ctrl & 0x04 == 0 {
-            return;
+            return false;
         }
 
         if self.tim_clocks < time {
@@ -73,12 +109,14 @@ impl Timer {
         } else {
             self.tim_clocks -= time;
         }
+
+        false
     }
 
     pub(crate) fn on_read(&self, addr: u16) -> u8 {
         info!("Timer read: {:04x}", addr);
         match addr {
-            0xff04 => self.div,
+            0xff04 => self.div.count(),
             0xff05 => self.tim,
             0xff06 => self.tim_load,
             0xff07 => self.ctrl,
@@ -89,7 +127,7 @@ impl Timer {
     pub(crate) fn on_write(&mut self, addr: u16, value: u8) {
         info!("Timer write: {:04x} {:02x}", addr, value);
         match addr {
-            0xff04 => self.div = 0,
+            0xff04 => self.div.reset(),
             0xff05 => self.tim = value,
             0xff06 => self.tim_load = value,
             0xff07 => {

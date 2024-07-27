@@ -110,6 +110,7 @@ extern crate alloc;
 mod alu;
 mod apu;
 mod cgb;
+mod clock_divider;
 mod dma;
 mod fc;
 mod gpu;

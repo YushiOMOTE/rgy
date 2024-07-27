@@ -1,9 +1,9 @@
 use log::*;
 
-use crate::cpu::CPU_FREQ_HZ;
 use bitfield_struct::bitfield;
 
-use super::{clock_divider::ClockDivider, dac::Dac, length_counter::LengthCounter, timer::Timer};
+use super::{dac::Dac, length_counter::LengthCounter, timer::Timer};
+use crate::clock_divider::ClockDivider;
 
 const RAM_SIZE: usize = 16;
 const WAVE_SIZE: usize = RAM_SIZE * 2;
@@ -123,7 +123,7 @@ impl Wave {
             nr32: Nr32::default(),
             nr33: Nr33::default(),
             nr34: Nr34::default(),
-            divider: ClockDivider::new(CPU_FREQ_HZ, WAVE_FREQ_HZ),
+            divider: ClockDivider::new(WAVE_FREQ_HZ),
             timer: Timer::enabled(),
             last_sample: 0,
             dac: Dac::new(),

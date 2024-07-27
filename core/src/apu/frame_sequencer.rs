@@ -1,4 +1,4 @@
-use super::clock_divider::ClockDivider;
+use crate::clock_divider::ClockDivider;
 
 const FRAME_SEQUENCER_FREQ_HZ: usize = 512;
 
@@ -24,9 +24,9 @@ pub struct FrameSequencer {
 }
 
 impl FrameSequencer {
-    pub fn new(source_clock_rate: usize) -> Self {
+    pub fn new() -> Self {
         Self {
-            divider: ClockDivider::new(source_clock_rate, FRAME_SEQUENCER_FREQ_HZ),
+            divider: ClockDivider::new(FRAME_SEQUENCER_FREQ_HZ),
             step: 0,
         }
     }
@@ -56,7 +56,7 @@ impl FrameSequencer {
 
 #[test]
 fn test_frame_sequencer() {
-    let mut seq = FrameSequencer::new(4194304);
+    let mut seq = FrameSequencer::new();
 
     for i in 1..=(8192 * 10) {
         match i {
@@ -77,7 +77,9 @@ fn test_frame_sequencer() {
 
 #[test]
 fn test_frame_sequencer_reset() {
-    let mut seq = FrameSequencer::new(1024);
+    let mut seq = FrameSequencer::new();
+
+    seq.set_source_clock_rate(1024);
 
     assert_eq!(seq.step(1), None);
     assert_eq!(seq.step(1), Some(0));
