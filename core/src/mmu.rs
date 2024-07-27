@@ -244,10 +244,16 @@ impl Sys for Mmu {
         if let Some(req) = self.gpu.step(cycles) {
             self.run_dma(req);
         }
-        self.apu.step(cycles);
         self.timer.step(cycles);
+        self.apu.step(cycles);
         self.serial.step(cycles);
         self.joypad.poll();
+    }
+
+    /// Stop instruction is called.
+    fn stop(&mut self) {
+        error!("STOP instruction is called");
+        self.cgb.try_switch_speed();
     }
 }
 
@@ -294,4 +300,6 @@ impl Sys for Ram {
     }
 
     fn step(&mut self, _: usize) {}
+
+    fn stop(&mut self) {}
 }

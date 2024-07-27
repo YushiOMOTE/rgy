@@ -34,6 +34,9 @@ pub trait Sys {
 
     /// Proceed the system state by the given CPU cycles.
     fn step(&mut self, cycles: usize);
+
+    /// Stop instruction is called.
+    fn stop(&mut self);
 }
 
 /// Represents CPU state.
@@ -229,8 +232,8 @@ impl<T: Sys> Cpu<T> {
     }
 
     /// Stop the CPU.
-    pub fn stop(&self) {
-        todo!("stop {:04x}", self.get_pc());
+    pub fn stop(&mut self) {
+        self.sys.stop();
     }
 
     /// Gets the value of `z` flag in the flag register.
