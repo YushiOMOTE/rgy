@@ -307,7 +307,7 @@ impl Wave {
         // Timer tick is 2 cycles. 2 ticks means 4 cycles.
         // Having this in CPU instruction means the instraction is happening
         // at the same time that APU is reading a sample from the Wave RAM.
-        self.timer.expires_in() == 2
+        self.timer.remaining() == 2
     }
 
     fn update(&mut self) {
@@ -341,10 +341,12 @@ impl Wave {
     }
 
     fn load_initial_timer(&mut self) {
+        self.timer.reset();
         self.timer.set_interval(self.timer_interval() + 3);
     }
 
     fn reload_timer(&mut self) {
+        self.timer.reset();
         self.timer.set_interval(self.timer_interval());
     }
 

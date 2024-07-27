@@ -131,6 +131,7 @@ impl Sweep {
     }
 
     fn reload_timer(&mut self) {
+        self.timer.reset();
         self.timer
             .set_interval(if self.period == 0 { 8 } else { self.period });
     }

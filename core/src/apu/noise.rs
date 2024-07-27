@@ -194,6 +194,7 @@ impl Noise {
     }
 
     fn reload_timer(&mut self) {
+        self.timer.reset();
         self.timer.set_interval(self.timer_interval());
     }
 

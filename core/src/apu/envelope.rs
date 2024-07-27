@@ -23,6 +23,7 @@ impl Envelope {
     pub fn update(&mut self, amp: usize, count: usize, inc: bool) {
         self.amp = amp;
         self.inc = inc;
+        self.timer.reset();
         self.timer.set_interval(count);
     }
 
