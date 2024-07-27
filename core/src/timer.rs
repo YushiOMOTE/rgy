@@ -1,4 +1,4 @@
-use crate::{clock_divider::ClockDivider, ic::Irq};
+use crate::{clock::ClockDivider, ic::Irq};
 use log::*;
 
 pub struct Timer {

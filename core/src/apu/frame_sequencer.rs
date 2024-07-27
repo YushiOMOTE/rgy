@@ -1,4 +1,4 @@
-use crate::clock_divider::ClockDivider;
+use crate::clock::ClockDivider;
 
 const FRAME_SEQUENCER_FREQ_HZ: usize = 512;
 

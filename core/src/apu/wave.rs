@@ -2,8 +2,8 @@ use log::*;
 
 use bitfield_struct::bitfield;
 
-use super::{dac::Dac, length_counter::LengthCounter, timer::Timer};
-use crate::clock_divider::ClockDivider;
+use super::{dac::Dac, length_counter::LengthCounter};
+use crate::clock::{ClockDivider, Timer};
 
 const RAM_SIZE: usize = 16;
 const WAVE_SIZE: usize = RAM_SIZE * 2;

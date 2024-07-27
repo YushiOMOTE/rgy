@@ -15,7 +15,6 @@ mod length_counter;
 mod mixer;
 mod noise;
 mod sweep;
-mod timer;
 mod tone;
 mod wave;
 

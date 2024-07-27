@@ -1,7 +1,5 @@
-use super::{
-    dac::Dac, envelope::Envelope, length_counter::LengthCounter, sweep::Sweep, timer::Timer,
-};
-use crate::clock_divider::ClockDivider;
+use super::{dac::Dac, envelope::Envelope, length_counter::LengthCounter, sweep::Sweep};
+use crate::clock::{ClockDivider, Timer};
 
 use bitfield_struct::bitfield;
 

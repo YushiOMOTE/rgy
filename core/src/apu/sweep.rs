@@ -1,4 +1,6 @@
-use super::{frame_sequencer::FrameSequencer, timer::Timer};
+use crate::clock::Timer;
+
+use super::frame_sequencer::FrameSequencer;
 use log::*;
 
 #[derive(Clone, Debug)]
