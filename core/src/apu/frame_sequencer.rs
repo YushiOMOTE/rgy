@@ -31,10 +31,6 @@ impl FrameSequencer {
         }
     }
 
-    pub fn set_source_clock_rate(&mut self, source_clock_rate: usize) {
-        self.divider.set_source_clock_rate(source_clock_rate);
-    }
-
     pub fn step(&mut self, cycles: usize) -> Option<usize> {
         let times = self.divider.step(cycles);
 

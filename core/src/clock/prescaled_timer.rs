@@ -38,23 +38,14 @@ impl PrescaledTimer {
         self.divider.set_target_clock_rate(frequency);
     }
 
-    /// Update the source clock rate.
-    pub fn set_source_clock_rate(&mut self, rate: usize) {
-        self.divider.set_source_clock_rate(rate);
-    }
-
     /// Get the current counter.
     pub fn counter(&self) -> usize {
         self.timer.counter()
     }
 
+    /// Update the counter.
     pub fn set_counter(&mut self, counter: usize) {
         self.timer.set_counter(counter);
-    }
-
-    /// Get the remaining ticks until the timer expires next.
-    pub fn remaining(&self) -> usize {
-        self.timer.remaining()
     }
 
     /// Updates the timer state given `cycles` that counts at source clock rate.
@@ -65,11 +56,6 @@ impl PrescaledTimer {
         }
 
         self.timer.tick()
-    }
-
-    /// Reset the counter without disabling the timer.
-    pub fn reset(&mut self) {
-        self.timer.reset();
     }
 }
 
@@ -95,11 +81,6 @@ impl PrescaledTimerBuilder {
 
     pub fn interval(mut self, interval: usize) -> Self {
         self.timer.set_interval(interval);
-        self
-    }
-
-    pub fn source_clock_rate(mut self, rate: usize) -> Self {
-        self.timer.set_source_clock_rate(rate);
         self
     }
 

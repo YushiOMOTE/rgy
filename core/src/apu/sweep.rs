@@ -33,10 +33,6 @@ impl Sweep {
         self.disabling_channel
     }
 
-    pub fn freq(&self) -> usize {
-        self.freq
-    }
-
     pub fn trigger(&mut self, freq: usize, period: usize, subtract: bool, shift: usize) {
         self.freq = freq;
         self.disabling_channel = false;
@@ -74,11 +70,6 @@ impl Sweep {
         self.period = period;
         self.shift = shift;
         self.subtract = subtract;
-    }
-
-    pub fn step_with_rate(&mut self, rate: usize) {
-        self.frame_sequencer.set_source_clock_rate(rate);
-        self.step(1);
     }
 
     pub fn step(&mut self, cycles: usize) -> Option<usize> {

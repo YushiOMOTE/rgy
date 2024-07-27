@@ -261,22 +261,6 @@ impl Tone {
         }
     }
 
-    pub fn step_with_rate(&mut self, rate: usize) {
-        if let Some(sweep) = self.sweep.as_mut() {
-            sweep.step_with_rate(rate);
-            self.freq = Freq::from_value(sweep.freq());
-        }
-        self.length_counter.step_with_rate(rate);
-        self.envelope.step_with_rate(rate);
-        self.divider.set_source_clock_rate(rate);
-
-        let times = self.divider.step(1);
-
-        for _ in 0..times {
-            self.update();
-        }
-    }
-
     fn update(&mut self) {
         if !self.is_active() {
             return;

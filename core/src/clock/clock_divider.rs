@@ -1,9 +1,5 @@
 use crate::cpu::CPU_FREQ_HZ;
 
-pub const fn hz_to_clocks(hz: usize) -> usize {
-    CPU_FREQ_HZ / hz
-}
-
 #[derive(Debug, Clone)]
 pub struct ClockDivider {
     counter: usize,
@@ -22,10 +18,6 @@ impl ClockDivider {
 
     pub fn set_target_clock_rate(&mut self, target_clock_rate: usize) {
         self.target_clock_rate = target_clock_rate;
-    }
-
-    pub fn set_source_clock_rate(&mut self, source_clock_rate: usize) {
-        self.source_clock_rate = source_clock_rate;
     }
 
     pub fn step(&mut self, cycles: usize) -> usize {

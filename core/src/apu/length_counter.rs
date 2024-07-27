@@ -105,12 +105,6 @@ impl LengthCounter {
         self.length = self.base - value;
     }
 
-    /// Called in the OS thread with sampling rate
-    pub fn step_with_rate(&mut self, rate: usize) {
-        self.frame_sequencer.set_source_clock_rate(rate);
-        self.step(1);
-    }
-
     pub fn step(&mut self, count: usize) {
         match self.frame_sequencer.step(count) {
             Some(0) | Some(2) | Some(4) | Some(6) => {

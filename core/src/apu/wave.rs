@@ -257,18 +257,6 @@ impl Wave {
         }
     }
 
-    pub fn step_with_rate(&mut self, rate: usize) {
-        self.length_counter.step_with_rate(rate);
-
-        self.divider.set_source_clock_rate(rate);
-
-        let times = self.divider.step(1);
-
-        for _ in 0..times {
-            self.update();
-        }
-    }
-
     fn adjust_waveram_index(&self, cpu_index: u16) -> Option<usize> {
         let apu_index = self.index.byte_index();
 

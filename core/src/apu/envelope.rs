@@ -44,11 +44,6 @@ impl Envelope {
         };
     }
 
-    pub fn step_with_rate(&mut self, rate: usize) {
-        self.frame_sequencer.set_source_clock_rate(rate);
-        self.step(1);
-    }
-
     pub fn amp(&self) -> usize {
         self.amp
     }
