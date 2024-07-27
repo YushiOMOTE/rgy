@@ -1,5 +1,6 @@
 use super::{ClockDivider, Timer};
 
+#[derive(Debug, Clone)]
 pub struct PrescaledTimer {
     timer: Timer,
     divider: ClockDivider,
@@ -83,7 +84,7 @@ impl PrescaledTimerBuilder {
     }
 
     pub fn disable(mut self) -> Self {
-        self.timer.enable();
+        self.timer.disable();
         self
     }
 
