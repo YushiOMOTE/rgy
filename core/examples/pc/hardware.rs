@@ -317,20 +317,24 @@ impl Pcm {
                     for sample in buffer.chunks_mut(format.channels as usize) {
                         let value = match &mut stream {
                             Some(s) => {
-                                (s.next(sample_rate) as u64 * 100 / s.max() as u64) as f32 / 100.0
+                                let (l, r) = s.next_dual(sample_rate);
+                                (adjust(l, s.max()), adjust(r, s.max()))
                             }
-                            None => 0.0,
+                            None => (0.0, 0.0),
                         };
 
-                        for out in sample.iter_mut() {
-                            *out = value;
-                        }
+                        sample[0] = value.0;
+                        sample[1] = value.1;
                     }
                 }
                 _ => (),
             }
         });
     }
+}
+
+fn adjust(value: u16, max: u16) -> f32 {
+    (value as u64 * 100 / max as u64) as f32 / 100.0
 }
 
 #[allow(unused)]

@@ -1,8 +1,8 @@
-use crate::{cpu::CPU_FREQ_HZ, hardware::Stream};
+use crate::cpu::CPU_FREQ_HZ;
 
 use super::{
-    clock_divider::ClockDivider, dac::Dac, length_counter::LengthCounter, sweep::Sweep,
-    timer::Timer, util::Envelop,
+    clock_divider::ClockDivider, dac::Dac, envelope::Envelope, length_counter::LengthCounter,
+    sweep::Sweep, timer::Timer,
 };
 
 use bitfield_struct::bitfield;
@@ -13,7 +13,7 @@ const TONE_FREQ_HZ: usize = 1_048_576;
 pub struct Tone {
     power: bool,
     sweep: Option<Sweep>,
-    envelop: Envelop,
+    envelope: Envelope,
     nr10: Nr10,
     nr11: Nr11,
     nr12: Nr12,
@@ -96,7 +96,7 @@ impl Tone {
         Self {
             power: false,
             sweep: if with_sweep { Some(Sweep::new()) } else { None },
-            envelop: Envelop::new(),
+            envelope: Envelope::new(),
             nr10: Nr10::default(),
             nr11: Nr11::default(),
             nr12: Nr12::default(),
@@ -214,16 +214,11 @@ impl Tone {
 
         if self.nr14.trigger() {
             self.reload_timer();
-            self.envelop
+            self.envelope
                 .update(self.nr12.init(), self.nr12.count(), self.nr12.increase());
         }
 
         self.nr14.trigger()
-    }
-
-    /// Create stream from the current data
-    pub fn create_stream(&self) -> ToneStream {
-        ToneStream::new(self.clone())
     }
 
     pub fn power_on(&mut self) {
@@ -261,7 +256,7 @@ impl Tone {
             }
         }
         self.length_counter.step(cycles);
-        self.envelop.step(cycles);
+        self.envelope.step(cycles);
 
         let times = self.divider.step(cycles);
 
@@ -270,13 +265,13 @@ impl Tone {
         }
     }
 
-    fn step_with_rate(&mut self, rate: usize) {
+    pub fn step_with_rate(&mut self, rate: usize) {
         if let Some(sweep) = self.sweep.as_mut() {
             sweep.step_with_rate(rate);
             self.freq = Freq::from_value(sweep.freq());
         }
         self.length_counter.step_with_rate(rate);
-        self.envelop.step_with_rate(rate, 1);
+        self.envelope.step_with_rate(rate);
         self.divider.set_source_clock_rate(rate);
 
         let times = self.divider.step(1);
@@ -306,7 +301,7 @@ impl Tone {
             _ => unreachable!(),
         };
 
-        self.dac.write(wave[self.index] * self.envelop.amp());
+        self.dac.write(wave[self.index] * self.envelope.amp());
     }
 
     fn reload_timer(&mut self) {
@@ -326,29 +321,8 @@ impl Tone {
 
         self.length_counter.is_active() && self.dac.on() && !sweep_disabling_channel
     }
-}
 
-pub struct ToneStream {
-    tone: Tone,
-}
-
-impl ToneStream {
-    fn new(tone: Tone) -> Self {
-        Self { tone }
-    }
-}
-
-impl Stream for ToneStream {
-    fn max(&self) -> u16 {
-        unreachable!()
-    }
-
-    fn next(&mut self, rate: u32) -> u16 {
-        self.tone.step_with_rate(rate as usize);
-        self.tone.dac.amp_as_u16()
-    }
-
-    fn on(&self) -> bool {
-        self.tone.is_active()
+    pub fn amp(&self) -> isize {
+        self.dac.amp()
     }
 }

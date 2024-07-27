@@ -1,6 +1,6 @@
 use log::*;
 
-use crate::{cpu::CPU_FREQ_HZ, hardware::Stream};
+use crate::cpu::CPU_FREQ_HZ;
 use bitfield_struct::bitfield;
 
 use super::{clock_divider::ClockDivider, dac::Dac, length_counter::LengthCounter, timer::Timer};
@@ -247,11 +247,6 @@ impl Wave {
         }
     }
 
-    /// Create stream from the current data
-    pub fn create_stream(&self) -> WaveStream {
-        WaveStream::new(self.clone())
-    }
-
     pub fn step(&mut self, cycles: usize) {
         self.length_counter.step(cycles);
 
@@ -386,29 +381,8 @@ impl Wave {
 
         self.freq = Freq::default();
     }
-}
 
-pub struct WaveStream {
-    wave: Wave,
-}
-
-impl WaveStream {
-    fn new(wave: Wave) -> Self {
-        Self { wave }
-    }
-}
-
-impl Stream for WaveStream {
-    fn max(&self) -> u16 {
-        unreachable!()
-    }
-
-    fn next(&mut self, rate: u32) -> u16 {
-        self.wave.step_with_rate(rate as usize);
-        self.wave.dac.amp_as_u16()
-    }
-
-    fn on(&self) -> bool {
-        self.wave.is_active()
+    pub fn amp(&self) -> isize {
+        self.dac.amp()
     }
 }

@@ -39,6 +39,9 @@ pub trait Stream: Send + 'static {
     /// whose max value is determined by [`Stream::max`][].
     fn next(&mut self, rate: u32) -> u16;
 
+    /// Stereo version of [`Stream::next`][]. Supports 2 channels.
+    fn next_dual(&mut self, rate: u32) -> (u16, u16);
+
     /// Indicate the stream is active.
     fn on(&self) -> bool;
 }

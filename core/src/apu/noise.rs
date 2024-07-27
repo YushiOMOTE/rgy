@@ -1,8 +1,8 @@
-use crate::{cpu::CPU_FREQ_HZ, hardware::Stream};
+use crate::cpu::CPU_FREQ_HZ;
 
 use super::{
-    clock_divider::ClockDivider, dac::Dac, length_counter::LengthCounter, timer::Timer,
-    util::Envelop,
+    clock_divider::ClockDivider, dac::Dac, envelope::Envelope, length_counter::LengthCounter,
+    timer::Timer,
 };
 
 use bitfield_struct::bitfield;
@@ -21,7 +21,7 @@ pub struct Noise {
     length_counter: LengthCounter,
     divider: ClockDivider,
     timer: Timer,
-    envelop: Envelop,
+    envelope: Envelope,
     lfsr: Lfsr,
     dac: Dac,
 }
@@ -73,7 +73,7 @@ impl Noise {
             length_counter: LengthCounter::type64(),
             divider: ClockDivider::new(CPU_FREQ_HZ, NOISE_FREQ_HZ),
             timer: Timer::enabled(),
-            envelop: Envelop::new(),
+            envelope: Envelope::new(),
             lfsr: Lfsr::new(),
 
             dac: Dac::new(),
@@ -147,21 +147,16 @@ impl Noise {
         if self.nr44.trigger() {
             self.reload_timer();
             self.lfsr.trigger(self.nr43.step());
-            self.envelop
+            self.envelope
                 .update(self.nr42.init(), self.nr42.count(), self.nr42.increase());
         }
 
         self.nr44.trigger()
     }
 
-    /// Create stream from the current data
-    pub fn create_stream(&self) -> NoiseStream {
-        NoiseStream::new(self.clone())
-    }
-
     pub fn step(&mut self, cycles: usize) {
         self.length_counter.step(cycles);
-        self.envelop.step(cycles);
+        self.envelope.step(cycles);
 
         let times = self.divider.step(cycles);
 
@@ -172,7 +167,7 @@ impl Noise {
 
     pub fn step_with_rate(&mut self, rate: usize) {
         self.length_counter.step_with_rate(rate);
-        self.envelop.step_with_rate(rate, 1);
+        self.envelope.step_with_rate(rate);
 
         self.divider.set_source_clock_rate(rate);
 
@@ -196,7 +191,7 @@ impl Noise {
         self.lfsr.update();
 
         self.dac.write(if self.lfsr.high() {
-            self.envelop.amp()
+            self.envelope.amp()
         } else {
             0
         });
@@ -241,30 +236,9 @@ impl Noise {
 
         self.dac.power_off();
     }
-}
 
-pub struct NoiseStream {
-    noise: Noise,
-}
-
-impl NoiseStream {
-    pub fn new(noise: Noise) -> Self {
-        Self { noise }
-    }
-}
-
-impl Stream for NoiseStream {
-    fn max(&self) -> u16 {
-        unreachable!()
-    }
-
-    fn next(&mut self, rate: u32) -> u16 {
-        self.noise.step_with_rate(rate as usize);
-        self.noise.dac.amp_as_u16()
-    }
-
-    fn on(&self) -> bool {
-        self.noise.is_active()
+    pub fn amp(&self) -> isize {
+        self.dac.amp()
     }
 }
 
