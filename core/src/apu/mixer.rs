@@ -1,5 +1,5 @@
 use super::{noise::Noise, tone::Tone, wave::Wave};
-use crate::hardware::Stream;
+use crate::{cpu::CPU_FREQ_HZ, hardware::Stream};
 use alloc::sync::Arc;
 use bitfield_struct::bitfield;
 use core::sync::atomic::{AtomicIsize, Ordering};
@@ -148,8 +148,8 @@ impl<T: VolumeUnit> Shared<T> {
         }
     }
 
-    fn step(&mut self, rate: u32) {
-        self.channel.lock().step(rate as usize);
+    fn step(&mut self, cycles: usize) {
+        self.channel.lock().step(cycles);
     }
 
     fn sync_channel(&self, channel: T) {
@@ -176,8 +176,8 @@ impl VolumeUnit for Tone {
         self.amp()
     }
 
-    fn step(&mut self, rate: usize) {
-        self.step_with_rate(rate);
+    fn step(&mut self, cycles: usize) {
+        self.step(cycles);
     }
 }
 
@@ -186,8 +186,8 @@ impl VolumeUnit for Wave {
         self.amp()
     }
 
-    fn step(&mut self, rate: usize) {
-        self.step_with_rate(rate);
+    fn step(&mut self, cycles: usize) {
+        self.step(cycles);
     }
 }
 
@@ -196,8 +196,8 @@ impl VolumeUnit for Noise {
         self.amp()
     }
 
-    fn step(&mut self, rate: usize) {
-        self.step_with_rate(rate);
+    fn step(&mut self, cycles: usize) {
+        self.step(cycles);
     }
 }
 
@@ -207,6 +207,7 @@ pub struct MixerStream {
     wave: Shared<Wave>,
     noise: Shared<Noise>,
     volumes: [Arc<AtomicIsize>; 2],
+    upscaler: UpScaler,
 }
 
 impl MixerStream {
@@ -216,6 +217,7 @@ impl MixerStream {
             wave: Shared::new(Wave::new()),
             noise: Shared::new(Noise::new()),
             volumes: [Arc::new(AtomicIsize::new(0)), Arc::new(AtomicIsize::new(0))],
+            upscaler: UpScaler::new(CPU_FREQ_HZ),
         }
     }
 
@@ -225,6 +227,48 @@ impl MixerStream {
 
     fn volume(&self, index: usize) -> isize {
         self.volumes[index].load(Ordering::Relaxed)
+    }
+
+    fn step(&mut self, rate: usize) {
+        let mut cycles = self.upscaler.compute_cycles(rate);
+
+        while cycles > 0 {
+            let sub_cycles = cycles.max(4);
+
+            self.tones[0].step(sub_cycles);
+            self.tones[1].step(sub_cycles);
+            self.wave.step(sub_cycles);
+            self.noise.step(sub_cycles);
+
+            cycles -= sub_cycles;
+        }
+    }
+}
+
+#[derive(Clone)]
+struct UpScaler {
+    target_rate: usize,
+    count: usize,
+}
+
+impl UpScaler {
+    fn new(target_rate: usize) -> Self {
+        Self {
+            target_rate,
+            count: 0,
+        }
+    }
+
+    fn compute_cycles(&mut self, rate: usize) -> usize {
+        let mut cycles = 0;
+
+        while self.count < self.target_rate {
+            self.count += rate;
+            cycles += 1;
+        }
+        self.count -= self.target_rate;
+
+        cycles
     }
 }
 
@@ -236,33 +280,14 @@ impl Stream for MixerStream {
     }
 
     fn next(&mut self, rate: u32) -> u16 {
-        let center = (self.max() / 2) as isize;
-
-        self.tones[0].step(rate);
-        self.tones[1].step(rate);
-        self.wave.step(rate);
-        self.noise.step(rate);
-
-        (0..2)
-            .map(|i| {
-                let mut vol = 0;
-                vol += self.tones[0].volume(i);
-                vol += self.tones[1].volume(i);
-                vol += self.wave.volume(i);
-                vol += self.noise.volume(i);
-                vol *= self.volume(i);
-                vol
-            })
-            .fold(0, |total, vol| total + vol + center) as u16
+        let (left, right) = self.next_dual(rate);
+        (left + right) / 2
     }
 
     fn next_dual(&mut self, rate: u32) -> (u16, u16) {
         let center = (self.max() / 2) as isize;
 
-        self.tones[0].step(rate);
-        self.tones[1].step(rate);
-        self.wave.step(rate);
-        self.noise.step(rate);
+        self.step(rate as usize);
 
         let mut values = (0..2).map(|i| {
             let mut vol = 0;
