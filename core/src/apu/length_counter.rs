@@ -6,7 +6,6 @@ pub struct LengthCounter {
     active: bool,
     length: usize,
     base: usize,
-    freeze: bool,
     first_half: bool,
 }
 
@@ -17,7 +16,6 @@ impl LengthCounter {
             active: false,
             length: 0,
             base,
-            freeze: false,
             first_half: false,
         }
     }
@@ -38,50 +36,37 @@ impl LengthCounter {
             trigger, enable, self, self
         );
 
-        // Conditions to clock when enabled.
-        let disabled_to_enabled = !self.enable && enable; // TODO: GB only. CGB has a different condition.
-        let clock_by_enable = disabled_to_enabled && self.first_half;
-        let freeze_by_enable = if clock_by_enable {
-            self.length == 1
-        } else {
-            false
-        };
+        if enable {
+            // Disabled -> enabled in the first half
+            // should clock once on enable
+            if !self.enable && self.first_half {
+                // Clock unless length reaches zero
+                if self.length != 0 {
+                    self.clock();
 
-        if clock_by_enable {
-            debug!("clock by enable");
-            self.clock();
-        }
-
-        if freeze_by_enable {
-            debug!("freeze by enable");
-            self.freeze = true;
-        } else if !trigger && enable {
-            debug!("unfreeze by enable");
-            self.freeze = false;
-        }
-
-        if trigger && self.length == 0 {
-            self.length = self.base;
-        }
-
-        if trigger {
-            if self.freeze && enable {
-                debug!("clock by trigger");
-                self.clock();
+                    // If counter reaches zero, should deactivate.
+                    // Mark this special case as "freeze"
+                    if self.length == 0 {
+                        self.active = false;
+                    }
+                }
             }
-            self.freeze = false;
-        }
-
-        // Trigger activates counting.
-        if trigger {
-            self.active = true;
         }
 
         self.enable = enable;
 
-        if self.length == 0 {
-            // If the clock makes length zero, should deactivate
-            self.active = false;
+        if trigger {
+            // Trigger on zero length loads max
+            if self.length == 0 {
+                self.length = self.base;
+
+                // Reloading 0 -> max on trigger & enable in the first half
+                // should clock once on enable.
+                if self.enable && self.first_half {
+                    self.clock();
+                }
+            }
+            self.active = true;
         }
     }
 
@@ -89,7 +74,9 @@ impl LengthCounter {
         self.active = false;
     }
 
-    pub fn power_on(&mut self) {}
+    pub fn power_on(&mut self) {
+        self.first_half = false;
+    }
 
     pub fn power_off(&mut self) {
         self.enable = false;
@@ -100,8 +87,8 @@ impl LengthCounter {
         self.length = self.base - value;
     }
 
-    pub fn step(&mut self, frame: Option<usize>) {
-        match frame {
+    pub fn step(&mut self, step: Option<usize>) {
+        match step {
             Some(0) | Some(2) | Some(4) | Some(6) => {
                 self.first_half = true;
             }
