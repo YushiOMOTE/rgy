@@ -233,11 +233,10 @@ impl Wave {
 
     /// Read wave pattern buffer
     pub fn read_wave_buf(&self, offset: u16) -> u8 {
-        let value = match self.adjust_waveram_index(offset - 0xff30) {
+        match self.adjust_waveram_index(offset - 0xff30) {
             Some(index) => self.ram[index],
             None => 0xff,
-        };
-        value
+        }
     }
 
     /// Write wave pattern buffer
@@ -247,8 +246,8 @@ impl Wave {
         }
     }
 
-    pub fn step(&mut self, cycles: usize) {
-        self.length_counter.step(cycles);
+    pub fn step(&mut self, cycles: usize, frame: Option<usize>) {
+        self.length_counter.step(frame);
 
         let times = self.divider.step(cycles);
 

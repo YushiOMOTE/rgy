@@ -150,9 +150,9 @@ impl Noise {
         self.nr44.trigger()
     }
 
-    pub fn step(&mut self, cycles: usize) {
-        self.length_counter.step(cycles);
-        self.envelope.step(cycles);
+    pub fn step(&mut self, cycles: usize, frame: Option<usize>) {
+        self.length_counter.step(frame);
+        self.envelope.step(frame);
 
         let times = self.divider.step(cycles);
 

@@ -249,9 +249,9 @@ impl Sys for Mmu {
         if let Some(req) = self.gpu.step(cycles) {
             self.run_dma(req);
         }
-        self.div.step(cycles);
+        let div_apu = self.div.step(cycles);
+        self.apu.step(cycles, div_apu);
         self.timer.step(cycles);
-        self.apu.step(cycles);
         self.serial.step(cycles);
         self.joypad.poll();
     }

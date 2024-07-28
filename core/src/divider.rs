@@ -49,6 +49,7 @@ impl Divider {
     }
 
     pub fn on_write(&mut self, _value: u8) {
+        log::info!("reset div");
         self.timer.set_counter(0);
     }
 }

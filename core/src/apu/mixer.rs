@@ -1,5 +1,5 @@
-use super::{noise::Noise, tone::Tone, wave::Wave};
-use crate::{cpu::CPU_FREQ_HZ, hardware::Stream};
+use super::{frame_sequencer::FrameSequencer, noise::Noise, tone::Tone, wave::Wave};
+use crate::{cpu::CPU_FREQ_HZ, divider::Divider, hardware::Stream};
 use alloc::sync::Arc;
 use bitfield_struct::bitfield;
 use core::sync::atomic::{AtomicIsize, Ordering};
@@ -9,7 +9,7 @@ pub struct Mixer {
     power: bool,
     nr50: Nr50,
     nr51: Nr51,
-    stream: MixerStream,
+    state: SharedState,
 }
 
 #[bitfield(u8)]
@@ -40,7 +40,7 @@ impl Mixer {
             power: false,
             nr50: Nr50::default(),
             nr51: Nr51::default(),
-            stream: MixerStream::new(),
+            state: SharedState::new(),
         }
     }
 
@@ -77,45 +77,43 @@ impl Mixer {
     }
 
     pub fn sync_tone(&mut self, index: usize, tone: Tone) {
-        self.stream.tones[index].sync_channel(tone);
+        self.state.tones[index].sync_channel(tone);
     }
 
     pub fn sync_wave(&mut self, wave: Wave) {
-        self.stream.wave.sync_channel(wave);
+        self.state.wave.sync_channel(wave);
     }
 
     pub fn sync_noise(&mut self, noise: Noise) {
-        self.stream.noise.sync_channel(noise);
+        self.state.noise.sync_channel(noise);
     }
 
     fn sync_volume(&mut self) {
-        self.stream
+        self.state
             .sync_volume(0, (self.nr50.left_volume() + 1) as isize);
-        self.stream
+        self.state
             .sync_volume(1, (self.nr50.right_volume() + 1) as isize);
 
-        self.stream.tones[0].sync_volume(0, self.nr51.ch1_left() as isize);
-        self.stream.tones[0].sync_volume(1, self.nr51.ch1_right() as isize);
-        self.stream.tones[1].sync_volume(0, self.nr51.ch2_left() as isize);
-        self.stream.tones[1].sync_volume(1, self.nr51.ch2_right() as isize);
-        self.stream
+        self.state.tones[0].sync_volume(0, self.nr51.ch1_left() as isize);
+        self.state.tones[0].sync_volume(1, self.nr51.ch1_right() as isize);
+        self.state.tones[1].sync_volume(0, self.nr51.ch2_left() as isize);
+        self.state.tones[1].sync_volume(1, self.nr51.ch2_right() as isize);
+        self.state
             .wave
             .sync_volume(0, self.nr51.ch3_left() as isize);
-        self.stream
+        self.state
             .wave
             .sync_volume(1, self.nr51.ch3_right() as isize);
-        self.stream
+        self.state
             .noise
             .sync_volume(0, self.nr51.ch4_left() as isize);
-        self.stream
+        self.state
             .noise
             .sync_volume(1, self.nr51.ch4_right() as isize);
     }
 
-    pub fn step(&mut self, _cycles: usize) {}
-
     pub fn create_stream(&self) -> MixerStream {
-        self.stream.clone()
+        MixerStream::new(self.state.clone())
     }
 
     pub fn power_on(&mut self) {
@@ -148,8 +146,8 @@ impl<T: VolumeUnit> Shared<T> {
         }
     }
 
-    fn step(&mut self, cycles: usize) {
-        self.channel.lock().step(cycles);
+    fn step(&mut self, cycles: usize, step: Option<usize>) {
+        self.channel.lock().step(cycles, step);
     }
 
     fn sync_channel(&self, channel: T) {
@@ -168,7 +166,7 @@ impl<T: VolumeUnit> Shared<T> {
 trait VolumeUnit {
     fn amp(&self) -> isize;
 
-    fn step(&mut self, rate: usize);
+    fn step(&mut self, rate: usize, step: Option<usize>);
 }
 
 impl VolumeUnit for Tone {
@@ -176,8 +174,8 @@ impl VolumeUnit for Tone {
         self.amp()
     }
 
-    fn step(&mut self, cycles: usize) {
-        self.step(cycles);
+    fn step(&mut self, cycles: usize, step: Option<usize>) {
+        self.step(cycles, step);
     }
 }
 
@@ -186,8 +184,8 @@ impl VolumeUnit for Wave {
         self.amp()
     }
 
-    fn step(&mut self, cycles: usize) {
-        self.step(cycles);
+    fn step(&mut self, cycles: usize, step: Option<usize>) {
+        self.step(cycles, step);
     }
 }
 
@@ -196,28 +194,26 @@ impl VolumeUnit for Noise {
         self.amp()
     }
 
-    fn step(&mut self, cycles: usize) {
-        self.step(cycles);
+    fn step(&mut self, cycles: usize, step: Option<usize>) {
+        self.step(cycles, step);
     }
 }
 
 #[derive(Clone)]
-pub struct MixerStream {
+pub struct SharedState {
     tones: [Shared<Tone>; 2],
     wave: Shared<Wave>,
     noise: Shared<Noise>,
     volumes: [Arc<AtomicIsize>; 2],
-    upscaler: UpScaler,
 }
 
-impl MixerStream {
+impl SharedState {
     fn new() -> Self {
         Self {
             tones: [Shared::new(Tone::new(true)), Shared::new(Tone::new(false))],
             wave: Shared::new(Wave::new()),
             noise: Shared::new(Noise::new()),
             volumes: [Arc::new(AtomicIsize::new(0)), Arc::new(AtomicIsize::new(0))],
-            upscaler: UpScaler::new(CPU_FREQ_HZ),
         }
     }
 
@@ -228,6 +224,24 @@ impl MixerStream {
     fn volume(&self, index: usize) -> isize {
         self.volumes[index].load(Ordering::Relaxed)
     }
+}
+
+pub struct MixerStream {
+    state: SharedState,
+    upscaler: UpScaler,
+    divider: Divider,
+    frame_sequencer: FrameSequencer,
+}
+
+impl MixerStream {
+    fn new(state: SharedState) -> Self {
+        Self {
+            state,
+            upscaler: UpScaler::new(CPU_FREQ_HZ),
+            divider: Divider::new(),
+            frame_sequencer: FrameSequencer::new(),
+        }
+    }
 
     fn step(&mut self, rate: usize) {
         let mut cycles = self.upscaler.compute_cycles(rate);
@@ -235,10 +249,13 @@ impl MixerStream {
         while cycles > 0 {
             let sub_cycles = cycles.max(4);
 
-            self.tones[0].step(sub_cycles);
-            self.tones[1].step(sub_cycles);
-            self.wave.step(sub_cycles);
-            self.noise.step(sub_cycles);
+            let div_apu = self.divider.step(sub_cycles);
+            let step = self.frame_sequencer.step(cycles, div_apu);
+
+            self.state.tones[0].step(sub_cycles, step);
+            self.state.tones[1].step(sub_cycles, step);
+            self.state.wave.step(sub_cycles, step);
+            self.state.noise.step(sub_cycles, step);
 
             cycles -= sub_cycles;
         }
@@ -291,11 +308,11 @@ impl Stream for MixerStream {
 
         let mut values = (0..2).map(|i| {
             let mut vol = 0;
-            vol += self.tones[0].volume(i);
-            vol += self.tones[1].volume(i);
-            vol += self.wave.volume(i);
-            vol += self.noise.volume(i);
-            vol *= self.volume(i);
+            vol += self.state.tones[0].volume(i);
+            vol += self.state.tones[1].volume(i);
+            vol += self.state.wave.volume(i);
+            vol += self.state.noise.volume(i);
+            vol *= self.state.volume(i);
             (vol + center) as u16 * 2
         });
 

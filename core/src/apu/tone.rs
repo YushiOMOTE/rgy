@@ -245,14 +245,14 @@ impl Tone {
         self.dac.power_off();
     }
 
-    pub fn step(&mut self, cycles: usize) {
+    pub fn step(&mut self, cycles: usize, frame: Option<usize>) {
         if let Some(sweep) = self.sweep.as_mut() {
-            if let Some(new_freq) = sweep.step(cycles) {
+            if let Some(new_freq) = sweep.step(frame) {
                 self.freq = Freq::from_value(new_freq);
             }
         }
-        self.length_counter.step(cycles);
-        self.envelope.step(cycles);
+        self.length_counter.step(frame);
+        self.envelope.step(frame);
 
         let times = self.divider.step(cycles);
 

@@ -1,4 +1,3 @@
-use super::frame_sequencer::FrameSequencer;
 use log::*;
 
 #[derive(Clone, Debug)]
@@ -8,7 +7,6 @@ pub struct LengthCounter {
     length: usize,
     base: usize,
     freeze: bool,
-    frame_sequencer: FrameSequencer,
     first_half: bool,
 }
 
@@ -20,7 +18,6 @@ impl LengthCounter {
             length: 0,
             base,
             freeze: false,
-            frame_sequencer: FrameSequencer::new(),
             first_half: false,
         }
     }
@@ -92,9 +89,7 @@ impl LengthCounter {
         self.active = false;
     }
 
-    pub fn power_on(&mut self) {
-        self.frame_sequencer.reset_step();
-    }
+    pub fn power_on(&mut self) {}
 
     pub fn power_off(&mut self) {
         self.enable = false;
@@ -105,8 +100,8 @@ impl LengthCounter {
         self.length = self.base - value;
     }
 
-    pub fn step(&mut self, count: usize) {
-        match self.frame_sequencer.step(count) {
+    pub fn step(&mut self, frame: Option<usize>) {
+        match frame {
             Some(0) | Some(2) | Some(4) | Some(6) => {
                 self.first_half = true;
             }

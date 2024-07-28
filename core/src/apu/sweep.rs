@@ -1,12 +1,10 @@
 use crate::clock::Timer;
 
-use super::frame_sequencer::FrameSequencer;
 use log::*;
 
 #[derive(Clone, Debug)]
 pub struct Sweep {
     disabling_channel: bool,
-    frame_sequencer: FrameSequencer,
     freq: usize,
     timer: Timer,
     subtract: bool,
@@ -18,7 +16,6 @@ pub struct Sweep {
 impl Sweep {
     pub fn new() -> Self {
         Self {
-            frame_sequencer: FrameSequencer::new(),
             freq: 0,
             timer: Timer::disabled(),
             subtract: false,
@@ -72,8 +69,8 @@ impl Sweep {
         self.subtract = subtract;
     }
 
-    pub fn step(&mut self, cycles: usize) -> Option<usize> {
-        match self.frame_sequencer.step(cycles) {
+    pub fn step(&mut self, frame: Option<usize>) -> Option<usize> {
+        match frame {
             Some(2) | Some(6) => {}
             _ => return None,
         }
@@ -132,12 +129,9 @@ impl Sweep {
         self.disabling_channel = true;
     }
 
-    pub fn power_on(&mut self) {
-        self.frame_sequencer.reset_step();
-    }
+    pub fn power_on(&mut self) {}
 
     pub fn power_off(&mut self) {
-        self.frame_sequencer.reset_step();
         self.freq = 0;
         self.timer.disable();
         self.timer.reset();
