@@ -7,7 +7,7 @@ pub struct Timer {
 }
 
 impl Timer {
-    fn new(enable: bool) -> Self {
+    pub fn new(enable: bool) -> Self {
         Self {
             enable,
             counter: 0,
@@ -35,14 +35,21 @@ impl Timer {
         self.enable = false;
     }
 
-    /// Update the interval of the timer resetting the current counter.
+    /// Update the interval of the timer.
     pub fn set_interval(&mut self, interval: usize) {
         self.interval = interval;
-        self.counter = 0;
+    }
+
+    pub fn counter(&self) -> usize {
+        self.counter
+    }
+
+    pub fn set_counter(&mut self, counter: usize) {
+        self.counter = counter;
     }
 
     /// Get the remaining ticks until the timer expires next.
-    pub fn expires_in(&self) -> usize {
+    pub fn remaining(&self) -> usize {
         self.interval.saturating_sub(self.counter)
     }
 
@@ -165,17 +172,17 @@ fn test_timer_expires_in() {
 
     timer.set_interval(3);
 
-    assert_eq!(timer.expires_in(), 3);
+    assert_eq!(timer.remaining(), 3);
     assert!(!timer.tick());
-    assert_eq!(timer.expires_in(), 2);
+    assert_eq!(timer.remaining(), 2);
     assert!(!timer.tick());
-    assert_eq!(timer.expires_in(), 1);
+    assert_eq!(timer.remaining(), 1);
     assert!(timer.tick());
-    assert_eq!(timer.expires_in(), 3);
+    assert_eq!(timer.remaining(), 3);
     assert!(!timer.tick());
-    assert_eq!(timer.expires_in(), 2);
+    assert_eq!(timer.remaining(), 2);
     assert!(!timer.tick());
-    assert_eq!(timer.expires_in(), 1);
+    assert_eq!(timer.remaining(), 1);
     assert!(timer.tick());
 }
 
@@ -200,18 +207,18 @@ fn test_timer_reset() {
 
     timer.set_interval(3);
 
-    assert_eq!(timer.expires_in(), 3);
+    assert_eq!(timer.remaining(), 3);
     assert!(!timer.tick());
 
     timer.reset();
 
-    assert_eq!(timer.expires_in(), 0);
+    assert_eq!(timer.remaining(), 0);
 
     for _ in 0..10 {
         assert!(!timer.tick());
     }
 
-    assert_eq!(timer.expires_in(), 0);
+    assert_eq!(timer.remaining(), 0);
 
     timer.set_interval(2);
 

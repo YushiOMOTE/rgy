@@ -1,11 +1,10 @@
-use super::{frame_sequencer::FrameSequencer, timer::Timer};
-use crate::cpu::CPU_FREQ_HZ;
+use crate::clock::Timer;
+
 use log::*;
 
 #[derive(Clone, Debug)]
 pub struct Sweep {
     disabling_channel: bool,
-    frame_sequencer: FrameSequencer,
     freq: usize,
     timer: Timer,
     subtract: bool,
@@ -17,7 +16,6 @@ pub struct Sweep {
 impl Sweep {
     pub fn new() -> Self {
         Self {
-            frame_sequencer: FrameSequencer::new(CPU_FREQ_HZ),
             freq: 0,
             timer: Timer::disabled(),
             subtract: false,
@@ -30,10 +28,6 @@ impl Sweep {
 
     pub fn disabling_channel(&self) -> bool {
         self.disabling_channel
-    }
-
-    pub fn freq(&self) -> usize {
-        self.freq
     }
 
     pub fn trigger(&mut self, freq: usize, period: usize, subtract: bool, shift: usize) {
@@ -75,13 +69,8 @@ impl Sweep {
         self.subtract = subtract;
     }
 
-    pub fn step_with_rate(&mut self, rate: usize) {
-        self.frame_sequencer.set_source_clock_rate(rate);
-        self.step(1);
-    }
-
-    pub fn step(&mut self, cycles: usize) -> Option<usize> {
-        match self.frame_sequencer.step(cycles) {
+    pub fn step(&mut self, frame: Option<usize>) -> Option<usize> {
+        match frame {
             Some(2) | Some(6) => {}
             _ => return None,
         }
@@ -130,6 +119,7 @@ impl Sweep {
     }
 
     fn reload_timer(&mut self) {
+        self.timer.reset();
         self.timer
             .set_interval(if self.period == 0 { 8 } else { self.period });
     }
@@ -139,12 +129,9 @@ impl Sweep {
         self.disabling_channel = true;
     }
 
-    pub fn power_on(&mut self) {
-        self.frame_sequencer.reset_step();
-    }
+    pub fn power_on(&mut self) {}
 
     pub fn power_off(&mut self) {
-        self.frame_sequencer.reset_step();
         self.freq = 0;
         self.timer.disable();
         self.timer.reset();

@@ -1,6 +1,7 @@
 use crate::apu::Apu;
 use crate::cgb::Cgb;
 use crate::cpu::Sys;
+use crate::divider::Divider;
 use crate::dma::{Dma, DmaRequest};
 use crate::gpu::Gpu;
 use crate::hardware::HardwareHandle;
@@ -24,6 +25,7 @@ pub struct Mmu {
     hram: Hram,
     gpu: Gpu,
     mbc: Mbc,
+    div: Divider,
     timer: Timer,
     ic: Ic,
     serial: Serial,
@@ -43,6 +45,7 @@ impl Mmu {
             hram: Hram::new(),
             gpu: Gpu::new(hw.clone(), irq.clone(), color),
             mbc: Mbc::new(hw.clone(), rom, color),
+            div: Divider::new(),
             timer: Timer::new(irq.clone()),
             ic: Ic::new(irq.clone()),
             serial: Serial::new(hw.clone(), irq.clone()),
@@ -59,7 +62,8 @@ impl Mmu {
             0xff01 => self.serial.get_data(),
             0xff02 => self.serial.get_ctrl(),
             0xff03 => todo!("i/o write: addr={:04x}", addr),
-            0xff04..=0xff07 => self.timer.on_read(addr),
+            0xff04 => self.div.on_read(),
+            0xff05..=0xff07 => self.timer.on_read(addr),
             0xff08..=0xff0e => todo!("i/o read: addr={:04x}", addr),
             0xff0f => self.ic.read_flags(),
             0xff10 => self.apu.read_tone_sweep(),
@@ -123,7 +127,8 @@ impl Mmu {
             0xff01 => self.serial.set_data(v),
             0xff02 => self.serial.set_ctrl(v),
             0xff03 => todo!("i/o write: addr={:04x}, v={:02x}", addr, v),
-            0xff04..=0xff07 => self.timer.on_write(addr, v),
+            0xff04 => self.div.on_write(v),
+            0xff05..=0xff07 => self.timer.on_write(addr, v),
             0xff08..=0xff0e => todo!("i/o write: addr={:04x}, v={:02x}", addr, v),
             0xff0f => self.ic.write_flags(v),
             0xff10 => self.apu.write_tone_sweep(v),
@@ -244,10 +249,17 @@ impl Sys for Mmu {
         if let Some(req) = self.gpu.step(cycles) {
             self.run_dma(req);
         }
-        self.apu.step(cycles);
+        let div_apu = self.div.step(cycles);
+        self.apu.step(cycles, div_apu);
         self.timer.step(cycles);
         self.serial.step(cycles);
         self.joypad.poll();
+    }
+
+    /// Stop instruction is called.
+    fn stop(&mut self) {
+        error!("STOP instruction is called");
+        self.cgb.try_switch_speed();
     }
 }
 
@@ -294,4 +306,6 @@ impl Sys for Ram {
     }
 
     fn step(&mut self, _: usize) {}
+
+    fn stop(&mut self) {}
 }

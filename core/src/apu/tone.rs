@@ -1,9 +1,5 @@
-use crate::cpu::CPU_FREQ_HZ;
-
-use super::{
-    clock_divider::ClockDivider, dac::Dac, envelope::Envelope, length_counter::LengthCounter,
-    sweep::Sweep, timer::Timer,
-};
+use super::{dac::Dac, envelope::Envelope, length_counter::LengthCounter, sweep::Sweep};
+use crate::clock::{ClockDivider, Timer};
 
 use bitfield_struct::bitfield;
 
@@ -104,7 +100,7 @@ impl Tone {
             nr14: Nr14::default(),
             length_counter: LengthCounter::type64(),
             timer: Timer::enabled(),
-            divider: ClockDivider::new(CPU_FREQ_HZ, TONE_FREQ_HZ),
+            divider: ClockDivider::new(TONE_FREQ_HZ),
             freq: Freq::default(),
             dac: Dac::new(),
             index: 0,
@@ -249,32 +245,16 @@ impl Tone {
         self.dac.power_off();
     }
 
-    pub fn step(&mut self, cycles: usize) {
+    pub fn step(&mut self, cycles: usize, frame: Option<usize>) {
         if let Some(sweep) = self.sweep.as_mut() {
-            if let Some(new_freq) = sweep.step(cycles) {
+            if let Some(new_freq) = sweep.step(frame) {
                 self.freq = Freq::from_value(new_freq);
             }
         }
-        self.length_counter.step(cycles);
-        self.envelope.step(cycles);
+        self.length_counter.step(frame);
+        self.envelope.step(frame);
 
         let times = self.divider.step(cycles);
-
-        for _ in 0..times {
-            self.update();
-        }
-    }
-
-    pub fn step_with_rate(&mut self, rate: usize) {
-        if let Some(sweep) = self.sweep.as_mut() {
-            sweep.step_with_rate(rate);
-            self.freq = Freq::from_value(sweep.freq());
-        }
-        self.length_counter.step_with_rate(rate);
-        self.envelope.step_with_rate(rate);
-        self.divider.set_source_clock_rate(rate);
-
-        let times = self.divider.step(1);
 
         for _ in 0..times {
             self.update();
@@ -305,6 +285,7 @@ impl Tone {
     }
 
     fn reload_timer(&mut self) {
+        self.timer.reset();
         self.timer.set_interval(self.timer_interval());
     }
 

@@ -1,9 +1,9 @@
 use log::*;
 
-use crate::cpu::CPU_FREQ_HZ;
 use bitfield_struct::bitfield;
 
-use super::{clock_divider::ClockDivider, dac::Dac, length_counter::LengthCounter, timer::Timer};
+use super::{dac::Dac, length_counter::LengthCounter};
+use crate::clock::{ClockDivider, Timer};
 
 const RAM_SIZE: usize = 16;
 const WAVE_SIZE: usize = RAM_SIZE * 2;
@@ -123,7 +123,7 @@ impl Wave {
             nr32: Nr32::default(),
             nr33: Nr33::default(),
             nr34: Nr34::default(),
-            divider: ClockDivider::new(CPU_FREQ_HZ, WAVE_FREQ_HZ),
+            divider: ClockDivider::new(WAVE_FREQ_HZ),
             timer: Timer::enabled(),
             last_sample: 0,
             dac: Dac::new(),
@@ -233,11 +233,10 @@ impl Wave {
 
     /// Read wave pattern buffer
     pub fn read_wave_buf(&self, offset: u16) -> u8 {
-        let value = match self.adjust_waveram_index(offset - 0xff30) {
+        match self.adjust_waveram_index(offset - 0xff30) {
             Some(index) => self.ram[index],
             None => 0xff,
-        };
-        value
+        }
     }
 
     /// Write wave pattern buffer
@@ -247,22 +246,10 @@ impl Wave {
         }
     }
 
-    pub fn step(&mut self, cycles: usize) {
-        self.length_counter.step(cycles);
+    pub fn step(&mut self, cycles: usize, frame: Option<usize>) {
+        self.length_counter.step(frame);
 
         let times = self.divider.step(cycles);
-
-        for _ in 0..times {
-            self.update();
-        }
-    }
-
-    pub fn step_with_rate(&mut self, rate: usize) {
-        self.length_counter.step_with_rate(rate);
-
-        self.divider.set_source_clock_rate(rate);
-
-        let times = self.divider.step(1);
 
         for _ in 0..times {
             self.update();
@@ -307,7 +294,7 @@ impl Wave {
         // Timer tick is 2 cycles. 2 ticks means 4 cycles.
         // Having this in CPU instruction means the instraction is happening
         // at the same time that APU is reading a sample from the Wave RAM.
-        self.timer.expires_in() == 2
+        self.timer.remaining() == 2
     }
 
     fn update(&mut self) {
@@ -341,10 +328,12 @@ impl Wave {
     }
 
     fn load_initial_timer(&mut self) {
+        self.timer.reset();
         self.timer.set_interval(self.timer_interval() + 3);
     }
 
     fn reload_timer(&mut self) {
+        self.timer.reset();
         self.timer.set_interval(self.timer_interval());
     }
 

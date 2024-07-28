@@ -4,11 +4,10 @@ use log::*;
 
 use crate::hardware::HardwareHandle;
 
-use self::{mixer::Mixer, noise::Noise, tone::Tone, wave::Wave};
+use self::{frame_sequencer::FrameSequencer, mixer::Mixer, noise::Noise, tone::Tone, wave::Wave};
 
 use bitfield_struct::bitfield;
 
-mod clock_divider;
 mod dac;
 mod envelope;
 mod frame_sequencer;
@@ -16,7 +15,6 @@ mod length_counter;
 mod mixer;
 mod noise;
 mod sweep;
-mod timer;
 mod tone;
 mod wave;
 
@@ -26,6 +24,7 @@ pub struct Apu {
     noise: Noise,
     mixer: Mixer,
     nr52: Nr52,
+    frame_sequencer: FrameSequencer,
 }
 
 #[bitfield(u8)]
@@ -53,6 +52,7 @@ impl Apu {
             noise: Noise::new(),
             mixer,
             nr52: Nr52::default(),
+            frame_sequencer: FrameSequencer::new(),
         }
     }
 
@@ -258,6 +258,9 @@ impl Apu {
 
         if !before && after {
             info!("Sound master enabled");
+
+            self.frame_sequencer.reset_step();
+
             for tone in &mut self.tones {
                 tone.power_on();
             }
@@ -289,12 +292,13 @@ impl Apu {
         self.mixer.sync_noise(self.noise.clone());
     }
 
-    pub fn step(&mut self, cycles: usize) {
+    pub fn step(&mut self, cycles: usize, div_apu: bool) {
+        let frame = self.frame_sequencer.step(cycles, div_apu);
+
         for tone in &mut self.tones {
-            tone.step(cycles);
+            tone.step(cycles, frame);
         }
-        self.wave.step(cycles);
-        self.noise.step(cycles);
-        self.mixer.step(cycles);
+        self.wave.step(cycles, frame);
+        self.noise.step(cycles, frame);
     }
 }

@@ -1,4 +1,4 @@
-use super::clock_divider::ClockDivider;
+use crate::clock::ClockDivider;
 
 const FRAME_SEQUENCER_FREQ_HZ: usize = 512;
 
@@ -21,69 +21,54 @@ const FRAME_SEQUENCER_FREQ_HZ: usize = 512;
 pub struct FrameSequencer {
     divider: ClockDivider,
     step: usize,
+    resetting: usize,
 }
 
 impl FrameSequencer {
-    pub fn new(source_clock_rate: usize) -> Self {
+    pub fn new() -> Self {
         Self {
-            divider: ClockDivider::new(source_clock_rate, FRAME_SEQUENCER_FREQ_HZ),
+            divider: ClockDivider::new(FRAME_SEQUENCER_FREQ_HZ),
             step: 0,
+            resetting: 0,
         }
-    }
-
-    pub fn set_source_clock_rate(&mut self, source_clock_rate: usize) {
-        self.divider.set_source_clock_rate(source_clock_rate);
-    }
-
-    pub fn step(&mut self, cycles: usize) -> Option<usize> {
-        let times = self.divider.step(cycles);
-
-        if times == 0 {
-            return None;
-        }
-        // assert_eq!(times, 1);
-
-        let current_step = self.step;
-        self.step = (self.step + 1) % 8;
-        Some(current_step)
     }
 
     pub fn reset_step(&mut self) {
         self.step = 0;
+        // This is to prevent updaating step immediately to 1 after reset
+        // when reset and div-apu happens in the same machine cycle,
+        self.resetting = 4;
         self.divider.reset();
+    }
+
+    pub fn step(&mut self, cycles: usize, div_apu: bool) -> Option<usize> {
+        if div_apu && self.resetting == 0 {
+            return Some(self.update());
+        }
+        self.resetting = self.resetting.saturating_sub(cycles);
+        None
+    }
+
+    fn update(&mut self) -> usize {
+        let current_step = self.step;
+        self.step = (self.step + 1) % 8;
+        current_step
     }
 }
 
 #[test]
 fn test_frame_sequencer() {
-    let mut seq = FrameSequencer::new(4194304);
+    let mut seq = FrameSequencer::new();
 
-    for i in 1..=(8192 * 10) {
-        match i {
-            8192 => assert_eq!(seq.step(1), Some(0)),
-            16384 => assert_eq!(seq.step(1), Some(1)),
-            24576 => assert_eq!(seq.step(1), Some(2)),
-            32768 => assert_eq!(seq.step(1), Some(3)),
-            40960 => assert_eq!(seq.step(1), Some(4)),
-            49152 => assert_eq!(seq.step(1), Some(5)),
-            57344 => assert_eq!(seq.step(1), Some(6)),
-            65536 => assert_eq!(seq.step(1), Some(7)),
-            73728 => assert_eq!(seq.step(1), Some(0)),
-            81920 => assert_eq!(seq.step(1), Some(1)),
-            _ => assert_eq!(seq.step(1), None),
-        }
-    }
-}
-
-#[test]
-fn test_frame_sequencer_reset() {
-    let mut seq = FrameSequencer::new(1024);
-
-    assert_eq!(seq.step(1), None);
-    assert_eq!(seq.step(1), Some(0));
-    assert_eq!(seq.step(1), None);
-    assert_eq!(seq.step(1), Some(1));
-    seq.reset_step();
-    assert_eq!(seq.step(1), None);
-    assert_eq!(seq.step(1), Some(0));
+    assert_eq!(seq.step(1, true), Some(0));
+    assert_eq!(seq.step(1, true), Some(1));
+    assert_eq!(seq.step(1, true), Some(2));
+    assert_eq!(seq.step(1, true), Some(3));
+    assert_eq!(seq.step(1, true), Some(4));
+    assert_eq!(seq.step(1, true), Some(5));
+    assert_eq!(seq.step(1, true), Some(6));
+    assert_eq!(seq.step(1, true), Some(7));
+    assert_eq!(seq.step(1, true), Some(0));
+    assert_eq!(seq.step(1, true), Some(1));
+    assert_eq!(seq.step(1, true), Some(2));
 }

@@ -1,9 +1,5 @@
-use crate::cpu::CPU_FREQ_HZ;
-
-use super::{
-    clock_divider::ClockDivider, dac::Dac, envelope::Envelope, length_counter::LengthCounter,
-    timer::Timer,
-};
+use super::{dac::Dac, envelope::Envelope, length_counter::LengthCounter};
+use crate::clock::{ClockDivider, Timer};
 
 use bitfield_struct::bitfield;
 
@@ -71,7 +67,7 @@ impl Noise {
             nr44: Nr44::default(),
 
             length_counter: LengthCounter::type64(),
-            divider: ClockDivider::new(CPU_FREQ_HZ, NOISE_FREQ_HZ),
+            divider: ClockDivider::new(NOISE_FREQ_HZ),
             timer: Timer::enabled(),
             envelope: Envelope::new(),
             lfsr: Lfsr::new(),
@@ -154,24 +150,11 @@ impl Noise {
         self.nr44.trigger()
     }
 
-    pub fn step(&mut self, cycles: usize) {
-        self.length_counter.step(cycles);
-        self.envelope.step(cycles);
+    pub fn step(&mut self, cycles: usize, frame: Option<usize>) {
+        self.length_counter.step(frame);
+        self.envelope.step(frame);
 
         let times = self.divider.step(cycles);
-
-        for _ in 0..times {
-            self.update();
-        }
-    }
-
-    pub fn step_with_rate(&mut self, rate: usize) {
-        self.length_counter.step_with_rate(rate);
-        self.envelope.step_with_rate(rate);
-
-        self.divider.set_source_clock_rate(rate);
-
-        let times = self.divider.step(1);
 
         for _ in 0..times {
             self.update();
@@ -198,6 +181,7 @@ impl Noise {
     }
 
     fn reload_timer(&mut self) {
+        self.timer.reset();
         self.timer.set_interval(self.timer_interval());
     }
 
