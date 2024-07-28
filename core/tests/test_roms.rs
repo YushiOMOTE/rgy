@@ -142,7 +142,7 @@ fn cpu_instrs() {
     const EXPECTED: &str = "cpu_instrs\n\n01:ok  02:ok  03:ok  04:ok  05:ok  06:ok  07:ok  08:ok  09:ok  10:ok  11:ok  \n\nPassed all tests";
     test_rom(
         Expected::Serial(EXPECTED),
-        "../roms/cpu_instrs/cpu_instrs.gb",
+        "../roms/blargg/cpu_instrs/cpu_instrs.gb",
     );
 }
 
@@ -151,7 +151,7 @@ fn instr_timing() {
     const EXPECTED: &str = "instr_timing\n\n\nPassed";
     test_rom(
         Expected::Serial(EXPECTED),
-        "../roms/instr_timing/instr_timing.gb",
+        "../roms/blargg/instr_timing/instr_timing.gb",
     );
 }
 
@@ -160,7 +160,7 @@ fn mem_timing() {
     const EXPECTED: &str = "mem_timing\n\n01:ok  02:ok  03:ok  \n\nPassed all tests";
     test_rom(
         Expected::Serial(EXPECTED),
-        "../roms/mem_timing/mem_timing.gb",
+        "../roms/blargg/mem_timing/mem_timing.gb",
     );
 }
 
@@ -168,7 +168,7 @@ fn mem_timing() {
 fn mem_timing2() {
     test_rom(
         Expected::from_file("tests/mem_timing2.txt"),
-        "../roms/mem_timing-2/mem_timing.gb",
+        "../roms/blargg/mem_timing-2/mem_timing.gb",
     );
 }
 
@@ -176,7 +176,7 @@ fn mem_timing2() {
 fn halt_bug() {
     test_rom(
         Expected::from_file("tests/halt_bug.txt"),
-        "../roms/halt_bug.gb",
+        "../roms/blargg/halt_bug.gb",
     );
 }
 
@@ -186,7 +186,7 @@ fn interrupt_time() {
     // The test compares with the expected display result in DMG mode that consumes 13 cycles when serial interrupt triggered manually.
     test_rom(
         Expected::from_file("tests/interrupt_time.txt"),
-        "../roms/interrupt_time/interrupt_time.gb",
+        "../roms/blargg/interrupt_time/interrupt_time.gb",
     );
 }
 
@@ -194,7 +194,7 @@ fn interrupt_time() {
 fn dmg_sound_01_registers() {
     test_rom(
         Expected::from_file("tests/dmg_sound_01_registers.txt"),
-        "../roms/dmg_sound/rom_singles/01-registers.gb",
+        "../roms/blargg/dmg_sound/rom_singles/01-registers.gb",
     );
 }
 
@@ -202,7 +202,7 @@ fn dmg_sound_01_registers() {
 fn dmg_sound_02_len_ctr() {
     test_rom(
         Expected::from_file("tests/dmg_sound_02_len_ctr.txt"),
-        "../roms/dmg_sound/rom_singles/02-len ctr.gb",
+        "../roms/blargg/dmg_sound/rom_singles/02-len ctr.gb",
     );
 }
 
@@ -210,7 +210,7 @@ fn dmg_sound_02_len_ctr() {
 fn dmg_sound_03_trigger() {
     test_rom(
         Expected::from_file("tests/dmg_sound_03_trigger.txt"),
-        "../roms/dmg_sound/rom_singles/03-trigger.gb",
+        "../roms/blargg/dmg_sound/rom_singles/03-trigger.gb",
     );
 }
 
@@ -218,7 +218,7 @@ fn dmg_sound_03_trigger() {
 fn dmg_sound_04_sweep() {
     test_rom(
         Expected::from_file("tests/dmg_sound_04_sweep.txt"),
-        "../roms/dmg_sound/rom_singles/04-sweep.gb",
+        "../roms/blargg/dmg_sound/rom_singles/04-sweep.gb",
     );
 }
 
@@ -226,7 +226,7 @@ fn dmg_sound_04_sweep() {
 fn dmg_sound_05_sweep_details() {
     test_rom(
         Expected::from_file("tests/dmg_sound_05_sweep_details.txt"),
-        "../roms/dmg_sound/rom_singles/05-sweep details.gb",
+        "../roms/blargg/dmg_sound/rom_singles/05-sweep details.gb",
     );
 }
 
@@ -234,7 +234,7 @@ fn dmg_sound_05_sweep_details() {
 fn dmg_sound_06_overflow_on_trigger() {
     test_rom(
         Expected::from_file("tests/dmg_sound_06_overflow_on_trigger.txt"),
-        "../roms/dmg_sound/rom_singles/06-overflow on trigger.gb",
+        "../roms/blargg/dmg_sound/rom_singles/06-overflow on trigger.gb",
     );
 }
 
@@ -242,7 +242,7 @@ fn dmg_sound_06_overflow_on_trigger() {
 fn dmg_sound_07_len_sweep_period_sync() {
     test_rom(
         Expected::from_file("tests/dmg_sound_07_len_sweep_period_sync.txt"),
-        "../roms/dmg_sound/rom_singles/07-len sweep period sync.gb",
+        "../roms/blargg/dmg_sound/rom_singles/07-len sweep period sync.gb",
     );
 }
 
@@ -250,7 +250,7 @@ fn dmg_sound_07_len_sweep_period_sync() {
 fn dmg_sound_08_len_ctr_during_power() {
     test_rom(
         Expected::from_file("tests/dmg_sound_08_len_ctr_during_power.txt"),
-        "../roms/dmg_sound/rom_singles/08-len ctr during power.gb",
+        "../roms/blargg/dmg_sound/rom_singles/08-len ctr during power.gb",
     );
 }
 
@@ -258,7 +258,7 @@ fn dmg_sound_08_len_ctr_during_power() {
 fn dmg_sound_09_wave_read_while_on() {
     test_rom(
         Expected::from_file("tests/dmg_sound_09_wave_read_while_on.txt"),
-        "../roms/dmg_sound/rom_singles/09-wave read while on.gb",
+        "../roms/blargg/dmg_sound/rom_singles/09-wave read while on.gb",
     );
 }
 
@@ -266,7 +266,7 @@ fn dmg_sound_09_wave_read_while_on() {
 fn dmg_sound_10_wave_trigger_while_on() {
     test_rom(
         Expected::from_file("tests/dmg_sound_10_wave_trigger_while_on.txt"),
-        "../roms/dmg_sound/rom_singles/10-wave trigger while on.gb",
+        "../roms/blargg/dmg_sound/rom_singles/10-wave trigger while on.gb",
     );
 }
 
@@ -274,7 +274,7 @@ fn dmg_sound_10_wave_trigger_while_on() {
 fn dmg_sound_11_regs_after_power() {
     test_rom(
         Expected::from_file("tests/dmg_sound_11_regs_after_power.txt"),
-        "../roms/dmg_sound/rom_singles/11-regs after power.gb",
+        "../roms/blargg/dmg_sound/rom_singles/11-regs after power.gb",
     );
 }
 
@@ -282,6 +282,6 @@ fn dmg_sound_11_regs_after_power() {
 fn dmg_sound_12_wave_write_while_on() {
     test_rom(
         Expected::from_file("tests/dmg_sound_12_wave_write_while_on.txt"),
-        "../roms/dmg_sound/rom_singles/12-wave write while on.gb",
+        "../roms/blargg/dmg_sound/rom_singles/12-wave write while on.gb",
     );
 }
