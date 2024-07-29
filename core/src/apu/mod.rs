@@ -294,11 +294,10 @@ impl Apu {
 
     /// Read PCM12 register
     pub fn read_pcm12(&self) -> u8 {
-        let pcm = Pcm::default()
+        Pcm::default()
             .with_low(self.tones[0].pcm())
-            .with_high(self.tones[1].pcm());
-
-        pcm.into_bits()
+            .with_high(self.tones[1].pcm())
+            .into_bits()
     }
 
     /// Read PCM34 register
