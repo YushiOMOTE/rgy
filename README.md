@@ -73,6 +73,7 @@ fn main() {
     * OAM bug is not yet supported.
 * Sound
     * The most features are functioning.
+    * PCM registers are always emulated for sound tests.
 * Joypad
 * Timer
 * Serial
