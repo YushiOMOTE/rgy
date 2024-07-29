@@ -309,4 +309,8 @@ impl Tone {
     pub fn amp(&self) -> isize {
         self.dac.amp()
     }
+
+    pub fn pcm(&self) -> usize {
+        self.dac.pcm()
+    }
 }

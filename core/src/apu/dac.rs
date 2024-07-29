@@ -1,14 +1,16 @@
 #[derive(Debug, Clone)]
 pub struct Dac {
     power: bool,
-    amp: isize,
+    digital_amp: usize,
+    analog_amp: isize,
 }
 
 impl Dac {
     pub fn new() -> Self {
         Self {
             power: false,
-            amp: 0,
+            digital_amp: 0,
+            analog_amp: 0,
         }
     }
 
@@ -19,8 +21,10 @@ impl Dac {
 
         assert!(amp < 16);
 
+        self.digital_amp = amp;
+
         // [0, 15] digital amp is mapped to [-8, 8]
-        self.amp = match amp {
+        self.analog_amp = match amp {
             0..=7 => amp as isize - 8,
             8..=15 => amp as isize - 7,
             _ => unreachable!(),
@@ -28,7 +32,11 @@ impl Dac {
     }
 
     pub fn amp(&self) -> isize {
-        self.amp
+        self.analog_amp
+    }
+
+    pub fn pcm(&self) -> usize {
+        self.digital_amp
     }
 
     pub fn on(&self) -> bool {
@@ -41,6 +49,6 @@ impl Dac {
 
     pub fn power_off(&mut self) {
         self.power = false;
-        self.amp = 0;
+        self.analog_amp = 0;
     }
 }

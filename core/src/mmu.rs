@@ -113,6 +113,8 @@ impl Mmu {
             0xff6a => todo!("cgb bg palette data"),
             0xff6b => self.gpu.read_obj_color_palette(),
             0xff70 => self.wram.get_bank(),
+            0xff76 => self.apu.read_pcm12(),
+            0xff77 => self.apu.read_pcm34(),
             0x0000..=0xfeff | 0xff80..=0xffff => unreachable!("read non-i/o addr={:04x}", addr),
             _ => {
                 warn!("read unknown i/o addr={:04x}", addr);

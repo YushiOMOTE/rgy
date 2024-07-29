@@ -38,6 +38,14 @@ struct Nr52 {
     power_on: bool,
 }
 
+#[bitfield(u8)]
+struct Pcm {
+    #[bits(4)]
+    low: usize,
+    #[bits(4)]
+    high: usize,
+}
+
 impl Apu {
     pub fn new(hw: HardwareHandle) -> Self {
         let mixer = Mixer::new();
@@ -282,6 +290,24 @@ impl Apu {
 
             self.sync_all();
         }
+    }
+
+    /// Read PCM12 register
+    pub fn read_pcm12(&self) -> u8 {
+        let pcm = Pcm::default()
+            .with_low(self.tones[0].pcm())
+            .with_high(self.tones[1].pcm());
+
+        pcm.into_bits()
+    }
+
+    /// Read PCM34 register
+    pub fn read_pcm34(&self) -> u8 {
+        let pcm = Pcm::default()
+            .with_low(self.wave.pcm())
+            .with_high(self.noise.pcm());
+
+        pcm.into_bits()
     }
 
     fn sync_all(&mut self) {

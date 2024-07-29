@@ -224,6 +224,10 @@ impl Noise {
     pub fn amp(&self) -> isize {
         self.dac.amp()
     }
+
+    pub fn pcm(&self) -> usize {
+        self.dac.pcm()
+    }
 }
 
 #[derive(Debug, Clone)]
