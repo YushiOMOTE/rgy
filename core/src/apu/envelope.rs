@@ -1,5 +1,7 @@
 use crate::clock::Timer;
 
+use super::frame_sequencer::Frame;
+
 #[derive(Debug, Clone)]
 pub struct Envelope {
     amp: usize,
@@ -23,8 +25,8 @@ impl Envelope {
         self.timer.set_interval(count);
     }
 
-    pub fn step(&mut self, frame: Option<usize>) {
-        match frame {
+    pub fn step(&mut self, frame: Frame) {
+        match frame.switched() {
             Some(7) => {}
             _ => return,
         }

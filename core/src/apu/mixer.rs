@@ -1,4 +1,9 @@
-use super::{frame_sequencer::FrameSequencer, noise::Noise, tone::Tone, wave::Wave};
+use super::{
+    frame_sequencer::{Frame, FrameSequencer},
+    noise::Noise,
+    tone::Tone,
+    wave::Wave,
+};
 use crate::{cpu::CPU_FREQ_HZ, divider::Divider, hardware::Stream};
 use alloc::sync::Arc;
 use bitfield_struct::bitfield;
@@ -146,8 +151,8 @@ impl<T: VolumeUnit> Shared<T> {
         }
     }
 
-    fn step(&mut self, cycles: usize, step: Option<usize>) {
-        self.channel.lock().step(cycles, step);
+    fn step(&mut self, cycles: usize, frame: Frame) {
+        self.channel.lock().step(cycles, frame);
     }
 
     fn sync_channel(&self, channel: T) {
@@ -166,7 +171,7 @@ impl<T: VolumeUnit> Shared<T> {
 trait VolumeUnit {
     fn amp(&self) -> isize;
 
-    fn step(&mut self, rate: usize, step: Option<usize>);
+    fn step(&mut self, rate: usize, frame: Frame);
 }
 
 impl VolumeUnit for Tone {
@@ -174,8 +179,8 @@ impl VolumeUnit for Tone {
         self.amp()
     }
 
-    fn step(&mut self, cycles: usize, step: Option<usize>) {
-        self.step(cycles, step);
+    fn step(&mut self, cycles: usize, frame: Frame) {
+        self.step(cycles, frame);
     }
 }
 
@@ -184,8 +189,8 @@ impl VolumeUnit for Wave {
         self.amp()
     }
 
-    fn step(&mut self, cycles: usize, step: Option<usize>) {
-        self.step(cycles, step);
+    fn step(&mut self, cycles: usize, frame: Frame) {
+        self.step(cycles, frame);
     }
 }
 
@@ -194,8 +199,8 @@ impl VolumeUnit for Noise {
         self.amp()
     }
 
-    fn step(&mut self, cycles: usize, step: Option<usize>) {
-        self.step(cycles, step);
+    fn step(&mut self, cycles: usize, frame: Frame) {
+        self.step(cycles, frame);
     }
 }
 
@@ -249,8 +254,8 @@ impl MixerStream {
         while cycles > 0 {
             let sub_cycles = cycles.max(4);
 
-            let div_apu = self.divider.step(sub_cycles);
-            let step = self.frame_sequencer.step(cycles, div_apu);
+            let div = self.divider.step(sub_cycles);
+            let step = self.frame_sequencer.step(cycles, div);
 
             self.state.tones[0].step(sub_cycles, step);
             self.state.tones[1].step(sub_cycles, step);

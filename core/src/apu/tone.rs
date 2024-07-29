@@ -1,4 +1,7 @@
-use super::{dac::Dac, envelope::Envelope, length_counter::LengthCounter, sweep::Sweep};
+use super::{
+    dac::Dac, envelope::Envelope, frame_sequencer::Frame, length_counter::LengthCounter,
+    sweep::Sweep,
+};
 use crate::clock::{ClockDivider, Timer};
 
 use bitfield_struct::bitfield;
@@ -245,7 +248,7 @@ impl Tone {
         self.dac.power_off();
     }
 
-    pub fn step(&mut self, cycles: usize, frame: Option<usize>) {
+    pub fn step(&mut self, cycles: usize, frame: Frame) {
         if let Some(sweep) = self.sweep.as_mut() {
             if let Some(new_freq) = sweep.step(frame) {
                 self.freq = Freq::from_value(new_freq);

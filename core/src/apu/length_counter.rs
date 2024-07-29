@@ -1,5 +1,7 @@
 use log::*;
 
+use super::frame_sequencer::Frame;
+
 #[derive(Clone, Debug)]
 pub struct LengthCounter {
     enable: bool,
@@ -87,16 +89,15 @@ impl LengthCounter {
         self.length = self.base - value;
     }
 
-    pub fn step(&mut self, step: Option<usize>) {
-        match step {
-            Some(0) | Some(2) | Some(4) | Some(6) => {
-                self.first_half = true;
-            }
-            Some(1) | Some(3) | Some(5) | Some(7) => {
-                self.first_half = false;
-                return;
-            }
-            _ => return,
+    pub fn step(&mut self, frame: Frame) {
+        self.first_half = match frame.step {
+            0 | 2 | 4 | 6 => true,
+            1 | 3 | 5 | 7 => false,
+            _ => unreachable!(),
+        };
+
+        if frame.cycles != 0 || !self.first_half {
+            return;
         }
 
         if self.enable {

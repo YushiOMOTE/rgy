@@ -2,6 +2,8 @@ use crate::clock::Timer;
 
 use log::*;
 
+use super::frame_sequencer::Frame;
+
 #[derive(Clone, Debug)]
 pub struct Sweep {
     disabling_channel: bool,
@@ -69,8 +71,8 @@ impl Sweep {
         self.subtract = subtract;
     }
 
-    pub fn step(&mut self, frame: Option<usize>) -> Option<usize> {
-        match frame {
+    pub fn step(&mut self, frame: Frame) -> Option<usize> {
+        match frame.switched() {
             Some(2) | Some(6) => {}
             _ => return None,
         }

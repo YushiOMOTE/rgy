@@ -107,7 +107,7 @@ Test status of [Blargg's Gameboy hardware test ROMs](https://github.com/retrio/g
 Test status of [Same Suite](https://github.com/YushiOMOTE/SameSuite/tree/430ab7f68fc612e005ed5586990dfec0ea7a9ce5)
 
 * [x] `apu/div_write_trigger.gb`
-* [ ] `apu/div_write_trigger_10.gb`
+* [x] `apu/div_write_trigger_10.gb`
 
 ## Projects
 
