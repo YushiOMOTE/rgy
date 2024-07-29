@@ -1,4 +1,4 @@
-use super::{dac::Dac, envelope::Envelope, length_counter::LengthCounter};
+use super::{dac::Dac, envelope::Envelope, frame_sequencer::Frame, length_counter::LengthCounter};
 use crate::clock::{ClockDivider, Timer};
 
 use bitfield_struct::bitfield;
@@ -150,7 +150,7 @@ impl Noise {
         self.nr44.trigger()
     }
 
-    pub fn step(&mut self, cycles: usize, frame: Option<usize>) {
+    pub fn step(&mut self, cycles: usize, frame: Frame) {
         self.length_counter.step(frame);
         self.envelope.step(frame);
 

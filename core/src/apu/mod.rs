@@ -292,8 +292,8 @@ impl Apu {
         self.mixer.sync_noise(self.noise.clone());
     }
 
-    pub fn step(&mut self, cycles: usize, div_apu: bool) {
-        let frame = self.frame_sequencer.step(cycles, div_apu);
+    pub fn step(&mut self, cycles: usize, div: usize) {
+        let frame = self.frame_sequencer.step(cycles, div);
 
         for tone in &mut self.tones {
             tone.step(cycles, frame);

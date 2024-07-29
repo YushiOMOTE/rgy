@@ -2,7 +2,6 @@ use crate::clock::PrescaledTimer;
 
 pub struct Divider {
     timer: PrescaledTimer,
-    last_counter: usize,
 }
 
 impl Divider {
@@ -13,23 +12,12 @@ impl Divider {
                 .frequency(16384)
                 .interval(256)
                 .build(),
-            last_counter: 0,
         }
     }
 
-    pub fn step(&mut self, cycles: usize) -> bool {
+    pub fn step(&mut self, cycles: usize) -> usize {
         self.timer.step(cycles);
-
-        self.check_div_apu()
-    }
-
-    fn check_div_apu(&mut self) -> bool {
-        let bit4_old = self.last_counter & 0x10 > 0;
-        let bit4_new = self.timer.counter() & 0x10 > 0;
-
-        self.last_counter = self.timer.counter();
-
-        bit4_old && !bit4_new
+        self.timer.counter()
     }
 
     // TODO: To be used for STOP emulation where DIV doesn't ticks

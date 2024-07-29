@@ -2,7 +2,7 @@ use log::*;
 
 use bitfield_struct::bitfield;
 
-use super::{dac::Dac, length_counter::LengthCounter};
+use super::{dac::Dac, frame_sequencer::Frame, length_counter::LengthCounter};
 use crate::clock::{ClockDivider, Timer};
 
 const RAM_SIZE: usize = 16;
@@ -246,7 +246,7 @@ impl Wave {
         }
     }
 
-    pub fn step(&mut self, cycles: usize, frame: Option<usize>) {
+    pub fn step(&mut self, cycles: usize, frame: Frame) {
         self.length_counter.step(frame);
 
         let times = self.divider.step(cycles);
