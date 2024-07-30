@@ -8,7 +8,7 @@ pub struct LengthCounter {
     active: bool,
     length: usize,
     base: usize,
-    first_half: bool,
+    extra_clock: bool,
 }
 
 impl LengthCounter {
@@ -18,7 +18,7 @@ impl LengthCounter {
             active: false,
             length: 0,
             base,
-            first_half: false,
+            extra_clock: false,
         }
     }
 
@@ -41,7 +41,7 @@ impl LengthCounter {
         if enable {
             // Disabled -> enabled in the first half
             // should clock once on enable
-            if !self.enable && self.first_half {
+            if !self.enable && self.extra_clock {
                 // Clock unless length reaches zero
                 if self.length != 0 {
                     self.clock();
@@ -64,7 +64,7 @@ impl LengthCounter {
 
                 // Reloading 0 -> max on trigger & enable in the first half
                 // should clock once on enable.
-                if self.enable && self.first_half {
+                if self.enable && self.extra_clock {
                     self.clock();
                 }
             }
@@ -77,7 +77,7 @@ impl LengthCounter {
     }
 
     pub fn power_on(&mut self) {
-        self.first_half = false;
+        self.extra_clock = false;
     }
 
     pub fn power_off(&mut self) {
@@ -90,13 +90,10 @@ impl LengthCounter {
     }
 
     pub fn step(&mut self, frame: Frame) {
-        self.first_half = match frame.step {
-            0 | 2 | 4 | 6 => true,
-            1 | 3 | 5 | 7 => false,
-            _ => unreachable!(),
-        };
+        // Extra clock happens if next frame isn't active.
+        self.extra_clock = !can_clock(frame.next);
 
-        if frame.cycles != 0 || !self.first_half {
+        if !can_clock(frame.switched()) {
             return;
         }
 
@@ -117,5 +114,12 @@ impl LengthCounter {
 
     fn clock(&mut self) {
         self.length = self.length.saturating_sub(1);
+    }
+}
+
+fn can_clock(frame_index: Option<usize>) -> bool {
+    match frame_index {
+        Some(0) | Some(2) | Some(4) | Some(6) => true,
+        _ => false,
     }
 }

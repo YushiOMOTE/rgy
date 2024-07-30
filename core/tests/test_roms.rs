@@ -319,3 +319,11 @@ fn same_suite_div_write_trigger_volume() {
         "../roms/same_suite/apu/div_write_trigger_volume.gb",
     );
 }
+
+#[test]
+fn same_suite_div_write_trigger_volume_10() {
+    test_rom(
+        Expected::from_file("tests/expects/same_suite_div_write_trigger_volume_10.txt"),
+        "../roms/same_suite/apu/div_write_trigger_volume_10.gb",
+    );
+}
