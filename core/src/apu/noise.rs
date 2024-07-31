@@ -1,9 +1,13 @@
 use super::{dac::Dac, envelope::Envelope, frame_sequencer::Frame, length_counter::LengthCounter};
-use crate::clock::{ClockDivider, Timer};
+use crate::{
+    clock::{ClockDivider, Timer},
+    cpu::CPU_FREQ_HZ,
+};
 
 use bitfield_struct::bitfield;
 
-const NOISE_FREQ_HZ: usize = 262_144;
+// LFSR runs at CPU rate.
+const NOISE_FREQ_HZ: usize = CPU_FREQ_HZ;
 
 #[derive(Debug, Clone)]
 pub struct Noise {
@@ -159,12 +163,11 @@ impl Noise {
         for _ in 0..times {
             self.update();
         }
+
+        self.write_amp();
     }
 
     fn update(&mut self) {
-        if !self.is_active() {
-            return;
-        }
         if !self.timer.tick() {
             return;
         }
@@ -172,8 +175,10 @@ impl Noise {
         self.reload_timer();
 
         self.lfsr.update();
+    }
 
-        self.dac.write(if self.lfsr.high() {
+    fn write_amp(&mut self) {
+        self.dac.write(if self.is_active() && self.lfsr.high() {
             self.envelope.amp()
         } else {
             0
@@ -189,11 +194,19 @@ impl Noise {
         let divider = self.nr43.div_freq();
         let shift = self.nr43.shift_freq();
 
-        if divider == 0 {
-            (5 << shift) / 10
-        } else {
-            divider << shift
-        }
+        // Divisor code   Divisor
+        // -----------------------
+        //    0             8
+        //    1            16
+        //    2            32
+        //    3            48
+        //    4            64
+        //    5            80
+        //    6            96
+        //    7           112
+        let base = if divider == 0 { 8 } else { divider * 16 };
+
+        base << shift
     }
 
     pub fn is_active(&self) -> bool {
@@ -204,6 +217,9 @@ impl Noise {
         self.power = true;
 
         self.length_counter.power_on();
+
+        self.reload_timer();
+        self.divider.reset();
     }
 
     pub fn power_off(&mut self) {
@@ -215,8 +231,6 @@ impl Noise {
         self.nr44 = Nr44::default();
 
         self.length_counter.power_off();
-
-        self.lfsr.reset();
 
         self.dac.power_off();
     }
@@ -239,14 +253,9 @@ struct Lfsr {
 impl Lfsr {
     fn new() -> Self {
         Self {
-            value: 0,
+            value: 0xff,
             short: false,
         }
-    }
-
-    fn reset(&mut self) {
-        self.value = 0;
-        self.short = false;
     }
 
     fn high(&self) -> bool {
@@ -255,19 +264,23 @@ impl Lfsr {
     }
 
     fn trigger(&mut self, short: bool) {
-        self.value = 0;
         self.short = short;
+        self.value = 0xff;
     }
 
     fn update(&mut self) {
-        // NXOR bit 0 and 1.
-        let bit = !((self.value & 0x01) ^ ((self.value & 0x02) >> 1)) & 1;
+        // Xor bit 0 and 1.
+        let bit = (self.value & 1) ^ ((self.value & 2) >> 1) & 1;
 
-        // Put XOR-ed result in bit 15 (and bit 7 in short mode)
+        // Shift right.
+        self.value >>= 1;
+
+        // Put the bit at bit 14 (i.e. 15 bits shift register)
+        self.value = (self.value & !0x4000) | (bit << 14);
+
         if self.short {
-            self.value = ((self.value >> 1) & 0x7f7f) | (bit << 7) | (bit << 15);
-        } else {
-            self.value = ((self.value >> 1) & 0x7fff) | (bit << 15);
+            // Put the bit at bit 6 (i.e. 7 bits shift register)
+            self.value = (self.value & !0x0040) | (bit << 6);
         }
     }
 }
