@@ -145,7 +145,7 @@ impl Noise {
             .update(self.nr44.trigger(), self.nr44.enable_length());
 
         if self.nr44.trigger() {
-            self.reload_timer();
+            self.reload_initial_timer(self.nr43.step());
             self.lfsr.trigger(self.nr43.step());
             self.envelope
                 .update(self.nr42.init(), self.nr42.count(), self.nr42.increase());
@@ -183,6 +183,15 @@ impl Noise {
         } else {
             0
         });
+    }
+
+    fn reload_initial_timer(&mut self, short: bool) {
+        self.timer.reset();
+
+        // TODO: Understand the initial delay more.
+        self.timer.set_interval(
+            self.timer_interval() + if short { 0 } else { 7 * self.timer_interval() } + 3,
+        );
     }
 
     fn reload_timer(&mut self) {

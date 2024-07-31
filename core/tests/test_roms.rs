@@ -353,3 +353,11 @@ fn same_suite_channel_4_lfsr() {
         "../roms/same_suite/apu/channel_4/channel_4_lfsr.gb",
     );
 }
+
+#[test]
+fn same_suite_channel_4_lfsr15() {
+    test_rom(
+        Expected::from_file("tests/expects/same_suite_channel_4_lfsr15.txt"),
+        "../roms/same_suite/apu/channel_4/channel_4_lfsr15.gb",
+    );
+}
