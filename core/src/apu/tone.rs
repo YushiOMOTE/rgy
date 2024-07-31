@@ -243,6 +243,8 @@ impl Tone {
         self.nr14 = Nr14::from_bits(0);
         self.freq = Freq::from_bits(0);
 
+        self.index = 0;
+
         self.length_counter.power_off();
 
         self.dac.power_off();
@@ -260,11 +262,13 @@ impl Tone {
         let times = self.divider.step(cycles);
 
         for _ in 0..times {
-            self.update();
+            self.update_index();
         }
+
+        self.write_amp();
     }
 
-    fn update(&mut self) {
+    fn update_index(&mut self) {
         if !self.is_active() {
             return;
         }
@@ -275,7 +279,9 @@ impl Tone {
         self.reload_timer();
 
         self.index = (self.index + 1) % 8;
+    }
 
+    fn write_amp(&mut self) {
         let wave = match self.nr11.wave_duty() {
             0 => [0, 0, 0, 0, 0, 0, 0, 1],
             1 => [1, 0, 0, 0, 0, 0, 0, 1],
