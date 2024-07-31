@@ -114,6 +114,8 @@ Test status of [Same Suite](https://github.com/YushiOMOTE/SameSuite/tree/430ab7f
 * [x] `apu/div_trigger_volume_10.gb`
 * [x] `apu/channel_4/channel_4_lfsr.gb`
 * [x] `apu/channel_4/channel_4_lfsr15.gb`
+* [x] `apu/channel_4/channel_4_lfsr_7_15.gb`
+* [x] `apu/channel_4/channel_4_lfsr_15_7.gb`
 
 ## Projects
 

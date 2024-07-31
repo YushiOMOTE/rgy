@@ -126,6 +126,7 @@ impl Noise {
         }
 
         self.nr43 = Nr43::from_bits(value);
+        self.lfsr.set_mode(self.nr43.step());
     }
 
     /// Read NR44 register (0xff23)
@@ -275,6 +276,10 @@ impl Lfsr {
     fn trigger(&mut self, short: bool) {
         self.short = short;
         self.value = 0xff;
+    }
+
+    fn set_mode(&mut self, short: bool) {
+        self.short = short;
     }
 
     fn update(&mut self) {

@@ -361,3 +361,19 @@ fn same_suite_channel_4_lfsr15() {
         "../roms/same_suite/apu/channel_4/channel_4_lfsr15.gb",
     );
 }
+
+#[test]
+fn same_suite_channel_4_lfsr_7_15() {
+    test_rom(
+        Expected::from_file("tests/expects/same_suite_channel_4_lfsr_7_15.txt"),
+        "../roms/same_suite/apu/channel_4/channel_4_lfsr_7_15.gb",
+    );
+}
+
+#[test]
+fn same_suite_channel_4_lfsr_15_7() {
+    test_rom(
+        Expected::from_file("tests/expects/same_suite_channel_4_lfsr_15_7.txt"),
+        "../roms/same_suite/apu/channel_4/channel_4_lfsr_15_7.gb",
+    );
+}
