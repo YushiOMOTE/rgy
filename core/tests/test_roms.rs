@@ -8,6 +8,12 @@ use rgy::{VRAM_HEIGHT, VRAM_WIDTH};
 const WHITE: u32 = 0xdddddd;
 const BLACK: u32 = 0x555555;
 
+const PRINT_DISPLAY: &'static str = "PRINT_DISPLAY";
+
+fn print_display() -> bool {
+    std::env::var(PRINT_DISPLAY).as_deref() == Ok("1")
+}
+
 enum Expected {
     Serial(&'static str),
     Display(Vec<u32>),
@@ -65,20 +71,24 @@ impl rgy::Hardware for TestHardware {
             self.is_done = true;
         }
 
-        // // print display to console
-        // if ly == VRAM_HEIGHT - 1 {
-        //     println!();
-        //     for (index, color) in self.display.iter().enumerate() {
-        //         if *color == WHITE {
-        //             print!(".")
-        //         } else {
-        //             print!("#")
-        //         }
-        //         if index % VRAM_WIDTH == VRAM_WIDTH - 1 {
-        //             println!();
-        //         }
-        //     }
-        // }
+        if !print_display() {
+            return;
+        }
+
+        // print display to console
+        if ly == VRAM_HEIGHT - 1 {
+            println!();
+            for (index, color) in self.display.iter().enumerate() {
+                if *color == WHITE {
+                    print!(".")
+                } else {
+                    print!("#")
+                }
+                if index % VRAM_WIDTH == VRAM_WIDTH - 1 {
+                    println!();
+                }
+            }
+        }
     }
 
     fn joypad_pressed(&mut self, _: rgy::Key) -> bool {
@@ -138,10 +148,10 @@ fn test_rom(expected: Expected, path: &str) {
         hw,
         rgy::debug::NullDebugger,
     );
-    const TIMEOUT: Duration = Duration::from_secs(60);
+    let timeout = Duration::from_secs(if print_display() { 10 } else { 60 });
     let now = Instant::now();
     while sys.poll() {
-        if now.elapsed() >= TIMEOUT {
+        if now.elapsed() >= timeout {
             panic!("timeout")
         }
     }
@@ -325,5 +335,13 @@ fn same_suite_div_write_trigger_volume_10() {
     test_rom(
         Expected::from_file("tests/expects/same_suite_div_write_trigger_volume_10.txt"),
         "../roms/same_suite/apu/div_write_trigger_volume_10.gb",
+    );
+}
+
+#[test]
+fn same_suite_div_trigger_volume_10() {
+    test_rom(
+        Expected::from_file("tests/expects/same_suite_div_trigger_volume_10.txt"),
+        "../roms/same_suite/apu/div_trigger_volume_10.gb",
     );
 }
