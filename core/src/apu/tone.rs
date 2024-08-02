@@ -25,6 +25,7 @@ pub struct Tone {
     dac: Dac,
     index: usize,
     after_power_on: bool,
+    current_duty: usize,
 }
 
 #[bitfield(u8)]
@@ -109,6 +110,7 @@ impl Tone {
             dac: Dac::new(),
             index: 0,
             after_power_on: true,
+            current_duty: 0,
         }
     }
 
@@ -217,6 +219,7 @@ impl Tone {
             self.load_initial_timer();
             self.envelope
                 .update(self.nr12.init(), self.nr12.count(), self.nr12.increase());
+            self.current_duty = self.nr11.wave_duty();
         }
 
         self.nr14.trigger()
@@ -284,6 +287,9 @@ impl Tone {
 
         self.index = (self.index + 1) % 8;
 
+        // Changing the duty becomes effective only after the current sample finishes.
+        self.current_duty = self.nr11.wave_duty();
+
         self.after_power_on = false;
     }
 
@@ -294,7 +300,7 @@ impl Tone {
         // 1      10000001    25%
         // 2      10000111    50%
         // 3      01111110    75%
-        let wave = match self.nr11.wave_duty() {
+        let wave = match self.current_duty {
             0 => [0, 0, 0, 0, 0, 0, 0, 1],
             1 => [1, 0, 0, 0, 0, 0, 0, 1],
             2 => [1, 0, 0, 0, 0, 1, 1, 1],
