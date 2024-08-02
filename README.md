@@ -116,6 +116,7 @@ Test status of [Same Suite](https://github.com/YushiOMOTE/SameSuite/tree/430ab7f
     * Channel 1
         * [x] `apu/channel_1/channel_1_delay.gb`
         * [x] `apu/channel_1/channel_1_duty_delay.gb`
+        * [x] `apu/channel_1/channel_1_freq_change.gb`
     * Channel 4
         * [x] `apu/channel_4/channel_4_lfsr.gb`
         * [x] `apu/channel_4/channel_4_lfsr15.gb`
