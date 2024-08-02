@@ -393,3 +393,11 @@ fn same_suite_channel_1_duty_delay() {
         "../roms/same_suite/apu/channel_1/channel_1_duty_delay.gb",
     );
 }
+
+#[test]
+fn same_suite_channel_1_freq_change() {
+    test_rom(
+        Expected::from_file("tests/expects/same_suite_channel_1_freq_change.txt"),
+        "../roms/same_suite/apu/channel_1/channel_1_freq_change.gb",
+    );
+}
