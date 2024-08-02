@@ -20,12 +20,9 @@ pub struct Opt {
     /// Cpu frequency
     #[structopt(short = "f", long = "freq", default_value = "4200000")]
     freq: u64,
-    /// Sampling rate for cpu frequency controller
-    #[structopt(short = "s", long = "sample", default_value = "4200")]
-    sample: u64,
-    /// Delay unit for cpu frequency controller
-    #[structopt(short = "u", long = "delayunit", default_value = "50")]
-    delay_unit: u64,
+    /// Interval to refill the token bucket for CPU rate-limiting.
+    #[structopt(short = "i", long = "interval", default_value = "20000")]
+    interval: u64,
     /// Don't adjust cpu frequency
     #[structopt(short = "n", long = "native")]
     native_speed: bool,
@@ -44,8 +41,7 @@ fn to_cfg(opt: Opt) -> rgy::Config {
     rgy::Config::new()
         .color(opt.color)
         .freq(opt.freq)
-        .sample(opt.sample)
-        .delay_unit(opt.delay_unit)
+        .rate_limit_interval(opt.interval)
         .native_speed(opt.native_speed)
 }
 

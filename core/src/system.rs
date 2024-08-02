@@ -9,10 +9,8 @@ use log::*;
 pub struct Config {
     /// CPU frequency.
     pub(crate) freq: u64,
-    /// Cycle sampling count in the CPU frequency controller.
-    pub(crate) sample: u64,
-    /// Delay unit in CPU frequency controller.
-    pub(crate) delay_unit: u64,
+    /// Interval to refill tokens in the token bucket for CPU rate-limiting in micro-seconds.
+    pub(crate) rate_limit_interval: u64,
     /// Don't adjust CPU frequency.
     pub(crate) native_speed: bool,
     /// Emulate Gameboy Color
@@ -32,8 +30,7 @@ impl Config {
 
         Self {
             freq,
-            sample: freq / 1000,
-            delay_unit: 10,
+            rate_limit_interval: 20_000,
             native_speed: false,
             color: false,
         }
@@ -45,15 +42,9 @@ impl Config {
         self
     }
 
-    /// Set the sampling count of the CPU frequency controller.
-    pub fn sample(mut self, sample: u64) -> Self {
-        self.sample = sample;
-        self
-    }
-
-    /// Set the delay unit.
-    pub fn delay_unit(mut self, delay: u64) -> Self {
-        self.delay_unit = delay;
+    /// Interval to refill tokens in the token bucket for CPU rate-limiting in micro-seconds.
+    pub fn rate_limit_interval(mut self, interval: u64) -> Self {
+        self.rate_limit_interval = interval;
         self
     }
 

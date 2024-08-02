@@ -1,15 +1,12 @@
 use crate::hardware::HardwareHandle;
 use crate::system::Config;
-use log::*;
 
 pub struct FreqControl {
     hw: HardwareHandle,
     last: u64,
-    cycles: u64,
-    sample: u64,
-    delay: u64,
-    delay_unit: u64,
+    refill_interval: u64,
     target_freq: u64,
+    remaining_cycles: u64,
 }
 
 impl FreqControl {
@@ -17,11 +14,9 @@ impl FreqControl {
         Self {
             hw,
             last: 0,
-            cycles: 0,
-            delay: 0,
-            sample: cfg.sample,
-            delay_unit: cfg.delay_unit,
+            refill_interval: cfg.rate_limit_interval,
             target_freq: cfg.freq,
+            remaining_cycles: 0,
         }
     }
 
@@ -30,35 +25,26 @@ impl FreqControl {
     }
 
     pub fn adjust(&mut self, time: usize) {
-        self.cycles += time as u64;
+        let consumed_cycles = time as u64;
 
-        for _ in 0..self.delay {
-            let _ = unsafe { core::ptr::read_volatile(&self.sample) };
+        self.try_fill();
+
+        while self.remaining_cycles < consumed_cycles {
+            self.try_fill();
         }
 
-        if self.cycles > self.sample {
-            self.cycles -= self.sample;
+        self.remaining_cycles -= consumed_cycles;
+    }
 
-            let now = self.hw.get().borrow_mut().clock();
-            let (diff, of) = now.overflowing_sub(self.last);
-            if of || diff == 0 {
-                warn!("Overflow: {} - {}", self.last, now);
-                self.last = now;
-                return;
-            }
+    fn try_fill(&mut self) {
+        let now = self.hw.get().borrow_mut().clock();
 
-            // get cycles per second
-            let freq = self.sample * 1_000_000 / diff;
+        let diff = now.saturating_sub(self.last);
 
-            debug!("Frequency: {}", freq);
-
-            self.delay = if freq > self.target_freq {
-                self.delay.saturating_add(self.delay_unit)
-            } else {
-                self.delay.saturating_sub(self.delay_unit)
-            };
-
+        if diff >= self.refill_interval {
             self.last = now;
+
+            self.remaining_cycles += self.target_freq * diff / 1_000_000;
         }
     }
 }

@@ -9,7 +9,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
 };
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use rgy::{Key, Stream, VRAM_HEIGHT, VRAM_WIDTH};
 
@@ -23,6 +23,7 @@ pub struct Hardware {
     color: bool,
     gamepad: Arc<Mutex<Gilrs>>,
     gamepad_id: Option<GamepadId>,
+    instant: Instant,
 }
 
 struct Gui {
@@ -151,6 +152,7 @@ impl Hardware {
             escape,
             gamepad,
             gamepad_id: None,
+            instant: Instant::now(),
         }
     }
 
@@ -214,10 +216,7 @@ impl rgy::Hardware for Hardware {
     }
 
     fn clock(&mut self) -> u64 {
-        let epoch = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Couldn't get epoch");
-        epoch.as_micros() as u64
+        self.instant.elapsed().as_micros() as u64
     }
 
     fn load_ram(&mut self, size: usize) -> Vec<u8> {
