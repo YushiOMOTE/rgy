@@ -24,6 +24,7 @@ pub struct Tone {
     freq: Freq,
     dac: Dac,
     index: usize,
+    after_power_on: bool,
 }
 
 #[bitfield(u8)]
@@ -107,6 +108,7 @@ impl Tone {
             freq: Freq::default(),
             dac: Dac::new(),
             index: 0,
+            after_power_on: true,
         }
     }
 
@@ -202,17 +204,17 @@ impl Tone {
         self.length_counter
             .update(self.nr14.trigger(), self.nr14.enable_length());
 
-        if let Some(sweep) = self.sweep.as_mut() {
-            sweep.trigger(
-                self.freq.value(),
-                self.nr10.freq(),
-                self.nr10.subtract(),
-                self.nr10.shift(),
-            );
-        }
-
         if self.nr14.trigger() {
-            self.reload_timer();
+            if let Some(sweep) = self.sweep.as_mut() {
+                sweep.trigger(
+                    self.freq.value(),
+                    self.nr10.freq(),
+                    self.nr10.subtract(),
+                    self.nr10.shift(),
+                );
+            }
+
+            self.load_initial_timer();
             self.envelope
                 .update(self.nr12.init(), self.nr12.count(), self.nr12.increase());
         }
@@ -227,6 +229,8 @@ impl Tone {
             sweep.power_on();
         }
         self.length_counter.power_on();
+
+        self.after_power_on = true;
     }
 
     pub fn power_off(&mut self) {
@@ -279,9 +283,17 @@ impl Tone {
         self.reload_timer();
 
         self.index = (self.index + 1) % 8;
+
+        self.after_power_on = false;
     }
 
     fn write_amp(&mut self) {
+        // Duty   Waveform    Ratio
+        // -------------------------
+        // 0      00000001    12.5%
+        // 1      10000001    25%
+        // 2      10000111    50%
+        // 3      01111110    75%
         let wave = match self.nr11.wave_duty() {
             0 => [0, 0, 0, 0, 0, 0, 0, 1],
             1 => [1, 0, 0, 0, 0, 0, 0, 1],
@@ -290,7 +302,27 @@ impl Tone {
             _ => unreachable!(),
         };
 
-        self.dac.write(wave[self.index] * self.envelope.amp());
+        // Just after powering on,
+        // the first duty step of the square waves after they are triggered for the first time is played
+        // as if it were 0. Also, the square duty sequence clocking is disabled until the first trigger.
+        let sample = if self.after_power_on && self.index == 0 {
+            0
+        } else {
+            wave[self.index]
+        };
+
+        self.dac.write(if self.is_active() {
+            sample * self.envelope.amp()
+        } else {
+            0
+        });
+    }
+
+    fn load_initial_timer(&mut self) {
+        // It takes (sample length + 2) ticks from the moment channel 1 is
+        // enabled until PCM12 is affected.
+        self.timer.reset();
+        self.timer.set_interval(self.timer_interval() + 2);
     }
 
     fn reload_timer(&mut self) {

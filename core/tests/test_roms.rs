@@ -377,3 +377,11 @@ fn same_suite_channel_4_lfsr_15_7() {
         "../roms/same_suite/apu/channel_4/channel_4_lfsr_15_7.gb",
     );
 }
+
+#[test]
+fn same_suite_channel_1_delay() {
+    test_rom(
+        Expected::from_file("tests/expects/same_suite_channel_1_delay.txt"),
+        "../roms/same_suite/apu/channel_1/channel_1_delay.gb",
+    );
+}
