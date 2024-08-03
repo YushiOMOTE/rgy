@@ -106,11 +106,15 @@ impl Noise {
 
         self.nr42 = Nr42::from_bits(value);
 
+        self.envelope
+            .reload(self.nr42.init(), self.nr42.count(), self.nr42.increase());
+
         if self.nr42.init() > 0 || self.nr42.increase() {
             self.dac.power_on();
         } else {
             self.dac.power_off();
             self.length_counter.deactivate();
+            self.envelope.deactivate();
         }
     }
 
@@ -149,13 +153,17 @@ impl Noise {
             self.reload_initial_timer(self.nr43.step());
             self.lfsr.trigger(self.nr43.step());
             self.envelope
-                .update(self.nr42.init(), self.nr42.count(), self.nr42.increase());
+                .trigger(self.nr42.init(), self.nr42.count(), self.nr42.increase());
         }
 
         self.nr44.trigger()
     }
 
     pub fn step(&mut self, cycles: usize, frame: Frame) {
+        if !self.is_active() {
+            self.envelope.deactivate();
+        }
+
         self.length_counter.step(frame);
         self.envelope.step(frame);
 
@@ -241,6 +249,7 @@ impl Noise {
         self.nr44 = Nr44::default();
 
         self.length_counter.power_off();
+        self.envelope.power_off();
 
         self.dac.power_off();
     }
