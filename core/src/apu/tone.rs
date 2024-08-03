@@ -203,6 +203,9 @@ impl Tone {
             return false;
         }
 
+        // Indicates this is re-triggering the channel while it's already active.
+        let restart = self.is_active();
+
         self.nr14 = Nr14::from_bits(value);
 
         self.freq = self.freq.with_high(self.nr14.freq_high());
@@ -220,7 +223,7 @@ impl Tone {
                 );
             }
 
-            self.load_initial_timer();
+            self.load_initial_timer(restart);
             self.envelope
                 .trigger(self.nr12.init(), self.nr12.count(), self.nr12.increase());
             self.current_duty = self.nr11.wave_duty();
@@ -333,11 +336,19 @@ impl Tone {
         });
     }
 
-    fn load_initial_timer(&mut self) {
-        // It takes (sample length + 2) ticks from the moment channel 1 is
-        // enabled until PCM12 is affected.
+    fn load_initial_timer(&mut self, restart: bool) {
+        let initial_delay = if restart {
+            // After restarting, the start delay is actually 1 tick shorter.
+            // That is, (sample length + 1) ticks.
+            self.timer_interval() + 1
+        } else {
+            // Usually it takes (sample length + 2) ticks from the moment channel 1 is
+            // enabled until PCM12 is affected.
+            self.timer_interval() + 2
+        };
+
         self.timer.reset();
-        self.timer.set_interval(self.timer_interval() + 2);
+        self.timer.set_interval(initial_delay);
     }
 
     fn reload_timer(&mut self) {
