@@ -127,7 +127,7 @@ Test status of [Same Suite](https://github.com/YushiOMOTE/SameSuite/tree/430ab7f
         * [ ] `apu/channel_1/channel_1_nrx2_glitch.gb`
         * [x] `apu/channel_1/channel_1_nrx2_speed_change.gb`
         * [x] `apu/channel_1/channel_1_restart.gb`
-        * [ ] `apu/channel_1/channel_1_restart_nrx2_glitch.gb`
+        * [x] `apu/channel_1/channel_1_restart_nrx2_glitch.gb`
         * [ ] `apu/channel_1/channel_1_stop_div.gb`
         * [ ] `apu/channel_1/channel_1_stop_restart.gb`
         * [ ] `apu/channel_1/channel_1_sweep.gb`

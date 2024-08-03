@@ -417,3 +417,11 @@ fn same_suite_channel_1_restart() {
         "../roms/same_suite/apu/channel_1/channel_1_restart.gb",
     );
 }
+
+#[test]
+fn same_suite_channel_1_restart_nrx2_glitch() {
+    test_rom(
+        Expected::from_file("tests/expects/same_suite_channel_1_restart_nrx2_glitch.txt"),
+        "../roms/same_suite/apu/channel_1/channel_1_restart_nrx2_glitch.gb",
+    );
+}
