@@ -117,6 +117,24 @@ Test status of [Same Suite](https://github.com/YushiOMOTE/SameSuite/tree/430ab7f
         * [x] `apu/channel_1/channel_1_delay.gb`
         * [x] `apu/channel_1/channel_1_duty_delay.gb`
         * [x] `apu/channel_1/channel_1_freq_change.gb`
+        * [ ] `apu/channel_1/channel_1_align.gb` (CGB double speed)
+        * [ ] `apu/channel_1/channel_1_align_cpu.gb` (CGB double speed)
+        * [ ] `apu/channel_1/channel_1_duty.gb` (CGB double speed)
+        * [ ] `apu/channel_1/channel_1_extra_length_clocking-cgb0B.gb` (CGB double speed)
+        * [ ] `apu/channel_1/channel_1_freq_change_timing-A.gb` (CGB double speed)
+        * [ ] `apu/channel_1/channel_1_freq_change_timing-cgb0BC.gb` (CGB double speed)
+        * [ ] `apu/channel_1/channel_1_freq_change_timing-cgbDE.gb` (CGB double speed)
+        * [ ] `apu/channel_1/channel_1_nrx2_glitch.gb`
+        * [x] `apu/channel_1/channel_1_nrx2_speed_change.gb`
+        * [ ] `apu/channel_1/channel_1_restart.gb`
+        * [ ] `apu/channel_1/channel_1_restart_nrx2_glitch.gb`
+        * [ ] `apu/channel_1/channel_1_stop_div.gb`
+        * [ ] `apu/channel_1/channel_1_stop_restart.gb`
+        * [ ] `apu/channel_1/channel_1_sweep.gb`
+        * [ ] `apu/channel_1/channel_1_sweep_restart.gb`
+        * [ ] `apu/channel_1/channel_1_sweep_restart_2.gb`
+        * [ ] `apu/channel_1/channel_1_volume.gb`
+        * [ ] `apu/channel_1/channel_1_volume_div.gb`
     * Channel 4
         * [x] `apu/channel_4/channel_4_lfsr.gb`
         * [x] `apu/channel_4/channel_4_lfsr15.gb`

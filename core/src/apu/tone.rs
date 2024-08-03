@@ -162,11 +162,15 @@ impl Tone {
 
         self.nr12 = Nr12::from_bits(value);
 
+        self.envelope
+            .reload(self.nr12.init(), self.nr12.count(), self.nr12.increase());
+
         if self.nr12.init() > 0 || self.nr12.increase() {
             self.dac.power_on();
         } else {
             self.dac.power_off();
             self.length_counter.deactivate();
+            self.envelope.deactivate();
         }
     }
 
@@ -218,7 +222,7 @@ impl Tone {
 
             self.load_initial_timer();
             self.envelope
-                .update(self.nr12.init(), self.nr12.count(), self.nr12.increase());
+                .trigger(self.nr12.init(), self.nr12.count(), self.nr12.increase());
             self.current_duty = self.nr11.wave_duty();
         }
 
@@ -253,11 +257,16 @@ impl Tone {
         self.index = 0;
 
         self.length_counter.power_off();
+        self.envelope.power_off();
 
         self.dac.power_off();
     }
 
     pub fn step(&mut self, cycles: usize, frame: Frame) {
+        if !self.is_active() {
+            self.envelope.deactivate();
+        }
+
         if let Some(sweep) = self.sweep.as_mut() {
             if let Some(new_freq) = sweep.step(frame) {
                 self.freq = Freq::from_value(new_freq);
