@@ -409,3 +409,11 @@ fn same_suite_channel_1_nrx2_speed_change() {
         "../roms/same_suite/apu/channel_1/channel_1_nrx2_speed_change.gb",
     );
 }
+
+#[test]
+fn same_suite_channel_1_restart() {
+    test_rom(
+        Expected::from_file("tests/expects/same_suite_channel_1_restart.txt"),
+        "../roms/same_suite/apu/channel_1/channel_1_restart.gb",
+    );
+}
