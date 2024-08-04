@@ -4,16 +4,25 @@ use log::*;
 
 use crate::hardware::HardwareHandle;
 
-use self::{frame_sequencer::FrameSequencer, mixer::Mixer, noise::Noise, tone::Tone, wave::Wave};
+use self::{
+    frame_sequencer::FrameSequencer,
+    mixer::Mixer,
+    noise::Noise,
+    stream::{open_stream, SoundSink},
+    tone::Tone,
+    wave::Wave,
+};
 
 use bitfield_struct::bitfield;
 
+mod buffer;
 mod dac;
 mod envelope;
 mod frame_sequencer;
 mod length_counter;
 mod mixer;
 mod noise;
+mod stream;
 mod sweep;
 mod tone;
 mod wave;
@@ -25,6 +34,7 @@ pub struct Apu {
     mixer: Mixer,
     nr52: Nr52,
     frame_sequencer: FrameSequencer,
+    sink: SoundSink,
 }
 
 #[bitfield(u8)]
@@ -50,9 +60,9 @@ impl Apu {
     pub fn new(hw: HardwareHandle) -> Self {
         let mixer = Mixer::new();
 
-        hw.get()
-            .borrow_mut()
-            .sound_play(Box::new(mixer.create_stream()));
+        let (sink, stream) = open_stream();
+
+        hw.get().borrow_mut().sound_play(Box::new(stream));
 
         Self {
             tones: [Tone::new(true), Tone::new(false)],
@@ -61,6 +71,7 @@ impl Apu {
             mixer,
             nr52: Nr52::default(),
             frame_sequencer: FrameSequencer::new(),
+            sink,
         }
     }
 
@@ -101,7 +112,7 @@ impl Apu {
 
     /// Write NR13/NR23 register (0xff13/0xff18)
     pub fn write_tone_freq_low(&mut self, tone: usize, value: u8) {
-        self.tones[tone].write_freq_low(value)
+        self.tones[tone].write_freq_low(value);
     }
 
     /// Read NR14/NR24 register (0xff14/0xff19)
@@ -111,9 +122,7 @@ impl Apu {
 
     /// Write NR14/NR24 register (0xff14/0xff19)
     pub fn write_tone_freq_high(&mut self, tone: usize, value: u8) {
-        if self.tones[tone].write_freq_high(value) {
-            self.mixer.sync_tone(tone, self.tones[tone].clone());
-        }
+        self.tones[tone].write_freq_high(value);
     }
 
     /// Read NR30 register (0xff1a)
@@ -124,7 +133,6 @@ impl Apu {
     /// Write NR30 register (0xff1a)
     pub fn write_wave_enable(&mut self, value: u8) {
         self.wave.write_enable(value);
-        self.mixer.sync_wave(self.wave.clone());
     }
 
     /// Read NR31 register (0xff1b)
@@ -164,9 +172,7 @@ impl Apu {
 
     /// Write NR34 register (0xff1e)
     pub fn write_wave_freq_high(&mut self, value: u8) {
-        if self.wave.write_freq_high(value) {
-            self.mixer.sync_wave(self.wave.clone());
-        }
+        self.wave.write_freq_high(value);
     }
 
     /// Read wave pattern buffer
@@ -216,9 +222,7 @@ impl Apu {
 
     /// Write NR44 register (0xff23)
     pub fn write_noise_select(&mut self, value: u8) {
-        if self.noise.write_select(value) {
-            self.mixer.sync_noise(self.noise.clone());
-        }
+        self.noise.write_select(value);
     }
 
     /// Read NR50 register (0xff24)
@@ -276,8 +280,6 @@ impl Apu {
             self.wave.power_on();
             self.noise.power_on();
             self.mixer.power_on();
-
-            self.sync_all();
         } else if before && !after {
             info!("Sound master disabled");
 
@@ -287,8 +289,6 @@ impl Apu {
             self.wave.power_off();
             self.noise.power_off();
             self.mixer.power_off();
-
-            self.sync_all();
         }
     }
 
@@ -309,14 +309,6 @@ impl Apu {
         pcm.into_bits()
     }
 
-    fn sync_all(&mut self) {
-        for (i, tone) in self.tones.iter().enumerate() {
-            self.mixer.sync_tone(i, tone.clone());
-        }
-        self.mixer.sync_wave(self.wave.clone());
-        self.mixer.sync_noise(self.noise.clone());
-    }
-
     pub fn step(&mut self, cycles: usize, div: usize) {
         let frame = self.frame_sequencer.step(cycles, div);
 
@@ -325,5 +317,16 @@ impl Apu {
         }
         self.wave.step(cycles, frame);
         self.noise.step(cycles, frame);
+
+        let amp = self
+            .mixer
+            .builder()
+            .tone1(self.tones[0].amp())
+            .tone2(self.tones[1].amp())
+            .wave(self.wave.amp())
+            .noise(self.noise.amp())
+            .build();
+
+        self.sink.send(cycles, amp);
     }
 }
