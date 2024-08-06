@@ -1,37 +1,97 @@
 use std::{
+    cell::RefCell,
     io::Write,
+    rc::Rc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use rgy::{VRAM_HEIGHT, VRAM_WIDTH};
 
-const WHITE: u32 = 0xdddddd;
-const BLACK: u32 = 0x555555;
+const SHORT_RUN: &'static str = "SHORT_RUN";
+const UPDATE_EXPECTED_DISPLAY: &'static str = "UPDATE_EXPECTED_DISPLAY";
 
-const PRINT_DISPLAY: &'static str = "PRINT_DISPLAY";
-
-fn print_display() -> bool {
-    std::env::var(PRINT_DISPLAY).as_deref() == Ok("1")
+fn color_to_char(color: u32) -> char {
+    match color {
+        0xdddddd => '.',
+        0xaaaaaa => '+',
+        0x888888 => '0',
+        0x555555 => '#',
+        0x000000 => ' ', // Uninitialized
+        _ => unreachable!(),
+    }
 }
 
+fn char_to_color(ch: char) -> Option<u32> {
+    match ch {
+        '.' => Some(0xdddddd),
+        '+' => Some(0xaaaaaa),
+        '0' => Some(0x888888),
+        '#' => Some(0x555555),
+        _ => None,
+    }
+}
+
+fn short_run() -> bool {
+    std::env::var(SHORT_RUN).as_deref() == Ok("1")
+}
+
+fn update_expected_display() -> bool {
+    std::env::var(UPDATE_EXPECTED_DISPLAY).as_deref() == Ok("1")
+}
+
+#[derive(Clone)]
+struct Display(Rc<RefCell<Vec<u32>>>);
+
+impl Display {
+    fn new() -> Self {
+        Self(Rc::new(RefCell::new(vec![0; VRAM_WIDTH * VRAM_HEIGHT])))
+    }
+
+    fn update_line(&mut self, ly: usize, buffer: &[u32]) {
+        self.0.borrow_mut()[ly * VRAM_WIDTH..(ly + 1) * VRAM_WIDTH].copy_from_slice(&buffer);
+    }
+
+    fn matches(&self, other: &Display) -> bool {
+        (*self.0).borrow().as_slice() == (*other.0).borrow().as_slice()
+    }
+
+    fn to_text(&self) -> String {
+        let mut s = String::default();
+
+        for (index, color) in (*self.0).borrow().iter().enumerate() {
+            s.push(color_to_char(*color));
+            if index % VRAM_WIDTH == VRAM_WIDTH - 1 {
+                s.push('\n')
+            }
+        }
+
+        s
+    }
+
+    fn load_from_file(filename: &str) -> Self {
+        let pixels: Vec<u32> = std::fs::read_to_string(filename)
+            .unwrap()
+            .chars()
+            .filter_map(char_to_color)
+            .collect();
+        assert_eq!(VRAM_HEIGHT * VRAM_WIDTH, pixels.len());
+        Self(Rc::new(RefCell::new(pixels)))
+    }
+
+    fn dump_to_file(&self, filename: &str) {
+        std::fs::write(filename, self.to_text()).unwrap();
+    }
+}
+
+#[derive(Clone)]
 enum Expected {
     Serial(&'static str),
-    Display(Vec<u32>),
+    Display(&'static str, Display),
 }
 
 impl Expected {
-    fn from_file(path: &str) -> Self {
-        let display: Vec<u32> = std::fs::read_to_string(path)
-            .unwrap()
-            .chars()
-            .filter_map(|c| match c {
-                '.' => Some(WHITE),
-                '#' => Some(BLACK),
-                _ => None,
-            })
-            .collect();
-        assert_eq!(VRAM_HEIGHT * VRAM_WIDTH, display.len());
-        Self::Display(display)
+    fn from_file(path: &'static str) -> Self {
+        Self::Display(path, Display::load_from_file(path))
     }
 }
 
@@ -39,55 +99,30 @@ struct TestHardware {
     expected: Expected,
     index: usize,
     is_done: bool,
-    display: [u32; VRAM_HEIGHT * VRAM_WIDTH],
+    display: Display,
 }
 
 impl TestHardware {
-    fn new(expected: Expected) -> Self {
+    fn new(expected: Expected, display: Display) -> Self {
         Self {
             expected,
             index: 0,
             is_done: false,
-            display: [0; VRAM_HEIGHT * VRAM_WIDTH],
+            display,
         }
     }
 }
 
 impl rgy::Hardware for TestHardware {
     fn vram_update(&mut self, ly: usize, buffer: &[u32]) {
-        let Expected::Display(expected) = &self.expected else {
+        let Expected::Display(_, expected) = &self.expected else {
             return;
         };
 
-        // Simplify to 2 tones as it suffices for the current test roms.
-        let buffer: Vec<_> = buffer
-            .iter()
-            .map(|color| if *color == WHITE { WHITE } else { BLACK })
-            .collect();
+        self.display.update_line(ly, buffer);
 
-        self.display[ly * VRAM_WIDTH..(ly + 1) * VRAM_WIDTH].copy_from_slice(&buffer);
-
-        if ly == VRAM_HEIGHT - 1 && self.display.as_slice() == expected.as_slice() {
+        if ly == VRAM_HEIGHT - 1 && self.display.matches(expected) {
             self.is_done = true;
-        }
-
-        if !print_display() {
-            return;
-        }
-
-        // print display to console
-        if ly == VRAM_HEIGHT - 1 {
-            println!();
-            for (index, color) in self.display.iter().enumerate() {
-                if *color == WHITE {
-                    print!(".")
-                } else {
-                    print!("#")
-                }
-                if index % VRAM_WIDTH == VRAM_WIDTH - 1 {
-                    println!();
-                }
-            }
         }
     }
 
@@ -140,19 +175,38 @@ impl rgy::Hardware for TestHardware {
 }
 
 fn test_rom(expected: Expected, path: &str) {
+    let display = Display::new();
+
     let rom = std::fs::read(path).unwrap();
-    let hw = TestHardware::new(expected);
+    let hw = TestHardware::new(expected.clone(), display.clone());
     let mut sys = rgy::System::new(
         rgy::Config::new().native_speed(true),
         &rom,
         hw,
         rgy::debug::NullDebugger,
     );
-    let timeout = Duration::from_secs(if print_display() { 10 } else { 60 });
+    let timeout = Duration::from_secs(if short_run() { 10 } else { 60 });
     let now = Instant::now();
+
     while sys.poll() {
         if now.elapsed() >= timeout {
-            panic!("timeout")
+            if let Expected::Display(filename, _) = expected {
+                if update_expected_display() {
+                    display.dump_to_file(filename);
+
+                    panic!(
+                        "didn't match display output: update expected display {}!!",
+                        filename
+                    );
+                } else {
+                    panic!(
+                        "didn't match display output; actual is:\n\n{}",
+                        display.to_text()
+                    );
+                }
+            } else {
+                panic!("didn't match serial output");
+            }
         }
     }
 }
