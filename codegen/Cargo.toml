@@ -5,7 +5,7 @@ authors = ["Yushi Omote <yushiomote@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-scraper = "0.19"
+scraper = "0.20"
 pest = "2.0"
 pest_derive = "2.0"
 env_logger = "0.11"
